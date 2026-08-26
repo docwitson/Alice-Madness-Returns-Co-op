@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a reproducible Alice Co-op problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not upload saves, dumps, private IP addresses, tokens, or unredacted personal paths.
+  - type: input
+    id: version
+    attributes:
+      label: Alice Co-op version
+      placeholder: 0.1.0-alpha.1 / protocol 29
+    validations:
+      required: true
+  - type: dropdown
+    id: role
+    attributes:
+      label: Affected role
+      options: [Host, Client, Both, Relay server]
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Chapter, map, and checkpoint
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include which player entered or activated the event first.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: recovery
+    attributes:
+      label: Recovery attempted
+      description: Mention P/O, forced cutscene, checkpoint restart, or reconnect.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Safety checklist
+      options:
+        - label: Both players used the exact same release.
+          required: true
+        - label: Logs were reviewed and personal information was removed.
+          required: true

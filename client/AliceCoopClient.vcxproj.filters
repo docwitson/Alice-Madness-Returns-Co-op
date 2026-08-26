@@ -1,0 +1,339 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="..\src\dllmain.cpp" />
+    <ClCompile Include="..\src\Engine\EnginePointers.cpp">
+      <Filter>src\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Engine\ResolutionHook.cpp">
+      <Filter>src\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Fixes\PhysicsFixes.cpp">
+      <Filter>src\Fixes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Fixes\CrashFixes.cpp">
+      <Filter>src\Fixes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Fixes\FixCPUPhysX.cpp">
+      <Filter>src\Fixes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Fixes\WindowHandling.cpp">
+      <Filter>src\Fixes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Fixes\ThreadPoolClamp.cpp">
+      <Filter>src\Fixes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Fixes\AtomicSaves.cpp">
+      <Filter>src\Fixes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Fixes\XAudio2Upgrade.cpp">
+      <Filter>src\Fixes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\General\IntroSkip.cpp">
+      <Filter>src\General</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\General\WarnAlice1InstallFolder.cpp">
+      <Filter>src\General</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\General\AchievementSupport.cpp">
+      <Filter>src\General</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Display\FontScaling.cpp">
+      <Filter>src\Display</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Display\AutoResolution.cpp">
+      <Filter>src\Display</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Display\UseWindowed.cpp">
+      <Filter>src\Display</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Input\SDLControllerInput.cpp">
+      <Filter>src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Graphics\ImprovedTextureStreaming.cpp">
+      <Filter>src\Graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Graphics\ReducedMipMapBias.cpp">
+      <Filter>src\Graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Graphics\DisableBackgroundLevelStreaming.cpp">
+      <Filter>src\Graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Graphics\FixBinkVideoBT709.cpp">
+      <Filter>src\Graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Graphics\FixAspectRatio.cpp">
+      <Filter>src\Graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Graphics\MenuScripts.cpp">
+      <Filter>src\Graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\MainLoop\MainLoop.cpp">
+      <Filter>src\MainLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\MainLoop\HysteriaLockOnGuard.cpp">
+      <Filter>src\MainLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\MainLoop\FixStuckKeys.cpp">
+      <Filter>src\MainLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\MainLoop\FixMissingMusic.cpp">
+      <Filter>src\MainLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\MainLoop\FixMapProperties.cpp">
+      <Filter>src\MainLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\MainLoop\FixHatterElevator.cpp">
+      <Filter>src\MainLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\MainLoop\FixFadeToBlack.cpp">
+      <Filter>src\MainLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\MainLoop\CutsceneFPSCap.cpp">
+      <Filter>src\MainLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Engine\ProcessEvent.cpp">
+      <Filter>src\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\MainLoop\InputResponsiveness.cpp">
+      <Filter>src\MainLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\MainLoop\BlackBarGuard.cpp">
+      <Filter>src\MainLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\safetyhook\safetyhook.cpp">
+      <Filter>safetyhook</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\safetyhook\Zydis.c">
+      <Filter>safetyhook</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\SDK\GameDefines.cpp">
+      <Filter>SDK</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\AliceGame_classes.cpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\Core_classes.cpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\Engine_classes.cpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\GameFramework_classes.cpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\GFxUI_classes.cpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\Kynapse_classes.cpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\WinDrv_classes.cpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\XAudio2_classes.cpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\imgui\imgui.cpp">
+      <Filter>include\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\imgui\imgui_draw.cpp">
+      <Filter>include\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\imgui\imgui_impl_dx9.cpp">
+      <Filter>include\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\imgui\imgui_impl_win32.cpp">
+      <Filter>include\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\imgui\imgui_tables.cpp">
+      <Filter>include\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\include\imgui\imgui_widgets.cpp">
+      <Filter>include\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\MainLoop\BlockCameraInMenu.cpp">
+      <Filter>src\MainLoop</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Input\InputBinding.cpp">
+      <Filter>src\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\Graphics\AdaptivePhysXMemory.cpp">
+      <Filter>src\Graphics</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\src\dllmain.hpp" />
+    <ClInclude Include="..\src\helper.hpp" />
+    <ClInclude Include="..\src\Common.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Features.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Globals.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Config.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Addresses.hpp">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\safetyhook\safetyhook.hpp">
+      <Filter>safetyhook</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\safetyhook\Zydis.h">
+      <Filter>safetyhook</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\GameDefines.hpp">
+      <Filter>SDK</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SdkHeaders.hpp">
+      <Filter>SDK</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\AliceGame_classes.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\AliceGame_parameters.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\AliceGame_structs.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Core_classes.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Core_parameters.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Core_structs.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Engine_classes.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Engine_parameters.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Engine_structs.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\GameFramework_classes.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\GameFramework_parameters.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\GameFramework_structs.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\GFxUI_classes.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\GFxUI_parameters.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\GFxUI_structs.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Kynapse_classes.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Kynapse_parameters.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Kynapse_structs.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\WinDrv_classes.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\WinDrv_parameters.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\WinDrv_structs.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\XAudio2_classes.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\XAudio2_parameters.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\XAudio2_structs.hpp">
+      <Filter>SDK\SDK_HEADERS</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\Controller.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\ini.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\MFortress\Patches_EA.hpp">
+      <Filter>MFortress</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\MFortress\Patches_Steam.hpp">
+      <Filter>MFortress</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\FixIniBindings.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\CrashHandler.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\MFortress\PatchEngine.hpp">
+      <Filter>MFortress</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\AchievementOverlay.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="MadnessPatch.ini" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="safetyhook">
+      <UniqueIdentifier>{3e16c9da-ba03-4fa3-a40a-d14c1a90f4bf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK">
+      <UniqueIdentifier>{4380ffb1-3f4b-4660-afc9-75d30d7764d8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SDK\SDK_HEADERS">
+      <UniqueIdentifier>{0c212c8a-c529-4312-b662-d497f915307f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{a26108f8-6e7d-4c35-8bc3-f3e1076eb4db}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="MFortress">
+      <UniqueIdentifier>{d08e5a7c-43e3-43fa-b9f2-3a1f4784bc94}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{b1a4f0c2-7e51-4c9a-9d3e-2f6a8c5b1d40}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Engine">
+      <UniqueIdentifier>{c2b5e1d3-8f62-4a1b-8e4f-3a7b9d6c2e51}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Fixes">
+      <UniqueIdentifier>{d3c6f2e4-9a73-4b2c-9f50-4b8cae7d3f62}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\General">
+      <UniqueIdentifier>{e4d7a3f5-ab84-4c3d-a061-5c9dbf8e4a73}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Display">
+      <UniqueIdentifier>{f5e8b4a6-bc95-4d4e-b172-6daec09f5b84}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Input">
+      <UniqueIdentifier>{a6f9c5b7-cda6-4e5f-c283-7ebfd1a06c95}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Graphics">
+      <UniqueIdentifier>{b7a0d6c8-deb7-4f60-d394-8fc0e2b17da6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\MainLoop">
+      <UniqueIdentifier>{c8b1e7d9-efc8-4071-e4a5-90d1f3c28eb7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include\imgui">
+      <UniqueIdentifier>{be307cd0-245b-44a4-a8cc-39b8ef0f66d8}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

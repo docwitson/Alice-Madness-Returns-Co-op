@@ -1,0 +1,16 @@
+* text=auto
+
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.sln text eol=crlf
+*.vcxproj text eol=crlf
+*.filters text eol=crlf
+*.png binary
+*.jpg binary
+*.lib binary
+
+include/safetyhook/** linguist-vendored whitespace=-trailing-space
+include/SDL3/** linguist-vendored whitespace=-trailing-space
+include/imgui/** linguist-vendored whitespace=-trailing-space
+include/MFortress/** linguist-vendored whitespace=-trailing-space
+include/SDK/** linguist-generated whitespace=-trailing-space

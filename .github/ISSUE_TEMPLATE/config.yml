@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Known issues and recovery
+    url: https://github.com/docwitson/Alice-Madness-Returns-Co-op/blob/main/docs/KNOWN_ISSUES.md
+    about: Check documented alpha limitations before filing a report.

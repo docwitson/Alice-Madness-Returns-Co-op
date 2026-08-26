@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Package version without the v prefix
+        required: true
+        default: 0.1.0-alpha.1
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $version = "${{ github.ref_name }}" -replace '^v', ''
+          } else {
+            $version = "${{ inputs.version }}"
+          }
+          "value=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Build packages
+        shell: pwsh
+        run: .\tools\Build-AliceCoop-Package.ps1 -Version "${{ steps.version.outputs.value }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AliceCoop-${{ steps.version.outputs.value }}
+          if-no-files-found: error
+          path: |
+            artifacts/deploy/*.zip
+            artifacts/deploy/*-SHA256SUMS.txt
+
+      - name: Publish GitHub release assets
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = Get-ChildItem -LiteralPath artifacts/deploy -File |
+            Where-Object { $_.Name -like '*.zip' -or $_.Name -like '*-SHA256SUMS.txt' } |
+            ForEach-Object FullName
+          if ($assets.Count -ne 3) {
+            throw "Expected two ZIP archives and one checksum file; found $($assets.Count)."
+          }
+          gh release create "${{ github.ref_name }}" @assets `
+            --title "Alice Co-op ${{ steps.version.outputs.value }}" `
+            --notes-file docs/RELEASE_NOTES_0.1.0-alpha.1.md `
+            --prerelease

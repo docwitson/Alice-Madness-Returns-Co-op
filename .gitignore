@@ -1,0 +1,51 @@
+# Visual Studio and MSBuild
+.vs/
+bin/
+obj/
+Debug/
+Release/
+x86/
+x64/
+*.user
+*.suo
+*.VC.db
+*.VC.VC.opendb
+*.obj
+*.pch
+*.pdb
+*.ilk
+*.idb
+*.ipdb
+*.iobj
+*.tlog
+*.lastbuildstate
+*.exp
+
+# Release output
+artifacts/
+*.zip
+*.7z
+SHA256SUMS.txt
+
+# Runtime data: never commit player information or game diagnostics
+logs/
+crash_*.txt
+*.dmp
+*.mdmp
+client-saves/
+backup/
+install-manifest.json
+package-manifest.json
+
+# Local launch overrides
+manual-launch/AliceCoop-LaunchConfig.local.bat
+manual-launch/RUN_*_IP.bat
+
+# Editors and operating systems
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
+*~

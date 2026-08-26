@@ -1,0 +1,215 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{AAF74379-24F2-4893-A5B1-35C4CBDD0D1D}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+		<RootNamespace>AliceCoopClient</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <TargetName>dinput8</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <TargetName>dinput8</TargetName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <TargetExt>.dll</TargetExt>
+    <IncludePath>$(SolutionDir)src\;$(SolutionDir)include\;$(IncludePath)</IncludePath>
+    <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <TargetExt>.dll</TargetExt>
+    <IncludePath>$(SolutionDir)src\;$(SolutionDir)include\;$(IncludePath)</IncludePath>
+    <OutDir>$(SolutionDir)bin\$(Configuration)\</OutDir>
+    <LibraryPath>$(SolutionDir)lib;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;MADNESSPATCH_EXPORTS_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;MADNESSPATCH_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+		<AdditionalIncludeDirectories>$(SolutionDir)include\SDK;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalModuleDependencies>
+      </AdditionalModuleDependencies>
+      <ScanSourceForModuleDependencies>
+      </ScanSourceForModuleDependencies>
+      <AdditionalHeaderUnitDependencies>
+      </AdditionalHeaderUnitDependencies>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ModuleDefinitionFile>$(SolutionDir)src\dinput8.def</ModuleDefinitionFile>
+      <AdditionalDependencies>winmm.lib;imm32.lib;version.lib;setupapi.lib;d3d9.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\include\imgui\imgui.cpp" />
+    <ClCompile Include="..\include\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\include\imgui\imgui_impl_dx9.cpp" />
+    <ClCompile Include="..\include\imgui\imgui_impl_win32.cpp" />
+    <ClCompile Include="..\include\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\include\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="..\include\safetyhook\safetyhook.cpp" />
+    <ClCompile Include="..\include\safetyhook\Zydis.c" />
+    <ClCompile Include="..\include\SDK\GameDefines.cpp" />
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\AliceGame_classes.cpp" />
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\Core_classes.cpp" />
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\Engine_classes.cpp" />
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\GameFramework_classes.cpp" />
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\GFxUI_classes.cpp" />
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\Kynapse_classes.cpp" />
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\WinDrv_classes.cpp" />
+    <ClCompile Include="..\include\SDK\SDK_HEADERS\XAudio2_classes.cpp" />
+    <ClCompile Include="..\src\Engine\EnginePointers.cpp" />
+    <ClCompile Include="..\src\Coop\CoopClient.cpp" />
+    <ClCompile Include="..\src\Engine\ResolutionHook.cpp" />
+    <ClCompile Include="..\src\Fixes\PhysicsFixes.cpp" />
+    <ClCompile Include="..\src\Fixes\CrashFixes.cpp" />
+    <ClCompile Include="..\src\Fixes\FixCPUPhysX.cpp" />
+    <ClCompile Include="..\src\Fixes\WindowHandling.cpp" />
+    <ClCompile Include="..\src\Fixes\ThreadPoolClamp.cpp" />
+    <ClCompile Include="..\src\Fixes\AtomicSaves.cpp" />
+    <ClCompile Include="..\src\Fixes\XAudio2Upgrade.cpp" />
+    <ClCompile Include="..\src\General\IntroSkip.cpp" />
+    <ClCompile Include="..\src\General\WarnAlice1InstallFolder.cpp" />
+    <ClCompile Include="..\src\General\AchievementSupport.cpp" />
+    <ClCompile Include="..\src\Display\FontScaling.cpp" />
+    <ClCompile Include="..\src\Display\AutoResolution.cpp" />
+    <ClCompile Include="..\src\Display\UseWindowed.cpp" />
+    <ClCompile Include="..\src\Input\SDLControllerInput.cpp" />
+    <ClCompile Include="..\src\Input\InputBinding.cpp" />
+    <ClCompile Include="..\src\Graphics\ImprovedTextureStreaming.cpp" />
+    <ClCompile Include="..\src\Graphics\ReducedMipMapBias.cpp" />
+    <ClCompile Include="..\src\Graphics\DisableBackgroundLevelStreaming.cpp" />
+    <ClCompile Include="..\src\Graphics\FixBinkVideoBT709.cpp" />
+    <ClCompile Include="..\src\Graphics\FixAspectRatio.cpp" />
+    <ClCompile Include="..\src\Graphics\MenuScripts.cpp" />
+    <ClCompile Include="..\src\Graphics\AdaptivePhysXMemory.cpp" />
+    <ClCompile Include="..\src\MainLoop\BlockCameraInMenu.cpp" />
+    <ClCompile Include="..\src\MainLoop\MainLoop.cpp" />
+    <ClCompile Include="..\src\MainLoop\HysteriaLockOnGuard.cpp" />
+    <ClCompile Include="..\src\MainLoop\FixStuckKeys.cpp" />
+    <ClCompile Include="..\src\MainLoop\FixMissingMusic.cpp" />
+    <ClCompile Include="..\src\MainLoop\FixMapProperties.cpp" />
+    <ClCompile Include="..\src\MainLoop\FixHatterElevator.cpp" />
+    <ClCompile Include="..\src\MainLoop\FixFadeToBlack.cpp" />
+    <ClCompile Include="..\src\MainLoop\CutsceneFPSCap.cpp" />
+    <ClCompile Include="..\src\Engine\ProcessEvent.cpp" />
+    <ClCompile Include="..\src\MainLoop\InputResponsiveness.cpp" />
+    <ClCompile Include="..\src\MainLoop\BlackBarGuard.cpp" />
+    <ClCompile Include="..\src\dllmain.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="MadnessPatch.ini">
+      <DeploymentContent>true</DeploymentContent>
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\include\AchievementOverlay.hpp" />
+    <ClInclude Include="..\include\Controller.hpp" />
+    <ClInclude Include="..\include\CrashHandler.hpp" />
+    <ClInclude Include="..\include\FixIniBindings.hpp" />
+    <ClInclude Include="..\include\ini.hpp" />
+    <ClInclude Include="..\include\MFortress\PatchEngine.hpp" />
+    <ClInclude Include="..\include\MFortress\Patches_EA.hpp" />
+    <ClInclude Include="..\include\MFortress\Patches_Steam.hpp" />
+    <ClInclude Include="..\include\safetyhook\safetyhook.hpp" />
+    <ClInclude Include="..\include\safetyhook\Zydis.h" />
+    <ClInclude Include="..\include\SDK\GameDefines.hpp" />
+    <ClInclude Include="..\include\SDK\SdkHeaders.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\AliceGame_classes.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\AliceGame_parameters.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\AliceGame_structs.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Core_classes.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Core_parameters.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Core_structs.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Engine_classes.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Engine_parameters.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Engine_structs.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\GameFramework_classes.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\GameFramework_parameters.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\GameFramework_structs.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\GFxUI_classes.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\GFxUI_parameters.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\GFxUI_structs.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Kynapse_classes.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Kynapse_parameters.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\Kynapse_structs.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\WinDrv_classes.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\WinDrv_parameters.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\WinDrv_structs.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\XAudio2_classes.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\XAudio2_parameters.hpp" />
+    <ClInclude Include="..\include\SDK\SDK_HEADERS\XAudio2_structs.hpp" />
+    <ClInclude Include="..\src\Common.hpp" />
+    <ClInclude Include="..\src\Coop\CoopClient.hpp" />
+    <ClInclude Include="..\src\Coop\Protocol.hpp" />
+    <ClInclude Include="..\src\Features.hpp" />
+    <ClInclude Include="..\src\Globals.hpp" />
+    <ClInclude Include="..\src\Config.hpp" />
+    <ClInclude Include="..\src\Addresses.hpp" />
+    <ClInclude Include="..\src\dllmain.hpp" />
+    <ClInclude Include="..\src\helper.hpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

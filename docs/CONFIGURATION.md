@@ -2,7 +2,8 @@
 
 ## Launch configuration
 
-Edit `AliceCoop-LaunchConfig.bat` for normal use.
+Edit `AliceCoop-LaunchConfig.bat` when launching the game through the supplied
+host/client BAT files.
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -36,8 +37,14 @@ Normal releases ship conservative defaults. The most relevant sections are:
 - `[Performance]`: process FPS and worker-thread limits.
 - `[Trace]`: diagnostic logging. Leave every trace disabled for normal play.
 
-`EnableWithoutLauncher` should remain `0`: the supported BAT files set the role
-and enable co-op separately for each process.
+For a normal Steam launch, set `EnableWithoutLauncher = 1` and explicitly set
+`Role = host` or `Role = client`. Steam may relaunch the game from its existing
+client process, which discards the per-process environment supplied by the BAT
+files. Set `ServerAddress` to the relay PC's reachable LAN/VPN address, or to
+`127.0.0.1` when the relay runs on the same PC.
+
+Keep `EnableWithoutLauncher = 0` when using the supplied host/client BAT files;
+those scripts set the role and enable co-op separately for each process.
 
 ## MadnessPatch.ini
 

@@ -62,7 +62,12 @@ not preserve files when the extraction program is told to overwrite them.
 
 - Run exactly one `AliceCoopServer.exe` for a two-player session.
 - The server can run on the host PC, client PC, or another trusted Windows PC.
-- Both game processes must use the same `SERVER_IP` and `COOP_PORT`.
+- For Steam launch, set `EnableWithoutLauncher = 1` and the appropriate
+  `Role = host` or `Role = client` in each `AliceCoop.ini`. Set `ServerAddress`
+  to the relay PC and use the same `Port` on both computers, then launch through
+  Steam normally.
+- For BAT launch, both game processes must use the same `SERVER_IP` and
+  `COOP_PORT` in `AliceCoop-LaunchConfig.bat`.
 - The server binds to `0.0.0.0` by default, so localhost, LAN and VPN adapters
   are accepted.
 - Allow inbound UDP on port `27018` or your configured alternative.

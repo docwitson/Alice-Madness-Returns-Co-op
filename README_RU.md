@@ -4,7 +4,8 @@
 
 <p align="center">
   <strong><a href="https://www.youtube.com/watch?v=QO0yarqS1-k">▶ ПОСМОТРЕТЬ ПОЛНЫЙ РЕЛИЗНЫЙ ТРЕЙЛЕР</a></strong><br>
-  <strong><a href="https://www.youtube.com/watch?v=UzjCvp7MhTM">▶ ПОСМОТРЕТЬ ИНСТРУКЦИЮ ПО УСТАНОВКЕ И НАСТРОЙКЕ</a></strong>
+  <strong><a href="https://www.youtube.com/watch?v=UzjCvp7MhTM">▶ ПОСМОТРЕТЬ ИНСТРУКЦИЮ ПО УСТАНОВКЕ И НАСТРОЙКЕ</a></strong><br>
+  <strong><a href="https://www.youtube.com/watch?v=rALyp02Q-LE">▶ ПОСМОТРЕТЬ ПОЛНОЕ ПРОХОЖДЕНИЕ — ЧАСТЬ 1</a></strong>
 </p>
 
 [English](README.md) · [Установка](docs/INSTALL_RU.md) ·

@@ -4,7 +4,8 @@
 
 <p align="center">
   <strong><a href="https://www.youtube.com/watch?v=QO0yarqS1-k">▶ WATCH THE FULL RELEASE TRAILER</a></strong><br>
-  <strong><a href="https://www.youtube.com/watch?v=UzjCvp7MhTM">▶ WATCH THE INSTALLATION &amp; SETUP GUIDE</a></strong>
+  <strong><a href="https://www.youtube.com/watch?v=UzjCvp7MhTM">▶ WATCH THE INSTALLATION &amp; SETUP GUIDE</a></strong><br>
+  <strong><a href="https://www.youtube.com/watch?v=rALyp02Q-LE">▶ WATCH THE FULL PLAYTHROUGH — PART 1</a></strong>
 </p>
 
 [Русская версия](README_RU.md) · [Installation](docs/INSTALL.md) ·

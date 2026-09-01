@@ -429,6 +429,9 @@
 			g_config.controlLifecycleTrace = EnvironmentInt(
 				L"ALICECOOP_CONTROL_TRACE",
 				ReadIniInt(iniPath, L"Trace", L"ControlLifecycleEnabled", 0)) == 1;
+			g_config.invariantTrace = EnvironmentInt(
+				L"ALICECOOP_INVARIANT_TRACE",
+				ReadIniInt(iniPath, L"Trace", L"InvariantEnabled", 0)) == 1;
 			g_config.preserveMovementTrails = ReadIniInt(
 				iniPath, L"VisualProxy", L"PreserveMovementTrails", 0) == 1;
 			g_config.sharedEnemyHealth =

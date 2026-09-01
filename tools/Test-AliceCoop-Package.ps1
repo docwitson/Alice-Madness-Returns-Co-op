@@ -125,7 +125,8 @@ try {
         'Get-PhysicalScreenWidth.ps1', 'dinput8.dll',
         'docs\CONFIGURATION.md', 'docs\DEVELOPMENT.md', 'docs\INSTALL.md',
         'docs\INSTALL_RU.md', 'docs\KNOWN_ISSUES.md',
-        'docs\TROUBLESHOOTING.md', 'images\cutsceneWatch2.png',
+        'docs\SMOKE_TEST.md', 'docs\TROUBLESHOOTING.md',
+        'images\cutsceneWatch2.png',
         'images\aliceWhait.png', 'images\aliceSoloLevel.png'
     )
     $installerExpected = @(

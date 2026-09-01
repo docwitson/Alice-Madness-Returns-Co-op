@@ -88,6 +88,7 @@
 					g_remoteController = nullptr;
 					g_remoteWorld = nullptr;
 				}
+				TraceWorldResetInvariants();
 				Log("World changed; visual proxy will be recreated.");
 			}
 			if (world && now >= g_nextMapRefresh)

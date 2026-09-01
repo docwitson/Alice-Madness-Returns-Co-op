@@ -1,3 +1,163 @@
+		void ReportInvariantViolation(
+			const char* event, const char* invariant,
+			const std::string& details)
+		{
+			if (!g_config.invariantTrace)
+				return;
+			const std::string eventName = event ? event : "Unknown";
+			const std::string invariantName = invariant ? invariant : "Unknown";
+			const std::string signature = eventName + '|' + invariantName;
+			{
+				std::lock_guard<std::mutex> lock(g_invariantTraceMutex);
+				if (!g_reportedInvariantViolations.insert(signature).second)
+					return;
+			}
+			Log("[CoopInvariant] event=" + eventName
+				+ " invariant=" + invariantName
+				+ " details=" + details);
+		}
+
+		void TraceWorldResetInvariants()
+		{
+			if (!g_config.invariantTrace)
+				return;
+			if (g_remotePawn || g_remoteController || g_remoteWorld)
+			{
+				ReportInvariantViolation("WorldReset", "RemotePawnCleared",
+					"remotePawn=" + std::to_string(g_remotePawn != nullptr)
+					+ ",remoteController="
+					+ std::to_string(g_remoteController != nullptr)
+					+ ",remoteWorld=" + std::to_string(g_remoteWorld != nullptr));
+			}
+			if (!g_remotePepperVisuals.empty() || !g_remoteClockBombVisuals.empty())
+			{
+				ReportInvariantViolation("WorldReset", "ProjectilesCleared",
+					"pepper=" + std::to_string(g_remotePepperVisuals.size())
+					+ ",clockBomb=" + std::to_string(g_remoteClockBombVisuals.size()));
+			}
+			if (g_remoteContextInteraction.active
+				|| !g_localInteractionKeysThisAttempt.empty()
+				|| !g_sequenceOpUseSnapshot.empty()
+				|| !g_usedEventSnapshot.empty())
+			{
+				ReportInvariantViolation("WorldReset", "InteractionStateCleared",
+					"remoteActive=" + std::to_string(g_remoteContextInteraction.active)
+					+ ",localKeys=" + std::to_string(g_localInteractionKeysThisAttempt.size())
+					+ ",sequenceOps=" + std::to_string(g_sequenceOpUseSnapshot.size())
+					+ ",usedEvents=" + std::to_string(g_usedEventSnapshot.size()));
+			}
+			if (!g_clientSharedEnemyBindings.empty()
+				|| !g_sharedEnemyRegistry.empty()
+				|| !g_hostEnemyAggro.empty())
+			{
+				ReportInvariantViolation("WorldReset", "EnemyBindingsCleared",
+					"clientBindings=" + std::to_string(g_clientSharedEnemyBindings.size())
+					+ ",registry=" + std::to_string(g_sharedEnemyRegistry.size())
+					+ ",aggro=" + std::to_string(g_hostEnemyAggro.size()));
+			}
+		}
+
+		void TracePeerTeardownInvariants()
+		{
+			if (!g_config.invariantTrace)
+				return;
+			if (g_remotePawn || g_remoteController || g_remoteWorld)
+			{
+				ReportInvariantViolation("PeerTeardown", "RemotePawnCleared",
+					"remotePawn=" + std::to_string(g_remotePawn != nullptr)
+					+ ",remoteController="
+					+ std::to_string(g_remoteController != nullptr)
+					+ ",remoteWorld=" + std::to_string(g_remoteWorld != nullptr));
+			}
+			if (g_remotePresentation.valid || g_remotePresentationWeapon
+				|| g_remoteHairProxy || g_remoteGlideParticle)
+			{
+				ReportInvariantViolation("PeerTeardown", "PresentationCleared",
+					"valid=" + std::to_string(g_remotePresentation.valid)
+					+ ",weapon=" + std::to_string(g_remotePresentationWeapon != nullptr)
+					+ ",hair=" + std::to_string(g_remoteHairProxy != nullptr)
+					+ ",glide=" + std::to_string(g_remoteGlideParticle != nullptr));
+			}
+			if (g_activeRemoteAnimationGraph || !g_remoteGraphSequences.empty())
+			{
+				ReportInvariantViolation("PeerTeardown", "AnimationStateCleared",
+					"graph=" + std::to_string(g_activeRemoteAnimationGraph.has_value())
+					+ ",sequences=" + std::to_string(g_remoteGraphSequences.size()));
+			}
+			if (!g_remotePepperVisuals.empty() || !g_remoteClockBombVisuals.empty())
+			{
+				ReportInvariantViolation("PeerTeardown", "ProjectilesCleared",
+					"pepper=" + std::to_string(g_remotePepperVisuals.size())
+					+ ",clockBomb=" + std::to_string(g_remoteClockBombVisuals.size()));
+			}
+			if (g_remoteContextInteraction.active)
+			{
+				ReportInvariantViolation("PeerTeardown", "RemoteInteractionCleared",
+					"remoteActive=1");
+			}
+			if (!g_clientSharedEnemyBindings.empty()
+				|| !g_sharedEnemyRegistry.empty()
+				|| !g_hostEnemyAggro.empty())
+			{
+				ReportInvariantViolation("PeerTeardown", "EnemyBindingsCleared",
+					"clientBindings=" + std::to_string(g_clientSharedEnemyBindings.size())
+					+ ",registry=" + std::to_string(g_sharedEnemyRegistry.size())
+					+ ",aggro=" + std::to_string(g_hostEnemyAggro.size()));
+			}
+		}
+
+		void TraceCutsceneReleaseInvariants()
+		{
+			if (!g_config.invariantTrace)
+				return;
+			if (g_waitingCutsceneAction || g_waitingCutsceneKey != 0)
+			{
+				ReportInvariantViolation("CutsceneBarrierReleased", "WaitingStateCleared",
+					"action=" + std::to_string(g_waitingCutsceneAction != nullptr)
+					+ ",key=" + std::to_string(g_waitingCutsceneKey));
+			}
+			if (g_waitingCutscenePlayRateOverridden
+				|| g_waitingCutsceneCanDeferActivation
+				|| g_waitingCutsceneActivationDeferred
+				|| g_replayingDeferredCutsceneActivation)
+			{
+				ReportInvariantViolation("CutsceneBarrierReleased", "FlagsCleared",
+					"playRateOverride="
+					+ std::to_string(g_waitingCutscenePlayRateOverridden)
+					+ ",canDefer="
+					+ std::to_string(g_waitingCutsceneCanDeferActivation)
+					+ ",activationDeferred="
+					+ std::to_string(g_waitingCutsceneActivationDeferred)
+					+ ",replaying="
+					+ std::to_string(g_replayingDeferredCutsceneActivation));
+			}
+		}
+
+		void TraceSaveSyncIdleInvariants(const char* event)
+		{
+			if (!g_config.invariantTrace)
+				return;
+			const char* eventName = event ? event : "SaveSyncFinished";
+			if (g_hostSaveTransfer.active || g_clientSaveTransfer.active)
+			{
+				ReportInvariantViolation(eventName, "TransfersInactive",
+					"hostActive=" + std::to_string(g_hostSaveTransfer.active)
+					+ ",clientActive=" + std::to_string(g_clientSaveTransfer.active));
+			}
+			const std::uint32_t requested =
+				g_requestedSaveTransferId.load(std::memory_order_acquire);
+			if (requested != 0)
+			{
+				ReportInvariantViolation(eventName, "RequestCleared",
+					"transferId=" + std::to_string(requested));
+			}
+			if (g_saveSyncInProgress.load(std::memory_order_acquire))
+			{
+				ReportInvariantViolation(eventName, "ProgressCleared",
+					"inProgress=1");
+			}
+		}
+
 		const char* PlayerActionName(PlayerAction action)
 		{
 			switch (action)

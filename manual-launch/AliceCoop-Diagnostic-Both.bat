@@ -47,11 +47,12 @@ set "ALICECOOP_WINDOW_HEIGHT=%WINDOW_HEIGHT%"
 set "ALICECOOP_VFX_TRACE=1"
 set "ALICECOOP_ANIMATION_TRACE=1"
 set "ALICECOOP_CONTROL_TRACE=1"
+set "ALICECOOP_INVARIANT_TRACE=1"
 set "ALICECOOP_ACTION_TRACE=0"
 set "ALICECOOP_WORLD_TRACE=0"
 
 echo AliceCoop focused diagnostic run via %SERVER_IP%:%COOP_PORT%
-echo VFX, animation and jump lifecycle tracing are enabled in both windows.
+echo VFX, animation, control and invariant tracing are enabled in both windows.
 echo Start AliceCoop-Server.bat first if the relay is not already running.
 echo.
 

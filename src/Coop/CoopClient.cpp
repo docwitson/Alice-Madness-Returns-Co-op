@@ -117,6 +117,8 @@ namespace AliceCoop
 				+ std::to_string(g_config.controlLifecycleTrace ? 1 : 0)
 				+ "; normal co-op replication remains active.");
 		}
+		if (g_config.invariantTrace)
+			Log("LIFECYCLE invariant diagnostics enabled.");
 		if (g_config.sharedEnemyHealth)
 		{
 			Log("SHAREDWORLD enemy health/death relay enabled; "

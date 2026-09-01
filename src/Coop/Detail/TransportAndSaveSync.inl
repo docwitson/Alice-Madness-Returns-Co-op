@@ -821,6 +821,7 @@
 						"TRANSFER FAILED SHA-256 CHECK", false, progress);
 					g_clientSaveTransfer = {};
 					g_requestedSaveTransferId.store(0);
+					TraceSaveSyncIdleInvariants("SaveSyncChecksumFailed");
 					return;
 				}
 			}
@@ -853,6 +854,8 @@
 				SetSaveSyncStatus(errorText, false, 100);
 			g_clientSaveTransfer = {};
 			g_requestedSaveTransferId.store(0);
+			TraceSaveSyncIdleInvariants(
+				committed ? "SaveSyncCompleted" : "SaveSyncCommitFailed");
 		}
 
 		void HandleSaveSyncAck(const SaveSyncAckPayload& ack)
@@ -867,6 +870,7 @@
 						"HOST COULD NOT PROVIDE SAVE", false, 0);
 					g_requestedSaveTransferId.store(0);
 					g_clientSaveTransfer = {};
+					TraceSaveSyncIdleInvariants("SaveSyncHostRejected");
 				}
 				return;
 			}
@@ -884,11 +888,13 @@
 			{
 				SetSaveSyncStatus("CLIENT SAVE VERIFIED", false, 100);
 				g_hostSaveTransfer = {};
+				TraceSaveSyncIdleInvariants("SaveSyncClientVerified");
 			}
 			else if (ack.status == SaveSyncAckStatus::TransferFailed)
 			{
 				SetSaveSyncStatus("CLIENT REJECTED SAVE TRANSFER", false, 0);
 				g_hostSaveTransfer = {};
+				TraceSaveSyncIdleInvariants("SaveSyncClientRejected");
 			}
 		}
 
@@ -921,6 +927,7 @@
 						SetSaveSyncStatus("HOST SAVE REQUEST TIMED OUT", false, 0);
 						g_requestedSaveTransferId.store(0);
 						g_clientSaveTransfer = {};
+						TraceSaveSyncIdleInvariants("SaveSyncRequestTimeout");
 					}
 				}
 				return;
@@ -932,6 +939,7 @@
 			{
 				SetSaveSyncStatus("SAVE TRANSFER TIMED OUT", false, 0);
 				g_hostSaveTransfer = {};
+				TraceSaveSyncIdleInvariants("SaveSyncTransferTimeout");
 				return;
 			}
 			if (now >= g_hostSaveTransfer.nextManifestAt)
@@ -1175,6 +1183,7 @@
 				g_requestedSaveTransferId.store(0);
 				g_clientSaveTransfer = {};
 				g_hostSaveTransfer = {};
+				TraceSaveSyncIdleInvariants("SaveSyncPeerLeft");
 				{
 					std::lock_guard lock(g_stateMutex);
 					g_inboundClientCommand.reset();
@@ -1211,6 +1220,7 @@
 					g_requestedSaveTransferId.store(0);
 					g_clientSaveTransfer = {};
 					g_hostSaveTransfer = {};
+					TraceSaveSyncIdleInvariants("SaveSyncRelayTimeout");
 					{
 						std::lock_guard lock(g_stateMutex);
 						g_inboundClientCommand.reset();

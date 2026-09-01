@@ -34,6 +34,10 @@
 		std::uint16_t SharedEnemyClassSignature(
 			const AAliceGameKynapsePawn* enemy);
 		void ForgetTornDownWorldObjects();
+		void TraceWorldResetInvariants();
+		void TracePeerTeardownInvariants();
+		void TraceCutsceneReleaseInvariants();
+		void TraceSaveSyncIdleInvariants(const char* event);
 		void DestroyRemotePawn();
 		void RequestHostCheckpointRestart(const char* source);
 		void RequestClientCheckpointRestart(const char* source);

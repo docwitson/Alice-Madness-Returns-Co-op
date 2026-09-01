@@ -137,6 +137,7 @@ foreach ($name in @(
     'INSTALL.md',
     'INSTALL_RU.md',
     'KNOWN_ISSUES.md',
+    'SMOKE_TEST.md',
     'TROUBLESHOOTING.md'
 )) {
     Copy-Item -LiteralPath (Join-Path $repoRoot "docs\$name") `

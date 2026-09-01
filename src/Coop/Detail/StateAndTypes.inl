@@ -47,6 +47,7 @@
 			bool animationLifecycleTrace = false;
 			bool animationComparisonTrace = false;
 			bool controlLifecycleTrace = false;
+			bool invariantTrace = false;
 			bool preserveMovementTrails = false;
 			bool sharedEnemyHealth = true;
 			bool sharedEnemyTransforms = true;
@@ -217,6 +218,8 @@
 		Clock::time_point g_controlTraceUntil{};
 		Clock::time_point g_nextControlTraceSample{};
 		std::string g_lastControlTraceSignature;
+		std::mutex g_invariantTraceMutex;
+		std::unordered_set<std::string> g_reportedInvariantViolations;
 		AAlicePawn* g_tracedPawn = nullptr;
 		AWeapon* g_tracedWeapon = nullptr;
 		std::string g_lastTracePawnState;

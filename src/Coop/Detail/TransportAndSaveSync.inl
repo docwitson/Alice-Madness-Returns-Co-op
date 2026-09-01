@@ -223,18 +223,6 @@
 			return ok;
 		}
 
-		std::uint32_t SaveChunkChecksum(
-			const std::uint8_t* data, std::size_t size)
-		{
-			std::uint32_t value = 2166136261u;
-			for (std::size_t index = 0; index < size; ++index)
-			{
-				value ^= data[index];
-				value *= 16777619u;
-			}
-			return value;
-		}
-
 		bool ReadSaveFile(
 			const std::filesystem::path& path,
 			std::vector<std::uint8_t>& bytes)
@@ -599,9 +587,8 @@
 				payload.files[index].kind = file.kind;
 				payload.files[index].byteCount =
 					static_cast<std::uint32_t>(file.bytes.size());
-				payload.files[index].chunkCount =
-					static_cast<std::uint16_t>((file.bytes.size()
-						+ SaveSyncChunkBytes - 1) / SaveSyncChunkBytes);
+				payload.files[index].chunkCount = static_cast<std::uint16_t>(
+					SaveChunkCount(file.bytes.size()));
 				std::copy(file.hash.begin(), file.hash.end(),
 					payload.files[index].sha256);
 			}
@@ -626,10 +613,9 @@
 			payload.kind = file.kind;
 			payload.chunkIndex = static_cast<std::uint16_t>(chunkIndex);
 			payload.chunkCount = static_cast<std::uint16_t>(
-				(file.bytes.size() + SaveSyncChunkBytes - 1)
-					/ SaveSyncChunkBytes);
-			payload.dataSize = static_cast<std::uint16_t>((std::min)(
-				SaveSyncChunkBytes, file.bytes.size() - offset));
+				SaveChunkCount(file.bytes.size()));
+			payload.dataSize = static_cast<std::uint16_t>(
+				SaveChunkDataSize(file.bytes.size(), chunkIndex));
 			std::copy_n(file.bytes.data() + offset,
 				payload.dataSize, payload.data);
 			payload.dataChecksum = SaveChunkChecksum(
@@ -697,8 +683,7 @@
 					return false;
 				}
 				const std::size_t chunkCount =
-					(transfer.files[index].bytes.size()
-						+ SaveSyncChunkBytes - 1) / SaveSyncChunkBytes;
+					SaveChunkCount(transfer.files[index].bytes.size());
 				if (chunkCount == 0
 					|| chunkCount > (std::numeric_limits<std::uint16_t>::max)())
 				{
@@ -765,9 +750,7 @@
 				if (seen[index] || incoming.byteCount == 0
 					|| incoming.byteCount > 4 * 1024 * 1024
 					|| incoming.chunkCount == 0
-					|| incoming.chunkCount !=
-						(incoming.byteCount + SaveSyncChunkBytes - 1)
-							/ SaveSyncChunkBytes)
+					|| incoming.chunkCount != SaveChunkCount(incoming.byteCount))
 					return;
 				seen[index] = true;
 				SaveTransferFile& file = transfer.files[index];
@@ -801,8 +784,8 @@
 			const std::size_t offset =
 				static_cast<std::size_t>(chunk.chunkIndex)
 					* SaveSyncChunkBytes;
-			const std::size_t expected = (std::min)(
-				SaveSyncChunkBytes, file.bytes.size() - offset);
+			const std::size_t expected = SaveChunkDataSize(
+				file.bytes.size(), chunk.chunkIndex);
 			if (chunk.dataSize != expected
 				|| chunk.dataChecksum != SaveChunkChecksum(
 					chunk.data, chunk.dataSize))
@@ -1071,8 +1054,8 @@
 				if (!g_inboundAnimationGraph
 					|| g_inboundAnimationGraph->graph.actorId
 						!= graph.actorId
-					|| static_cast<std::int32_t>(graph.frameNumber
-						- g_inboundAnimationGraph->graph.frameNumber) > 0)
+					|| IsNewerSequence(graph.frameNumber,
+						g_inboundAnimationGraph->graph.frameNumber))
 				{
 					ReceivedAnimationGraph received{};
 					received.graph = graph;

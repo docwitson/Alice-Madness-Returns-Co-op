@@ -35,6 +35,31 @@ namespace AliceCoopProtocol
 		SaveSyncAck = 15,
 	};
 
+	constexpr bool IsKnownPacketType(PacketType type)
+	{
+		switch (type)
+		{
+		case PacketType::Hello:
+		case PacketType::Welcome:
+		case PacketType::State:
+		case PacketType::PeerLeft:
+		case PacketType::Ping:
+		case PacketType::Pong:
+		case PacketType::ClientCommand:
+		case PacketType::HostSnapshot:
+		case PacketType::AnimationGraph:
+		case PacketType::ProjectileEvent:
+		case PacketType::SharedWorldEvent:
+		case PacketType::SaveSyncRequest:
+		case PacketType::SaveSyncManifest:
+		case PacketType::SaveSyncChunk:
+		case PacketType::SaveSyncAck:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	enum class SaveSyncFileKind : std::uint8_t
 	{
 		PersistentData = 1,
@@ -410,6 +435,7 @@ namespace AliceCoopProtocol
 	{
 		return header.magic == Magic
 			&& header.version == Version
+			&& IsKnownPacketType(header.type)
 			&& header.payloadSize <= MaxDatagramSize - sizeof(Header)
 			&& datagramSize == sizeof(Header) + header.payloadSize;
 	}

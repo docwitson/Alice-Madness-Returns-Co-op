@@ -603,19 +603,6 @@
 				Clock::now().time_since_epoch()).count());
 		}
 
-		std::uint32_t HashMapName(const std::string& mapName)
-		{
-			std::uint32_t hash = 2166136261u;
-			for (const unsigned char character : mapName)
-			{
-				const unsigned char normalized = static_cast<unsigned char>(
-					std::tolower(character));
-				hash ^= normalized;
-				hash *= 16777619u;
-			}
-			return hash;
-		}
-
 		bool ContainsCaseInsensitive(const std::string& value, const char* needle)
 		{
 			if (!needle || !*needle)

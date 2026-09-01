@@ -100,17 +100,6 @@
 			return x * x + y * y + z * z <= radius * radius;
 		}
 
-		std::uint64_t WorldTraceHash(const std::string& value)
-		{
-			std::uint64_t hash = 1469598103934665603ull;
-			for (const unsigned char byte : value)
-			{
-				hash ^= byte;
-				hash *= 1099511628211ull;
-			}
-			return hash;
-		}
-
 		std::uint64_t SequenceActionStableKey(UObject* action)
 		{
 			return action ? WorldTraceHash(ObjectName(action)) : 0;

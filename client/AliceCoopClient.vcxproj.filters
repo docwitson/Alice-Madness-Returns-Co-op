@@ -186,6 +186,9 @@
     <ClInclude Include="..\src\Coop\CoopClient.hpp">
       <Filter>src\Coop</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\Coop\Core\PureHelpers.hpp">
+      <Filter>src\Coop</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\Coop\Protocol.hpp">
       <Filter>src\Coop</Filter>
     </ClInclude>

@@ -5,6 +5,7 @@
 
 #include "Common.hpp"
 #include "Coop/CoopClient.hpp"
+#include "Coop/Core/PureHelpers.hpp"
 #include "Coop/Protocol.hpp"
 
 #include <array>
@@ -32,6 +33,7 @@ namespace AliceCoop
 
 	namespace
 	{
+		using namespace AliceCoopCore;
 		using namespace AliceCoopProtocol;
 		using Clock = std::chrono::steady_clock;
 		constexpr bool PepperProjectileReplicationEnabled = false;

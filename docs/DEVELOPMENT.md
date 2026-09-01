@@ -45,6 +45,7 @@ and drop-in packages, writes manifests/checksums, and creates ZIP archives below
 | `client/` | Combined MadnessPatch/Alice Co-op DLL project and default patch INI |
 | `server/` | Standalone UDP relay |
 | `src/Coop/` | Protocol integration, proxy, world and lifecycle synchronization |
+| `src/Coop/Detail/` | Internal implementation fragments included only by `CoopClient.cpp` |
 | `src/` | MadnessPatch base and shared hooks/features |
 | `include/` | Project headers, vendored dependencies and UE3 SDK declarations |
 | `lib/` | Vendored x86 static libraries required by the inherited build |

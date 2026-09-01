@@ -5,6 +5,9 @@
     <ClCompile Include="..\src\Engine\EnginePointers.cpp">
       <Filter>src\Engine</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\Coop\CoopClient.cpp">
+      <Filter>src\Coop</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\Engine\ResolutionHook.cpp">
       <Filter>src\Engine</Filter>
     </ClCompile>
@@ -180,6 +183,57 @@
     <ClInclude Include="..\src\Addresses.hpp">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\Coop\CoopClient.hpp">
+      <Filter>src\Coop</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Protocol.hpp">
+      <Filter>src\Coop</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\Diagnostics.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\EngineInterop.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\InteractionDiscovery.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\LifecycleAndStatus.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\PresentationParticles.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\Projectiles.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\PublicHooks.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\RemoteActionVfx.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\RemoteAnimation.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\RemoteCosmetics.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\RemotePawn.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\RuntimeAndAnimationCapture.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\SharedWorldAndEnemies.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\TransportAndSaveSync.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\WorldAndProgression.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
     <ClInclude Include="..\include\safetyhook\safetyhook.hpp">
       <Filter>safetyhook</Filter>
     </ClInclude>
@@ -313,6 +367,12 @@
     </Filter>
     <Filter Include="src\Engine">
       <UniqueIdentifier>{c2b5e1d3-8f62-4a1b-8e4f-3a7b9d6c2e51}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Coop">
+      <UniqueIdentifier>{7e839ff2-3dbb-49a3-8451-67446b4bbf28}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="src\Coop\Detail">
+      <UniqueIdentifier>{9ace395c-2d8e-4f1a-8a37-ed0739b75a79}</UniqueIdentifier>
     </Filter>
     <Filter Include="src\Fixes">
       <UniqueIdentifier>{d3c6f2e4-9a73-4b2c-9f50-4b8cae7d3f62}</UniqueIdentifier>

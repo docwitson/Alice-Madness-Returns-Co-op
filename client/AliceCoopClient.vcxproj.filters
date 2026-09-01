@@ -201,6 +201,15 @@
     <ClInclude Include="..\src\Coop\Detail\PresentationParticles.inl">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\Projectiles.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\RemoteActionVfx.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\RemoteAnimation.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\RemoteCosmetics.inl">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>

@@ -206,6 +206,9 @@
     <ClInclude Include="..\src\Coop\Detail\EngineInterop.inl" />
     <ClInclude Include="..\src\Coop\Detail\InteractionDiscovery.inl" />
     <ClInclude Include="..\src\Coop\Detail\PresentationParticles.inl" />
+    <ClInclude Include="..\src\Coop\Detail\Projectiles.inl" />
+    <ClInclude Include="..\src\Coop\Detail\RemoteActionVfx.inl" />
+    <ClInclude Include="..\src\Coop\Detail\RemoteAnimation.inl" />
     <ClInclude Include="..\src\Coop\Detail\RemoteCosmetics.inl" />
     <ClInclude Include="..\src\Coop\Detail\RemotePawn.inl" />
     <ClInclude Include="..\src\Coop\Detail\RuntimeAndAnimationCapture.inl" />

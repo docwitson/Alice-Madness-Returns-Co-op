@@ -39,7 +39,11 @@ jobs:
 
       - name: Build packages
         shell: pwsh
-        run: .\tools\Build-AliceCoop-Package.ps1 -Version "${{ steps.version.outputs.value }}"
+        run: .\tools\Build-AliceCoop-Package.ps1 -Version "${{ steps.version.outputs.value }}" -RequireCleanSource
+
+      - name: Verify packages
+        shell: pwsh
+        run: .\tools\Test-AliceCoop-Package.ps1 -Version "${{ steps.version.outputs.value }}" -RequireCleanSource
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4

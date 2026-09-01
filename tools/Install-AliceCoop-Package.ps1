@@ -41,6 +41,7 @@ $gameExe = Join-Path $win32Path 'AliceMadnessReturns.exe'
 $targetDll = Join-Path $win32Path 'dinput8.dll'
 $madnessPatchIni = Join-Path $win32Path 'MadnessPatch.ini'
 $coopPath = Join-Path $win32Path 'AliceCoop'
+$targetServer = Join-Path $coopPath 'AliceCoopServer.exe'
 $backupPath = Join-Path $coopPath 'backup'
 $backupDll = Join-Path $backupPath 'dinput8.before-alicecoop.dll'
 $manifestPath = Join-Path $coopPath 'install-manifest.json'
@@ -48,6 +49,11 @@ $packageManifestPath = Join-Path $packageRoot 'package-manifest.json'
 
 if (Get-Process AliceMadnessReturns -ErrorAction SilentlyContinue) {
     throw 'Close every AliceMadnessReturns.exe process before installing.'
+}
+$runningTargetRelay = @(Get-Process AliceCoopServer -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -and $_.Path -eq $targetServer })
+if ($runningTargetRelay.Count -ne 0) {
+    throw 'Close the installed AliceCoopServer.exe process before installing.'
 }
 if (-not (Test-Path -LiteralPath $gameExe -PathType Leaf)) {
     throw "Game executable not found: $gameExe"
@@ -59,7 +65,7 @@ $requiredPayload = @(
     'MadnessPatch.ini',
     'README.md',
     'README_RU.md',
-    'KNOWN_ISSUES.md',
+    'docs\KNOWN_ISSUES.md',
     'Uninstall-AliceCoop.ps1',
     'Uninstall-AliceCoop.bat',
     'AliceCoop-LaunchConfig.bat',
@@ -118,7 +124,6 @@ foreach ($name in @(
     'AliceCoopServer.exe',
     'README.md',
     'README_RU.md',
-    'KNOWN_ISSUES.md',
     'Uninstall-AliceCoop.ps1',
     'Uninstall-AliceCoop.bat',
     'AliceCoop-Server.bat',
@@ -131,6 +136,8 @@ foreach ($name in @(
     Copy-Item -LiteralPath (Join-Path $payloadPath $name) `
         -Destination (Join-Path $coopPath $name) -Force
 }
+Copy-Item -LiteralPath (Join-Path $payloadPath 'docs\KNOWN_ISSUES.md') `
+    -Destination (Join-Path $coopPath 'KNOWN_ISSUES.md') -Force
 if (-not (Test-Path -LiteralPath $existingCoopIni -PathType Leaf)) {
     Copy-Item -LiteralPath (Join-Path $payloadPath 'AliceCoop.ini') `
         -Destination $existingCoopIni

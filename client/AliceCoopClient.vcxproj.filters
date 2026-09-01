@@ -198,6 +198,15 @@
     <ClInclude Include="..\src\Coop\Detail\InteractionDiscovery.inl">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\PresentationParticles.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\RemoteCosmetics.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\RemotePawn.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\RuntimeAndAnimationCapture.inl">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>

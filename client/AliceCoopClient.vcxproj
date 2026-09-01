@@ -210,6 +210,7 @@
     <ClInclude Include="..\src\Coop\Detail\Diagnostics.inl" />
     <ClInclude Include="..\src\Coop\Detail\EngineInterop.inl" />
     <ClInclude Include="..\src\Coop\Detail\InteractionDiscovery.inl" />
+	<ClInclude Include="..\src\Coop\Detail\InternalDeclarations.inl" />
     <ClInclude Include="..\src\Coop\Detail\LifecycleAndStatus.inl" />
     <ClInclude Include="..\src\Coop\Detail\PresentationParticles.inl" />
     <ClInclude Include="..\src\Coop\Detail\Projectiles.inl" />
@@ -220,6 +221,7 @@
     <ClInclude Include="..\src\Coop\Detail\RemotePawn.inl" />
     <ClInclude Include="..\src\Coop\Detail\RuntimeAndAnimationCapture.inl" />
     <ClInclude Include="..\src\Coop\Detail\SharedWorldAndEnemies.inl" />
+	<ClInclude Include="..\src\Coop\Detail\StateAndTypes.inl" />
     <ClInclude Include="..\src\Coop\Detail\TransportAndSaveSync.inl" />
     <ClInclude Include="..\src\Coop\Detail\WorldAndProgression.inl" />
     <ClInclude Include="..\src\Coop\Protocol.hpp" />

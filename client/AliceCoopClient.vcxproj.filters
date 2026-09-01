@@ -201,6 +201,9 @@
     <ClInclude Include="..\src\Coop\Detail\InteractionDiscovery.inl">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\InternalDeclarations.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\LifecycleAndStatus.inl">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
@@ -229,6 +232,9 @@
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\SharedWorldAndEnemies.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\StateAndTypes.inl">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\TransportAndSaveSync.inl">

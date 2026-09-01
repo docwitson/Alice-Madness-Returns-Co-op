@@ -202,6 +202,9 @@
     <ClInclude Include="..\include\SDK\SDK_HEADERS\XAudio2_structs.hpp" />
     <ClInclude Include="..\src\Common.hpp" />
     <ClInclude Include="..\src\Coop\CoopClient.hpp" />
+    <ClInclude Include="..\src\Coop\Detail\Diagnostics.inl" />
+    <ClInclude Include="..\src\Coop\Detail\EngineInterop.inl" />
+    <ClInclude Include="..\src\Coop\Detail\RuntimeAndAnimationCapture.inl" />
     <ClInclude Include="..\src\Coop\Protocol.hpp" />
     <ClInclude Include="..\src\Features.hpp" />
     <ClInclude Include="..\src\Globals.hpp" />

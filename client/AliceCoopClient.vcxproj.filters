@@ -198,10 +198,16 @@
     <ClInclude Include="..\src\Coop\Detail\InteractionDiscovery.inl">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\LifecycleAndStatus.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\PresentationParticles.inl">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\Projectiles.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\PublicHooks.inl">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\RemoteActionVfx.inl">

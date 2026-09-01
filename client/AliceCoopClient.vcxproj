@@ -124,6 +124,7 @@
     <ClCompile Include="..\include\SDK\SDK_HEADERS\XAudio2_classes.cpp" />
     <ClCompile Include="..\src\Engine\EnginePointers.cpp" />
     <ClCompile Include="..\src\Coop\CoopClient.cpp" />
+    <ClCompile Include="..\src\Coop\ProcessEventBridge.cpp" />
     <ClCompile Include="..\src\Engine\ResolutionHook.cpp" />
     <ClCompile Include="..\src\Fixes\PhysicsFixes.cpp" />
     <ClCompile Include="..\src\Fixes\CrashFixes.cpp" />
@@ -206,6 +207,7 @@
     <ClInclude Include="..\include\SDK\SDK_HEADERS\XAudio2_structs.hpp" />
     <ClInclude Include="..\src\Common.hpp" />
     <ClInclude Include="..\src\Coop\CoopClient.hpp" />
+	<ClInclude Include="..\src\Coop\ProcessEventBridge.hpp" />
 	<ClInclude Include="..\src\Coop\Core\PureHelpers.hpp" />
     <ClInclude Include="..\src\Coop\Detail\Diagnostics.inl" />
     <ClInclude Include="..\src\Coop\Detail\EngineInterop.inl" />

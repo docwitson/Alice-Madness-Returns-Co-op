@@ -429,6 +429,9 @@
 			g_config.controlLifecycleTrace = EnvironmentInt(
 				L"ALICECOOP_CONTROL_TRACE",
 				ReadIniInt(iniPath, L"Trace", L"ControlLifecycleEnabled", 0)) == 1;
+			g_config.invariantTrace = EnvironmentInt(
+				L"ALICECOOP_INVARIANT_TRACE",
+				ReadIniInt(iniPath, L"Trace", L"InvariantEnabled", 0)) == 1;
 			g_config.preserveMovementTrails = ReadIniInt(
 				iniPath, L"VisualProxy", L"PreserveMovementTrails", 0) == 1;
 			g_config.sharedEnemyHealth =
@@ -601,19 +604,6 @@
 		{
 			return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
 				Clock::now().time_since_epoch()).count());
-		}
-
-		std::uint32_t HashMapName(const std::string& mapName)
-		{
-			std::uint32_t hash = 2166136261u;
-			for (const unsigned char character : mapName)
-			{
-				const unsigned char normalized = static_cast<unsigned char>(
-					std::tolower(character));
-				hash ^= normalized;
-				hash *= 16777619u;
-			}
-			return hash;
 		}
 
 		bool ContainsCaseInsensitive(const std::string& value, const char* needle)

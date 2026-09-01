@@ -2646,8 +2646,7 @@
 						g_lastAuthoritativeEnemyStateSerial[
 							event.entityKey];
 					if (lastSerial != 0
-						&& static_cast<std::int32_t>(
-							event.eventSerial - lastSerial) <= 0)
+						&& !IsNewerSequence(event.eventSerial, lastSerial))
 					{
 						continue;
 					}

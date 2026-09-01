@@ -3,11 +3,50 @@ param(
     [string]$Version = '0.1.0-alpha.1',
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$RequireCleanSource
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Get-AliceCoopProtocolVersion {
+    param([Parameter(Mandatory)][string]$ServerPath)
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $ServerPath
+    $startInfo.Arguments = '--protocol-version'
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    if (-not $process.Start()) {
+        throw 'Failed to start AliceCoopServer protocol-version query.'
+    }
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) {
+        throw "AliceCoopServer --protocol-version failed with exit code $($process.ExitCode)."
+    }
+    if ($stderr.Length -ne 0) {
+        throw "AliceCoopServer --protocol-version wrote to stderr: $stderr"
+    }
+    if ($stdout -notmatch '^(\d+)\r?\n$') {
+        throw "AliceCoopServer --protocol-version returned invalid stdout: '$stdout'"
+    }
+    return [int]$Matches[1]
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$sourceStatus = (& git -C $repoRoot status --porcelain | Out-String).Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw 'Unable to query the source worktree status.'
+}
+if ($RequireCleanSource -and $sourceStatus.Length -ne 0) {
+    throw 'Packaging requires a clean source worktree.'
+}
 $artifactsRoot = Join-Path $repoRoot 'artifacts\deploy'
 $packageName = "AliceCoop-$Version"
 $stagingPath = Join-Path $artifactsRoot $packageName
@@ -65,6 +104,7 @@ foreach ($requiredFile in @($builtDll, $builtServer)) {
 if ($LASTEXITCODE -ne 0) {
     throw "AliceCoopServer self-test failed with exit code $LASTEXITCODE."
 }
+$protocolVersion = Get-AliceCoopProtocolVersion -ServerPath $builtServer
 
 New-Item -ItemType Directory -Force -Path $artifactsRoot | Out-Null
 if (Test-Path -LiteralPath $stagingPath) {
@@ -97,6 +137,7 @@ foreach ($name in @(
     'INSTALL.md',
     'INSTALL_RU.md',
     'KNOWN_ISSUES.md',
+    'SMOKE_TEST.md',
     'TROUBLESHOOTING.md'
 )) {
     Copy-Item -LiteralPath (Join-Path $repoRoot "docs\$name") `
@@ -171,14 +212,13 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\INSTALL_RU.md') `
     -Destination (Join-Path $stagingPath 'INSTALL_RU.md')
 
 $commit = & git -C $repoRoot rev-parse --short HEAD
-$gitStatus = (& git -C $repoRoot status --porcelain | Out-String).Trim()
-$dirty = $gitStatus.Length -gt 0
+$dirty = $sourceStatus.Length -gt 0
 $manifest = [ordered]@{
     schemaVersion = 1
     name = 'AliceCoop'
     version = $Version
     architecture = 'Win32'
-    protocolVersion = 29
+    protocolVersion = $protocolVersion
     buildUtc = [DateTime]::UtcNow.ToString('o')
     sourceCommit = $commit
     sourceDirty = $dirty

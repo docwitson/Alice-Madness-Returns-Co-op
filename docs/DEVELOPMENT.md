@@ -28,6 +28,18 @@ Run the relay self-test:
 & .\bin\Release\AliceCoopServer.exe --self-test
 ```
 
+Run the protocol and pure-helper tests:
+
+```powershell
+& .\bin\Release\AliceCoopTests.exe
+```
+
+The relay reports the wire protocol version without opening logs or sockets:
+
+```powershell
+& .\bin\Release\AliceCoopServer.exe --protocol-version
+```
+
 ## Packaging
 
 ```powershell
@@ -37,6 +49,19 @@ Run the relay self-test:
 The script rebuilds `Release|x86`, runs the server self-test, stages installer
 and drop-in packages, writes manifests/checksums, and creates ZIP archives below
 `artifacts\deploy`.
+
+Validate both archives against their manifests, checksums, exact file layouts
+and the freshly built DLL/server binaries:
+
+```powershell
+& .\tools\Test-AliceCoop-Package.ps1 `
+  -InstallerZip .\artifacts\deploy\AliceCoop-0.1.0-alpha.1-Installer.zip `
+  -DropInZip .\artifacts\deploy\AliceCoop-0.1.0-alpha.1-DropIn.zip
+```
+
+CI and release workflows add `-RequireCleanSource` to both packaging and
+verification. Local packaging permits a dirty worktree unless that switch is
+specified.
 
 ## Source layout
 
@@ -64,13 +89,20 @@ and drop-in packages, writes manifests/checksums, and creates ZIP archives below
 Never run destructive save synchronization tests against the only copy of a
 real player profile.
 
+The reproducible combined checklist and baseline recovery procedure are in
+[`SMOKE_TEST.md`](SMOKE_TEST.md). The diagnostic launcher also enables passive
+lifecycle invariant checks. Any `[CoopInvariant]` record must be investigated;
+the checks only report state and never repair or assert on it.
+
 ## Release checklist
 
 - Build from a clean tree.
 - Confirm protocol and manifest versions match.
 - Run server self-test.
+- Run `AliceCoopTests.exe` in the tested configuration.
 - Scan tracked files and commit history for secrets, logs and private paths.
-- Validate both ZIP layouts and SHA-256 files.
+- Validate both ZIP layouts, manifests and SHA-256 files with the package
+  verifier.
 - Test clean install, update, host, client and uninstall.
 - Create a signed or annotated version tag where practical.
 - Upload both archives and checksums to a draft GitHub Release.

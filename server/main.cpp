@@ -236,6 +236,11 @@ int wmain(int argc, wchar_t** argv)
 	for (int i = 1; i < argc; ++i)
 	{
 		const std::wstring argument = argv[i];
+		if (argument == L"--protocol-version")
+		{
+			std::cout << AliceCoopProtocol::Version << '\n';
+			return 0;
+		}
 		if (argument == L"--self-test")
 			return SelfTest();
 		if (argument == L"--bind" && i + 1 < argc)

@@ -186,6 +186,9 @@
     <ClInclude Include="..\src\Coop\CoopClient.hpp">
       <Filter>src\Coop</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\Coop\Core\PureHelpers.hpp">
+      <Filter>src\Coop</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\Coop\Protocol.hpp">
       <Filter>src\Coop</Filter>
     </ClInclude>
@@ -196,6 +199,9 @@
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\InteractionDiscovery.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\InternalDeclarations.inl">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\LifecycleAndStatus.inl">
@@ -226,6 +232,9 @@
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\SharedWorldAndEnemies.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\StateAndTypes.inl">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\TransportAndSaveSync.inl">

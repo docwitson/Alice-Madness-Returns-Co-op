@@ -608,6 +608,7 @@
 			AchievementOverlay::SetCoopWaitingForPeer(false);
 			g_nextSpawnAttempt = Clock::now()
 				+ std::chrono::milliseconds(300);
+			TracePeerTeardownInvariants();
 			Log(std::string("PEERLIFE presentation teardown completed, reason=")
 				+ (reason ? reason : "unknown") + '.');
 		}

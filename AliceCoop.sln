@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AliceCoopClient", "client\A
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AliceCoopServer", "server\AliceCoopServer.vcxproj", "{DFA92B08-4C96-4B5B-8992-E385E8CC0865}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "AliceCoopTests", "tests\AliceCoopTests.vcxproj", "{25122673-CE7E-4854-B515-B177C9E3B39A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -21,6 +23,10 @@ Global
 		{DFA92B08-4C96-4B5B-8992-E385E8CC0865}.Debug|x86.Build.0 = Debug|Win32
 		{DFA92B08-4C96-4B5B-8992-E385E8CC0865}.Release|x86.ActiveCfg = Release|Win32
 		{DFA92B08-4C96-4B5B-8992-E385E8CC0865}.Release|x86.Build.0 = Release|Win32
+		{25122673-CE7E-4854-B515-B177C9E3B39A}.Debug|x86.ActiveCfg = Debug|Win32
+		{25122673-CE7E-4854-B515-B177C9E3B39A}.Debug|x86.Build.0 = Debug|Win32
+		{25122673-CE7E-4854-B515-B177C9E3B39A}.Release|x86.ActiveCfg = Release|Win32
+		{25122673-CE7E-4854-B515-B177C9E3B39A}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

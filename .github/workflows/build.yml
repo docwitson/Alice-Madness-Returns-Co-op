@@ -21,13 +21,35 @@ jobs:
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Build Debug x86
+        shell: pwsh
+        run: msbuild AliceCoop.sln /m /t:Rebuild "/p:Configuration=Debug;Platform=x86"
+
       - name: Build Release x86
         shell: pwsh
-        run: msbuild AliceCoop.sln /m /t:Build "/p:Configuration=Release;Platform=x86"
+        run: msbuild AliceCoop.sln /m /t:Rebuild "/p:Configuration=Release;Platform=x86"
+
+      - name: Unit tests
+        shell: pwsh
+        run: .\bin\Release\AliceCoopTests.exe
 
       - name: Relay self-test
         shell: pwsh
         run: .\bin\Release\AliceCoopServer.exe --self-test
+
+      - name: Protocol version query
+        shell: pwsh
+        run: |
+          $output = & .\bin\Release\AliceCoopServer.exe --protocol-version
+          if ($LASTEXITCODE -ne 0 -or $output -notmatch '^\d+$') {
+            throw 'Invalid protocol-version response.'
+          }
+
+      - name: Build and verify packages
+        shell: pwsh
+        run: |
+          .\tools\Build-AliceCoop-Package.ps1 -Version 0.0.0-ci -SkipBuild -RequireCleanSource
+          .\tools\Test-AliceCoop-Package.ps1 -Version 0.0.0-ci -RequireCleanSource
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4

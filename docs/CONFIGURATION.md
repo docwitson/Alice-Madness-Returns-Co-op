@@ -37,6 +37,16 @@ Normal releases ship conservative defaults. The most relevant sections are:
 - `[Performance]`: process FPS and worker-thread limits.
 - `[Trace]`: diagnostic logging. Leave every trace disabled for normal play.
 
+`[Trace] InvariantEnabled = 1` enables passive completion-point checks for
+world reset, remote-player teardown, cutscene barrier release and save sync.
+Violations are emitted as machine-readable `[CoopInvariant]` log records. The
+checks do not dereference stale objects, modify game state or run every frame.
+`AliceCoop-Diagnostic-Both.bat` enables this setting through the
+`ALICECOOP_INVARIANT_TRACE` environment override.
+
+See [`SMOKE_TEST.md`](SMOKE_TEST.md) for the diagnostic test sequence and log
+acceptance criteria.
+
 For a normal Steam launch, set `EnableWithoutLauncher = 1` and explicitly set
 `Role = host` or `Role = client`. Steam may relaunch the game from its existing
 client process, which discards the per-process environment supplied by the BAT

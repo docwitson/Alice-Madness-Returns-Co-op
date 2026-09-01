@@ -1336,6 +1336,7 @@
 					+ SharedWorldKeyText(key)
 					+ ", action=" + ObjectName(action) + '.');
 			}
+			TraceCutsceneReleaseInvariants();
 		}
 
 		bool NativeForceActivateSequenceInput(

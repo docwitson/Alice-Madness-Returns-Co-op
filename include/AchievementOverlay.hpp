@@ -71,6 +71,8 @@ namespace AchievementOverlay
 
     inline float g_uiScale = 1.0f;
     inline float g_pendingScale = 0.0f;
+    inline int g_layoutWidth = 0;
+    inline int g_layoutHeight = 0;
 
     inline int g_lastDispW = 0;
     inline int g_lastDispH = 0;
@@ -503,23 +505,109 @@ namespace AchievementOverlay
         return *reinterpret_cast<IDirect3DDevice9**>(g_devicePtrAddr);
     }
 
-    // Initial scale guess from the backbuffer, the runtime scale from io.DisplaySize.y corrects it
-    inline float ComputeUiScale(IDirect3DDevice9* dev)
+    inline bool QueryBackBufferSize(
+        IDirect3DDevice9* dev, float& width, float& height)
     {
-        float renderHeight = 1080.0f;
-        IDirect3DSurface9* bb = nullptr;
-        if (dev && SUCCEEDED(dev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) && bb)
+        IDirect3DSurface9* backBuffer = nullptr;
+        if (!dev || FAILED(dev->GetBackBuffer(
+                0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))
+            || !backBuffer)
         {
-            D3DSURFACE_DESC d{};
-            if (SUCCEEDED(bb->GetDesc(&d)))
-            {
-                renderHeight = (float)d.Height;
-            }
-
-            bb->Release();
+            return false;
         }
 
-        return (renderHeight > 1080.0f ? renderHeight / 1080.0f : 1.0f);
+        D3DSURFACE_DESC description{};
+        const bool valid = SUCCEEDED(backBuffer->GetDesc(&description))
+            && description.Width > 0 && description.Height > 0;
+        backBuffer->Release();
+        if (!valid)
+            return false;
+
+        width = static_cast<float>(description.Width);
+        height = static_cast<float>(description.Height);
+        return true;
+    }
+
+    inline bool QueryOverlayLayoutSize(
+        IDirect3DDevice9* dev, float& width, float& height)
+    {
+        float backBufferWidth = 0.0f;
+        float backBufferHeight = 0.0f;
+        const bool haveBackBuffer = QueryBackBufferSize(
+            dev, backBufferWidth, backBufferHeight);
+
+        RECT clientRect{};
+        const bool haveClient = g_hWnd && GetClientRect(g_hWnd, &clientRect)
+            && clientRect.right > clientRect.left
+            && clientRect.bottom > clientRect.top;
+        const float clientWidth = haveClient
+            ? static_cast<float>(clientRect.right - clientRect.left) : 0.0f;
+        const float clientHeight = haveClient
+            ? static_cast<float>(clientRect.bottom - clientRect.top) : 0.0f;
+
+        if (!haveBackBuffer && !haveClient)
+            return false;
+
+        if (haveBackBuffer && haveClient)
+        {
+            // Window geometry and the D3D9 backbuffer can briefly disagree
+            // while UE3 applies a resolution change. Keep layout inside both
+            // coordinate spaces so bottom/right anchored panels stay visible.
+            width = (std::min)(backBufferWidth, clientWidth);
+            height = (std::min)(backBufferHeight, clientHeight);
+        }
+        else if (haveBackBuffer)
+        {
+            width = backBufferWidth;
+            height = backBufferHeight;
+        }
+        else
+        {
+            width = clientWidth;
+            height = clientHeight;
+        }
+        return width > 0.0f && height > 0.0f;
+    }
+
+    inline float ComputeUiScaleFromHeight(float renderHeight)
+    {
+        return renderHeight > 1080.0f
+            ? renderHeight / 1080.0f : 1.0f;
+    }
+
+    // Refresh this before deciding whether the ImGui context needs rebuilding.
+    // Previously it was only updated from Render(), one frame after a resize.
+    inline void RefreshRenderMetrics(IDirect3DDevice9* dev)
+    {
+        float renderWidth = 0.0f;
+        float renderHeight = 0.0f;
+        if (!QueryOverlayLayoutSize(dev, renderWidth, renderHeight))
+            return;
+
+        g_pendingScale = ComputeUiScaleFromHeight(renderHeight);
+        const int width = static_cast<int>(renderWidth);
+        const int height = static_cast<int>(renderHeight);
+        if (width == g_layoutWidth && height == g_layoutHeight)
+            return;
+
+        g_layoutWidth = width;
+        g_layoutHeight = height;
+        // Force movable ImGui windows and animated notifications to acquire
+        // positions in the new coordinate space immediately.
+        g_lastDispW = 0;
+        g_lastDispH = 0;
+        std::lock_guard<std::mutex> lock(g_toastMutex);
+        for (ToastItem& toast : g_toasts)
+            toast.placed = false;
+    }
+
+    // Initial scale guess from the current backbuffer.
+    inline float ComputeUiScale(IDirect3DDevice9* dev)
+    {
+        float renderWidth = 0.0f;
+        float renderHeight = 0.0f;
+        return QueryOverlayLayoutSize(dev, renderWidth, renderHeight)
+            ? ComputeUiScaleFromHeight(renderHeight) : 1.0f;
     }
 
     // Texture & text loading
@@ -1674,8 +1762,12 @@ namespace AchievementOverlay
         ImVec2 disp = io.DisplaySize;
 
         ImVec2 winSize(disp.x * 0.6f, disp.y * 0.8f);
-        winSize.x = winSize.x < 700.0f ? 700.0f : (winSize.x > disp.x - 40.0f ? disp.x - 40.0f : winSize.x);
-        winSize.y = winSize.y < 500.0f ? 500.0f : (winSize.y > disp.y - 40.0f ? disp.y - 40.0f : winSize.y);
+        const float availableWidth = (std::max)(1.0f, disp.x - 40.0f);
+        const float availableHeight = (std::max)(1.0f, disp.y - 40.0f);
+        winSize.x = (std::min)(availableWidth,
+            (std::max)((std::min)(700.0f, availableWidth), winSize.x));
+        winSize.y = (std::min)(availableHeight,
+            (std::max)((std::min)(500.0f, availableHeight), winSize.y));
 
         bool resChanged = ((int)disp.x != g_lastDispW) || ((int)disp.y != g_lastDispH);
         g_lastDispW = (int)disp.x;
@@ -1969,30 +2061,21 @@ namespace AchievementOverlay
         float clientW = io.DisplaySize.x;
         float clientH = io.DisplaySize.y;
 
-        float renderW = clientW, renderH = clientH;
-        IDirect3DSurface9* bb = nullptr;
-        if (SUCCEEDED(pDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) && bb)
-        {
-            D3DSURFACE_DESC d{};
-            if (SUCCEEDED(bb->GetDesc(&d)) && d.Width > 0 && d.Height > 0)
-            {
-                renderW = (float)d.Width;
-                renderH = (float)d.Height;
-            }
+        float layoutW = clientW, layoutH = clientH;
+        QueryOverlayLayoutSize(pDevice, layoutW, layoutH);
 
-            bb->Release();
-        }
+        io.DisplaySize = ImVec2(layoutW, layoutH);
+        g_pendingScale = ComputeUiScaleFromHeight(layoutH);
 
-        io.DisplaySize = ImVec2(renderW, renderH);
-
-        g_pendingScale = (renderH > 1080.0f ? renderH / 1080.0f : 1.0f);
-
-        if (clientW > 0.0f && clientH > 0.0f && (renderW != clientW || renderH != clientH))
+        if (clientW > 0.0f && clientH > 0.0f
+            && (layoutW != clientW || layoutH != clientH))
         {
             POINT pt;
             if (GetCursorPos(&pt) && ScreenToClient(g_hWnd, &pt))
             {
-                io.AddMousePosEvent((float)pt.x * (renderW / clientW), (float)pt.y * (renderH / clientH));
+                io.AddMousePosEvent(
+                    static_cast<float>(pt.x) * (layoutW / clientW),
+                    static_cast<float>(pt.y) * (layoutH / clientH));
             }
         }
 
@@ -2333,6 +2416,10 @@ namespace AchievementOverlay
         {
             return;
         }
+
+        // Query the new backbuffer before comparing scales. This prevents a
+        // frame rendered with the previous resolution's layout after Reset().
+        RefreshRenderMetrics(pDevice);
 
         if (g_imguiInitialized && pDevice != g_pInitializedDevice)
         {

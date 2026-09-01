@@ -204,7 +204,9 @@
     <ClInclude Include="..\src\Coop\CoopClient.hpp" />
     <ClInclude Include="..\src\Coop\Detail\Diagnostics.inl" />
     <ClInclude Include="..\src\Coop\Detail\EngineInterop.inl" />
+    <ClInclude Include="..\src\Coop\Detail\InteractionDiscovery.inl" />
     <ClInclude Include="..\src\Coop\Detail\RuntimeAndAnimationCapture.inl" />
+    <ClInclude Include="..\src\Coop\Detail\SharedWorldAndEnemies.inl" />
     <ClInclude Include="..\src\Coop\Detail\TransportAndSaveSync.inl" />
     <ClInclude Include="..\src\Coop\Detail\WorldAndProgression.inl" />
     <ClInclude Include="..\src\Coop\Protocol.hpp" />

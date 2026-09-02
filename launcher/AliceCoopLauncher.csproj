@@ -12,11 +12,15 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <OutputPath>..\bin\$(Configuration)\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <ApplicationIcon>Assets\AliceCoop.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <Resource Include="..\images\aliceWhait.png">
       <Link>Assets\aliceWhait.png</Link>
+    </Resource>
+    <Resource Include="..\images\AliceLauncher.jpg">
+      <Link>Assets\AliceLauncher.jpg</Link>
     </Resource>
   </ItemGroup>
 </Project>

@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Navigation;
 
 namespace AliceCoopLauncher
 {
@@ -28,6 +29,8 @@ namespace AliceCoopLauncher
             }));
             Loaded += MainWindow_Loaded;
             Closing += MainWindow_Closing;
+            StateChanged += (_, __) =>
+                MaximizeButton.Content = WindowState == WindowState.Maximized ? "❐" : "□";
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -41,7 +44,7 @@ namespace AliceCoopLauncher
                 GameDirectoryTextBox.Text = selected.Win32Directory;
 
             ServerAddressTextBox.Text = LauncherSession.ReadPreference(
-                "ServerAddress", "127.0.0.1");
+                "ServerAddress", string.Empty);
             PortTextBox.Text = LauncherSession.ReadPreference("Port", "27018");
             SelectDisplayMode(LauncherSession.ReadPreference("DisplayMode", "fullscreen"));
 
@@ -65,9 +68,10 @@ namespace AliceCoopLauncher
             activeWin32Directory = installed ? path : null;
             if (installed)
             {
-                var store = GameLocator.Describe(path).Store;
-                InstallationStatusText.Text = "Alice Co-op is installed — " + store;
+                InstallationStatusText.Text = "Installation detected";
                 InstallationStatusText.Foreground = FindBrush("SuccessBrush");
+                InstallButton.Content = "Repair installation";
+                InstallButton.ClearValue(StyleProperty);
             }
             else
             {
@@ -75,6 +79,8 @@ namespace AliceCoopLauncher
                     ? "Select the folder containing AliceMadnessReturns.exe, then install."
                     : "Alice Co-op installation is incomplete. Run the launcher from the installer package.";
                 InstallationStatusText.Foreground = FindBrush("WarningBrush");
+                InstallButton.Content = "Install / Repair";
+                InstallButton.Style = (Style)FindResource("PrimaryButton");
             }
             InstallButton.Visibility = PackageInstaller.IsPackageMode
                 ? Visibility.Visible : Visibility.Collapsed;
@@ -176,7 +182,7 @@ namespace AliceCoopLauncher
                     return;
                 launcherSession.Activate("client", address, port, displayMode);
                 SavePreferences(port, displayMode);
-                SessionStatusText.Text = "Launching client";
+                SessionStatusText.Text = "Client launching — waiting to connect";
                 LaunchSelectedGame();
             }
             catch (Exception exception)
@@ -212,7 +218,8 @@ namespace AliceCoopLauncher
             }
         }
 
-        private bool TryPrepare(out int port, out string displayMode)
+        private bool TryPrepare(out int port, out string displayMode,
+            bool confirmRunningGame = true)
         {
             port = 0;
             displayMode = CurrentDisplayMode();
@@ -223,14 +230,33 @@ namespace AliceCoopLauncher
                     "Installation required", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
-            if (Process.GetProcessesByName("AliceMadnessReturns").Length != 0)
+            var runningGames = confirmRunningGame
+                ? GameLocator.RunningGameExecutables()
+                : Array.Empty<string>();
+            if (runningGames.Count != 0)
             {
-                MessageBox.Show(this,
-                    "Close Alice: Madness Returns before choosing Host or Join. " +
-                    "The role is applied when the game starts.",
-                    "Game already running", MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                return false;
+                var selectedExecutable = Path.Combine(activeWin32Directory,
+                    GameLocator.GameExecutableName);
+                var runningText = string.Join(Environment.NewLine,
+                    runningGames.Select(item => "• " + item));
+                var sameCopy = runningGames.Any(item =>
+                    File.Exists(item) && GameLocator.PathsEqual(item, selectedExecutable));
+                var warning = sameCopy
+                    ? "The selected game copy is already running. Starting it again may fail, " +
+                      "especially through Steam."
+                    : "Another Alice: Madness Returns copy is already running.";
+                var answer = MessageBox.Show(this,
+                    warning + Environment.NewLine + Environment.NewLine +
+                    "Currently running:" + Environment.NewLine + runningText +
+                    Environment.NewLine + Environment.NewLine +
+                    "Selected for this launch:" + Environment.NewLine +
+                    selectedExecutable + Environment.NewLine + Environment.NewLine +
+                    "Choose Yes only if you understand this and want to launch the selected " +
+                    "copy anyway.",
+                    "Launch another Alice instance?", MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning, MessageBoxResult.No);
+                if (answer != MessageBoxResult.Yes)
+                    return false;
             }
             return TryReadPort(out port);
         }
@@ -301,6 +327,7 @@ namespace AliceCoopLauncher
 
         private void AppendStatus(string message)
         {
+            SessionLogTextBox.Visibility = Visibility.Visible;
             SessionLogTextBox.AppendText(message + Environment.NewLine);
             SessionLogTextBox.ScrollToEnd();
         }
@@ -319,7 +346,7 @@ namespace AliceCoopLauncher
 
         private void Firewall_Click(object sender, RoutedEventArgs e)
         {
-            if (!TryPrepare(out var port, out _))
+            if (!TryPrepare(out var port, out _, confirmRunningGame: false))
                 return;
             try
             {
@@ -384,6 +411,25 @@ namespace AliceCoopLauncher
                     return;
                 }
             }
+        }
+
+        private void Minimize_Click(object sender, RoutedEventArgs e) =>
+            WindowState = WindowState.Minimized;
+
+        private void Maximize_Click(object sender, RoutedEventArgs e) =>
+            WindowState = WindowState == WindowState.Maximized
+                ? WindowState.Normal : WindowState.Maximized;
+
+        private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+        private void OpenRepository_Click(object sender,
+            RequestNavigateEventArgs e)
+        {
+            Process.Start(new ProcessStartInfo {
+                FileName = e.Uri.AbsoluteUri,
+                UseShellExecute = true
+            });
+            e.Handled = true;
         }
 
         private void MainWindow_Closing(object sender,

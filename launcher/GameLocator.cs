@@ -137,6 +137,30 @@ namespace AliceCoopLauncher
             string.Equals(Normalize(first), Normalize(second),
                 StringComparison.OrdinalIgnoreCase);
 
+        public static IReadOnlyList<string> RunningGameExecutables()
+        {
+            var paths = new List<string>();
+            foreach (var process in Process.GetProcessesByName(
+                Path.GetFileNameWithoutExtension(GameExecutableName)))
+            {
+                try
+                {
+                    var path = process.MainModule?.FileName;
+                    if (!string.IsNullOrWhiteSpace(path))
+                        paths.Add(path);
+                }
+                catch (Exception)
+                {
+                    paths.Add("Running Alice process (path unavailable)");
+                }
+                finally
+                {
+                    process.Dispose();
+                }
+            }
+            return paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
         private static string Normalize(string path)
         {
             if (string.IsNullOrWhiteSpace(path))

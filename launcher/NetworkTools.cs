@@ -53,7 +53,7 @@ namespace AliceCoopLauncher
 
         public static IReadOnlyList<string> LocalAddresses()
         {
-            var addresses = new List<string>();
+            var addresses = new List<Tuple<int, string>>();
             foreach (var network in NetworkInterface.GetAllNetworkInterfaces()
                 .Where(item => item.OperationalStatus == OperationalStatus.Up &&
                     item.NetworkInterfaceType != NetworkInterfaceType.Loopback))
@@ -62,10 +62,50 @@ namespace AliceCoopLauncher
                 {
                     if (address.Address.AddressFamily == AddressFamily.InterNetwork &&
                         !IPAddress.IsLoopback(address.Address))
-                        addresses.Add(address.Address + " — " + network.Name);
+                    {
+                        var classification = ClassifyAddress(address.Address, network.Name);
+                        var suffixAlreadyPresent = network.Name.IndexOf(
+                            classification.Item2, StringComparison.OrdinalIgnoreCase) >= 0;
+                        addresses.Add(Tuple.Create(classification.Item1,
+                            address.Address + " — " + network.Name +
+                            (suffixAlreadyPresent ? string.Empty : " · " +
+                                classification.Item2)));
+                    }
                 }
             }
-            return addresses.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var ordered = addresses.OrderBy(item => item.Item1)
+                .ThenBy(item => item.Item2, StringComparer.OrdinalIgnoreCase)
+                .Select(item => item.Item2)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (ordered.Count != 0)
+                ordered[0] += " · Recommended";
+            return ordered;
+        }
+
+        private static Tuple<int, string> ClassifyAddress(IPAddress address,
+            string adapterName)
+        {
+            var name = adapterName ?? string.Empty;
+            var vpn = new[] { "radmin", "tailscale", "hamachi", "wireguard",
+                "zerotier", "tunnel", "-tun", " tun", "vpn" };
+            if (vpn.Any(marker => name.IndexOf(marker,
+                StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                var priority = name.IndexOf("radmin",
+                    StringComparison.OrdinalIgnoreCase) >= 0 ? 0 : 1;
+                return Tuple.Create(priority, "VPN");
+            }
+
+            var bytes = address.GetAddressBytes();
+            var privateLan = bytes[0] == 10 ||
+                (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
+                (bytes[0] == 192 && bytes[1] == 168);
+            if (privateLan)
+                return Tuple.Create(2, "LAN");
+            if (bytes[0] == 169 && bytes[1] == 254)
+                return Tuple.Create(5, "Local only");
+            return Tuple.Create(4, "Network");
         }
 
         public static byte[] BuildPingDatagram(ushort protocolVersion)

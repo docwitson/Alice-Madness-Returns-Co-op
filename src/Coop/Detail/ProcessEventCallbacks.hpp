@@ -52,4 +52,6 @@ namespace AliceCoop
 	void ExecuteDevCommand(int command);
 	bool IsActionTraceEnabled();
 	bool IsWorldTraceEnabled();
+	bool IsProcessEventBridgeTraceEnabled();
+	void LogProcessEventBridgeDiagnostic(const std::string& message);
 }

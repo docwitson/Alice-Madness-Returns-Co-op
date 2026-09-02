@@ -58,6 +58,17 @@ namespace AliceCoop
 	}
 
 	#include "Coop/Detail/PublicHooks.inl"
+
+	bool IsProcessEventBridgeTraceEnabled()
+	{
+		return g_config.processEventBridgeTrace;
+	}
+
+	void LogProcessEventBridgeDiagnostic(const std::string& message)
+	{
+		Log(message);
+	}
+
 	void Initialize()
 	{
 		ReadConfig();
@@ -120,6 +131,8 @@ namespace AliceCoop
 		}
 		if (g_config.invariantTrace)
 			Log("LIFECYCLE invariant diagnostics enabled.");
+		if (g_config.processEventBridgeTrace)
+			Log("PROCESS_EVENT_BRIDGE diagnostics enabled.");
 		if (g_config.sharedEnemyHealth)
 		{
 			Log("SHAREDWORLD enemy health/death relay enabled; "

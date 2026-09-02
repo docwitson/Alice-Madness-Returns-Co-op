@@ -48,6 +48,7 @@
 			bool animationComparisonTrace = false;
 			bool controlLifecycleTrace = false;
 			bool invariantTrace = false;
+			bool processEventBridgeTrace = false;
 			bool preserveMovementTrails = false;
 			bool sharedEnemyHealth = true;
 			bool sharedEnemyTransforms = true;

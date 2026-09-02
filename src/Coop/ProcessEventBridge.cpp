@@ -3,12 +3,34 @@
 #include "Coop/Detail/ProcessEventCallbacks.hpp"
 #include "Coop/ProcessEventBridge.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cmath>
+#include <sstream>
 
 namespace AliceCoop::ProcessEventBridge
 {
 	namespace
 	{
+		constexpr std::size_t DecisionReasonCount =
+			static_cast<std::size_t>(DecisionReason::Count);
+
+		struct ThreadDiagnostics
+		{
+			std::uint64_t entered = 0;
+			std::uint64_t completed = 0;
+			std::uint64_t suppressed = 0;
+			std::uint64_t deferred = 0;
+			std::uint32_t depth = 0;
+			std::uint32_t maxDepth = 0;
+			std::array<std::uint64_t, DecisionReasonCount> reasons{};
+			bool summaryPending = false;
+			bool mismatchReported = false;
+		};
+
+		bool g_diagnosticsEnabled = false;
+		thread_local ThreadDiagnostics g_threadDiagnostics;
+
 		UFunction* g_tickAlicePawn = nullptr;
 		UFunction* g_interpStarted = nullptr;
 		UFunction* g_aliceHudPostRender = nullptr;
@@ -89,14 +111,188 @@ namespace AliceCoop::ProcessEventBridge
 				|| function == g_coopClientTravel
 				|| function == g_coopBackToTitle;
 		}
+
+		bool IsSummaryBoundaryFunction(UFunction* function)
+		{
+			return function == g_coopClientTravel
+				|| function == g_coopBackToTitle
+				|| function == g_coopSetInMainMenu
+				|| function == g_coopLoadChapter
+				|| function == g_coopTitleMenuLoadCheckpoint
+				|| function == g_coopInGameMenuLoadCheckpoint
+				|| function == g_coopInGameMenuQuit;
+		}
+
+		const char* DispositionName(Disposition disposition)
+		{
+			switch (disposition)
+			{
+			case Disposition::Continue:
+				return "Continue";
+			case Disposition::Suppress:
+				return "Suppress";
+			case Disposition::Defer:
+				return "Defer";
+			}
+			return "Unknown";
+		}
+
+		const char* DecisionReasonName(DecisionReason reason)
+		{
+			switch (reason)
+			{
+			case DecisionReason::None:
+				return "None";
+			case DecisionReason::HostProgressionTrophy:
+				return "HostProgressionTrophy";
+			case DecisionReason::SharedPlayerDamage:
+				return "SharedPlayerDamage";
+			case DecisionReason::SequenceActivationBarrier:
+				return "SequenceActivationBarrier";
+			case DecisionReason::Count:
+				break;
+			}
+			return "Unknown";
+		}
+
+		void WriteDiagnostic(const std::string& message) noexcept
+		{
+			try
+			{
+				AliceCoop::LogProcessEventBridgeDiagnostic(message);
+			}
+			catch (...)
+			{
+				// Diagnostics must never change ProcessEvent behavior.
+			}
+		}
+
+		void ReportHookExitViolation(const std::string& details)
+		{
+			ThreadDiagnostics& diagnostics = g_threadDiagnostics;
+			if (diagnostics.mismatchReported)
+				return;
+			diagnostics.mismatchReported = true;
+
+			std::ostringstream stream;
+			stream << "[CoopBridge] event=HookExit"
+				<< " invariant=BalancedInvocation"
+				<< " thread=" << GetCurrentThreadId()
+				<< " details=" << details;
+			WriteDiagnostic(stream.str());
+		}
+
+		void WriteDecision(const Decision& decision, std::uint32_t depth)
+		{
+			std::ostringstream stream;
+			stream << "[CoopBridge] event=Decision"
+				<< " disposition=" << DispositionName(decision.disposition)
+				<< " reason=" << DecisionReasonName(decision.reason)
+				<< " depth=" << depth;
+			WriteDiagnostic(stream.str());
+		}
+
+		void WriteSummary()
+		{
+			const ThreadDiagnostics& diagnostics = g_threadDiagnostics;
+			std::ostringstream stream;
+			stream << "[CoopBridge] event=Summary"
+				<< " thread=" << GetCurrentThreadId()
+				<< " entered=" << diagnostics.entered
+				<< " completed=" << diagnostics.completed
+				<< " suppressed=" << diagnostics.suppressed
+				<< " deferred=" << diagnostics.deferred
+				<< " active=" << diagnostics.depth
+				<< " maxDepth=" << diagnostics.maxDepth
+				<< " reasonHostProgressionTrophy="
+				<< diagnostics.reasons[static_cast<std::size_t>(
+					DecisionReason::HostProgressionTrophy)]
+				<< " reasonSharedPlayerDamage="
+				<< diagnostics.reasons[static_cast<std::size_t>(
+					DecisionReason::SharedPlayerDamage)]
+				<< " reasonSequenceActivationBarrier="
+				<< diagnostics.reasons[static_cast<std::size_t>(
+					DecisionReason::SequenceActivationBarrier)];
+			WriteDiagnostic(stream.str());
+		}
 	}
 
 	Invocation::Invocation(int object, UFunction* function, int params, int result)
 		: object_(object), function_(function), params_(params), result_(result)
 	{
+		if (!g_diagnosticsEnabled)
+			return;
+
+		diagnosticsActive_ = true;
+		ThreadDiagnostics& diagnostics = g_threadDiagnostics;
+		++diagnostics.entered;
+		++diagnostics.depth;
+		diagnosticDepth_ = diagnostics.depth;
+		diagnostics.maxDepth = (std::max)(
+			diagnostics.maxDepth, diagnostics.depth);
 	}
 
-	Invocation::~Invocation() = default;
+	Invocation::~Invocation()
+	{
+		if (!diagnosticsActive_)
+			return;
+
+		ThreadDiagnostics& diagnostics = g_threadDiagnostics;
+		if (diagnostics.depth != diagnosticDepth_
+			|| diagnostics.depth == 0)
+		{
+			std::ostringstream details;
+			details << "depthMismatch(expected=" << diagnosticDepth_
+				<< ",actual=" << diagnostics.depth << ')';
+			ReportHookExitViolation(details.str());
+		}
+
+		if (decisionSet_)
+		{
+			if (decision_.disposition == Disposition::Suppress)
+				++diagnostics.suppressed;
+			else if (decision_.disposition == Disposition::Defer)
+				++diagnostics.deferred;
+			else
+				ReportHookExitViolation("terminalDecisionIsContinue");
+
+			const std::size_t reason =
+				static_cast<std::size_t>(decision_.reason);
+			if (reason < diagnostics.reasons.size())
+				++diagnostics.reasons[reason];
+			else
+				ReportHookExitViolation("terminalReasonOutOfRange");
+			WriteDecision(decision_, diagnosticDepth_);
+		}
+		else if (afterOriginalCompleted_)
+		{
+			++diagnostics.completed;
+		}
+		else
+		{
+			ReportHookExitViolation("missingTerminalOrAfterOriginal");
+		}
+
+		if (diagnostics.depth > 0)
+			--diagnostics.depth;
+
+		const std::uint64_t accounted = diagnostics.completed
+			+ diagnostics.suppressed + diagnostics.deferred
+			+ diagnostics.depth;
+		if (diagnostics.entered != accounted)
+		{
+			std::ostringstream details;
+			details << "accountingMismatch(entered=" << diagnostics.entered
+				<< ",accounted=" << accounted << ')';
+			ReportHookExitViolation(details.str());
+		}
+
+		if (diagnostics.depth == 0 && diagnostics.summaryPending)
+		{
+			diagnostics.summaryPending = false;
+			WriteSummary();
+		}
+	}
 
 	void Invocation::SetDecision(Decision decision)
 	{
@@ -136,6 +332,9 @@ namespace AliceCoop::ProcessEventBridge
 
 	void Initialize()
 	{
+		g_diagnosticsEnabled =
+			AliceCoop::IsProcessEventBridgeTraceEnabled();
+
 		g_tickAlicePawn = UFunction::FindFunction(
 			"Function AliceGame.AlicePawn.Tick");
 		g_interpStarted = UFunction::FindFunction(
@@ -593,6 +792,9 @@ namespace AliceCoop::ProcessEventBridge
 		if (AliceCoop::IsEnabled() && Function == g_tickAlicePawn)
 			AliceCoop::OnAlicePawnTicked(
 				reinterpret_cast<AAlicePawn*>(This));
+
+		if (g_diagnosticsEnabled && IsSummaryBoundaryFunction(Function))
+			g_threadDiagnostics.summaryPending = true;
 
 		invocation.afterOriginalCompleted_ = true;
 	}

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 class UObject;
 class UFunction;
 
@@ -58,6 +60,8 @@ namespace AliceCoop::ProcessEventBridge
 		Decision decision_{};
 		bool decisionSet_ = false;
 		bool afterOriginalCompleted_ = false;
+		bool diagnosticsActive_ = false;
+		std::uint32_t diagnosticDepth_ = 0;
 	};
 
 	void Initialize();

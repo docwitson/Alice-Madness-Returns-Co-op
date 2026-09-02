@@ -432,6 +432,10 @@
 			g_config.invariantTrace = EnvironmentInt(
 				L"ALICECOOP_INVARIANT_TRACE",
 				ReadIniInt(iniPath, L"Trace", L"InvariantEnabled", 0)) == 1;
+			g_config.processEventBridgeTrace = EnvironmentInt(
+				L"ALICECOOP_PROCESS_EVENT_BRIDGE_TRACE",
+				ReadIniInt(iniPath, L"Trace",
+					L"ProcessEventBridgeEnabled", 0)) == 1;
 			g_config.preserveMovementTrails = ReadIniInt(
 				iniPath, L"VisualProxy", L"PreserveMovementTrails", 0) == 1;
 			g_config.sharedEnemyHealth =

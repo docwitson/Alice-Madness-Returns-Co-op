@@ -3,17 +3,30 @@
 ## The game does not start
 
 - Confirm the mod is in the directory containing `AliceMadnessReturns.exe`.
+- In the launcher, confirm that the selected path is the same copy of the game
+  that Steam or EA App starts. Use **Browse** when multiple copies exist.
 - Install Microsoft Visual C++ Redistributable 2015–2022 x86.
+- Install or repair .NET Framework 4.8 if the launcher itself does not open.
 - Remove unrelated `dinput8.dll` proxy mods temporarily; only one file with that
   name can be loaded.
-- Restore the previous DLL with `AliceCoop\Uninstall-AliceCoop.bat` to confirm
-  whether the issue is mod-related.
+- Restore the previous DLL with
+  `AliceCoop\Advanced\Tools\Uninstall-AliceCoop.bat` to confirm whether the
+  issue is mod-related.
+
+## Installation failed
+
+- Close every game and relay process, then retry **Install / Repair**.
+- Approve the Windows administrator prompt.
+- Read `%LOCALAPPDATA%\AliceCoop\installer-status.txt` for the exact failure.
+- Extract the installer before running it; do not start the launcher inside the
+  ZIP preview.
 
 ## Server or peer stays offline
 
 - Both players must use the same IP, UDP port, release and protocol version.
 - Run only one relay server.
 - Allow `AliceCoopServer.exe` through Windows Firewall for private networks.
+- Use **Test connection** on the client before launching the game.
 - Ping the VPN address and confirm both players are in the same VPN network.
 - Do not use the host's public Internet address without a trusted VPN.
 

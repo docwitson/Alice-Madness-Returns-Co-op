@@ -6,6 +6,7 @@
 - Desktop development with C++ workload
 - MSVC v143 x86 tools
 - Windows 10 or Windows 11 SDK
+- .NET Framework 4.8 targeting pack
 - PowerShell 5.1 or later
 
 Clone the repository and build:
@@ -20,6 +21,7 @@ Expected outputs:
 ```text
 bin\Release\dinput8.dll
 bin\Release\AliceCoopServer.exe
+bin\Release\AliceCoopLauncher.exe
 ```
 
 Run the relay self-test:
@@ -46,17 +48,15 @@ The relay reports the wire protocol version without opening logs or sockets:
 & .\tools\Build-AliceCoop-Package.ps1 -Version 0.1.0-alpha.1
 ```
 
-The script rebuilds `Release|x86`, runs the server self-test, stages installer
-and drop-in packages, writes manifests/checksums, and creates ZIP archives below
-`artifacts\deploy`.
+The script rebuilds `Release|x86`, runs the server and launcher self-tests,
+stages installer and drop-in packages, writes manifests/checksums, and creates
+ZIP archives below `artifacts\deploy`.
 
 Validate both archives against their manifests, checksums, exact file layouts
 and the freshly built DLL/server binaries:
 
 ```powershell
-& .\tools\Test-AliceCoop-Package.ps1 `
-  -InstallerZip .\artifacts\deploy\AliceCoop-0.1.0-alpha.1-Installer.zip `
-  -DropInZip .\artifacts\deploy\AliceCoop-0.1.0-alpha.1-DropIn.zip
+& .\tools\Test-AliceCoop-Package.ps1 -Version 0.1.0-alpha.1
 ```
 
 CI and release workflows add `-RequireCleanSource` to both packaging and
@@ -69,13 +69,14 @@ specified.
 | --- | --- |
 | `client/` | Combined MadnessPatch/Alice Co-op DLL project and default patch INI |
 | `server/` | Standalone UDP relay |
+| `launcher/` | WPF launcher/installer UI and Steam/game discovery |
 | `src/Coop/` | Protocol integration, proxy, world and lifecycle synchronization |
 | `src/Coop/Detail/` | Internal implementation fragments included only by `CoopClient.cpp` |
 | `src/Coop/ProcessEventBridge.*` | Alice Co-op boundary inside the shared MadnessPatch `ProcessEvent` hook |
 | `src/` | MadnessPatch base and shared hooks/features |
 | `include/` | Project headers, vendored dependencies and UE3 SDK declarations |
 | `lib/` | Vendored x86 static libraries required by the inherited build |
-| `manual-launch/` | Supported host/client/server and local-test scripts |
+| `manual-launch/` | Advanced host/client/server and local-test scripts |
 | `tools/` | Packaging, installation and uninstallation scripts |
 | `images/` | Alice Co-op-owned runtime overlay images only |
 

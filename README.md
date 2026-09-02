@@ -51,6 +51,7 @@ identify safely at runtime.
 - A legitimate PC installation of *Alice: Madness Returns* (Steam or EA App).
 - Windows 10 or Windows 11, 64-bit OS; the game and mod are 32-bit.
 - The Microsoft Visual C++ 2015–2022 Redistributable **x86**.
+- .NET Framework 4.8 for the graphical launcher.
 - The exact same Alice Co-op release on both computers.
 - Localhost, a trusted LAN, or a trusted VPN such as Radmin VPN.
 
@@ -60,50 +61,30 @@ A separate MadnessPatch installation is not required.
 
 ## Quick start
 
-Prefer a video walkthrough? Watch the
-[installation and setup guide on YouTube](https://www.youtube.com/watch?v=UzjCvp7MhTM).
-
 1. Close the game on both computers.
-2. Download the latest `AliceCoop-*-drop-in.zip` from
+2. Download the latest `AliceCoop-*-installer.zip` from
    [Releases](https://github.com/docwitson/Alice-Madness-Returns-Co-op/releases).
-3. Extract the archive into the folder containing `AliceMadnessReturns.exe`:
-
-   ```text
-   <game>\Binaries\Win32
-   ```
-
-4. Start exactly one relay server on either computer:
-
-   ```text
-   AliceCoop\AliceCoop-Server.bat
-   ```
-
-5. **Steam:** edit `AliceCoop\AliceCoop.ini` on both computers. Set
-   `EnableWithoutLauncher = 1`, use `Role = host` on the host and
-   `Role = client` on the client, then set `ServerAddress` to the IP address of
-   the PC running the relay. Use `127.0.0.1` only when the relay runs on that
-   same PC. Both players must use the same `Port`.
-6. Launch both copies normally through Steam. The overlay should show the
-   configured `HOST` or `CLIENT` role.
-7. **EA App or BAT launch:** leave `EnableWithoutLauncher = 0`, set `SERVER_IP`
-   and `COOP_PORT` in `AliceCoop-LaunchConfig.bat`, then use the corresponding
-   script on each computer:
-
-   ```text
-   AliceCoop\AliceCoop-Host.bat
-   AliceCoop\AliceCoop-Client.bat
-   ```
-
-8. Load compatible profiles. The client can use `SYNC HOST SAVE` in the main
+3. Extract it anywhere, run `AliceCoopLauncher.exe`, select the folder
+   containing `AliceMadnessReturns.exe`, and choose **Install / Repair**.
+4. On the host PC, choose a trusted LAN/VPN address, allow the relay through
+   the private-network firewall when prompted, and press **Start Host**. Send
+   the displayed address to the other player.
+5. On the second PC, enter that address, press **Test connection**, then
+   **Join Session**. The launcher uses the matching Steam installation when it
+   can identify one; other installations are started directly.
+6. Keep both launchers open during the session. The host launcher reports when
+   both game processes have connected to the relay and owns the relay process.
+7. Load compatible profiles. The client can use `SYNC HOST SAVE` in the main
    menu to copy the host's progression; read the warning carefully.
-9. Enter gameplay. If joining through the overlay loads the correct level but
+8. Enter gameplay. If joining through the overlay loads the correct level but
    not the host's exact position, press `O` once after the level has loaded.
 
 The relay server may run on either player's computer. Allow inbound UDP traffic
 for its configured port (default `27018`). Do not expose it directly to the
 public Internet: the prototype protocol has no authentication or encryption.
 
-See the full [installation and update guide](docs/INSTALL.md).
+The direct `drop-in.zip` and manual BAT files remain available for advanced
+users. See the full [installation and update guide](docs/INSTALL.md).
 
 ## Controls
 
@@ -119,15 +100,18 @@ The normal game keeps ownership of these keys outside the listed contexts.
 
 ## Configuration
 
-BAT launch settings live in:
+The launcher stores its temporary live session in:
 
 ```text
-AliceCoop\AliceCoop-LaunchConfig.bat
+%LOCALAPPDATA%\AliceCoop\session.ini
 ```
 
-Network, proxy, synchronization and diagnostic settings live in:
+The session is accepted only while that launcher instance is alive, so Steam
+may restart the game without losing its role. Manual launch settings and the
+full mod configuration live in:
 
 ```text
+AliceCoop\Advanced\Manual\AliceCoop-LaunchConfig.bat
 AliceCoop\AliceCoop.ini
 ```
 

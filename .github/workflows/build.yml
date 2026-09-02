@@ -41,6 +41,15 @@ jobs:
         shell: pwsh
         run: .\bin\Release\AliceCoopServer.exe --self-test
 
+      - name: Launcher self-test
+        shell: pwsh
+        run: |
+          $process = Start-Process .\bin\Release\AliceCoopLauncher.exe `
+            -ArgumentList '--self-test' -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw 'AliceCoopLauncher self-test failed.'
+          }
+
       - name: Protocol version query
         shell: pwsh
         run: |
@@ -63,3 +72,4 @@ jobs:
           path: |
             bin/Release/dinput8.dll
             bin/Release/AliceCoopServer.exe
+            bin/Release/AliceCoopLauncher.exe

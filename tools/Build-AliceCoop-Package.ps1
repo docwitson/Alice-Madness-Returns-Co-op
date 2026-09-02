@@ -11,7 +11,6 @@ $ErrorActionPreference = 'Stop'
 
 function Get-AliceCoopProtocolVersion {
     param([Parameter(Mandatory)][string]$ServerPath)
-
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $ServerPath
     $startInfo.Arguments = '--protocol-version'
@@ -21,155 +20,164 @@ function Get-AliceCoopProtocolVersion {
     $startInfo.RedirectStandardError = $true
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
-    if (-not $process.Start()) {
-        throw 'Failed to start AliceCoopServer protocol-version query.'
-    }
+    if (-not $process.Start()) { throw 'Failed to query the protocol version.' }
     $stdout = $process.StandardOutput.ReadToEnd()
     $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
-    if ($process.ExitCode -ne 0) {
-        throw "AliceCoopServer --protocol-version failed with exit code $($process.ExitCode)."
-    }
-    if ($stderr.Length -ne 0) {
-        throw "AliceCoopServer --protocol-version wrote to stderr: $stderr"
-    }
-    if ($stdout -notmatch '^(\d+)\r?\n$') {
-        throw "AliceCoopServer --protocol-version returned invalid stdout: '$stdout'"
+    if ($process.ExitCode -ne 0 -or $stderr.Length -ne 0 -or
+        $stdout -notmatch '^(\d+)\r?\n$') {
+        throw "Invalid protocol-version response: '$stdout' '$stderr'"
     }
     return [int]$Matches[1]
 }
 
+function Reset-StagingPath {
+    param([Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$AllowedRoot)
+    $resolved = [System.IO.Path]::GetFullPath($Path)
+    $root = [System.IO.Path]::GetFullPath($AllowedRoot)
+    if (-not $resolved.StartsWith(
+        $root + [System.IO.Path]::DirectorySeparatorChar,
+        [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Unsafe staging path: $resolved"
+    }
+    if (Test-Path -LiteralPath $resolved) {
+        Remove-Item -LiteralPath $resolved -Recurse -Force
+    }
+}
+
+function Write-Checksums {
+    param([Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)][string]$Destination)
+    Get-ChildItem -LiteralPath $Root -Recurse -File |
+        Where-Object FullName -ne $Destination |
+        Sort-Object FullName |
+        ForEach-Object {
+            $relative = $_.FullName.Substring($Root.Length + 1)
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+            "$hash  $relative"
+        } | Set-Content -LiteralPath $Destination -Encoding ASCII
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $sourceStatus = (& git -C $repoRoot status --porcelain | Out-String).Trim()
-if ($LASTEXITCODE -ne 0) {
-    throw 'Unable to query the source worktree status.'
-}
+if ($LASTEXITCODE -ne 0) { throw 'Unable to query the source worktree status.' }
 if ($RequireCleanSource -and $sourceStatus.Length -ne 0) {
     throw 'Packaging requires a clean source worktree.'
-}
-$artifactsRoot = Join-Path $repoRoot 'artifacts\deploy'
-$packageName = "AliceCoop-$Version"
-$stagingPath = Join-Path $artifactsRoot $packageName
-$archivePath = Join-Path $artifactsRoot "$packageName.zip"
-$dropInName = "$packageName-drop-in"
-$dropInStagingPath = Join-Path $artifactsRoot $dropInName
-$dropInArchivePath = Join-Path $artifactsRoot "$dropInName.zip"
-$archiveChecksumsPath = Join-Path $artifactsRoot "AliceCoop-$Version-SHA256SUMS.txt"
-$payloadPath = Join-Path $stagingPath 'payload'
-$payloadDocsPath = Join-Path $payloadPath 'docs'
-
-$resolvedArtifactsRoot = [System.IO.Path]::GetFullPath($artifactsRoot)
-$resolvedStagingPath = [System.IO.Path]::GetFullPath($stagingPath)
-if (-not $resolvedStagingPath.StartsWith(
-    $resolvedArtifactsRoot + [System.IO.Path]::DirectorySeparatorChar,
-    [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "Unsafe staging path: $resolvedStagingPath"
-}
-$resolvedDropInStagingPath = [System.IO.Path]::GetFullPath($dropInStagingPath)
-if (-not $resolvedDropInStagingPath.StartsWith(
-    $resolvedArtifactsRoot + [System.IO.Path]::DirectorySeparatorChar,
-    [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "Unsafe drop-in staging path: $resolvedDropInStagingPath"
 }
 
 if (-not $SkipBuild) {
     $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-    if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) {
-        throw 'Visual Studio Installer (vswhere.exe) was not found.'
-    }
-    $msbuild = & $vswhere -latest -products * `
-        -requires Microsoft.Component.MSBuild `
-        -find 'MSBuild\**\Bin\MSBuild.exe' |
-        Select-Object -First 1
-    if (-not $msbuild) {
-        throw 'MSBuild was not found.'
-    }
+    $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild `
+        -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+    if (-not $msbuild) { throw 'MSBuild was not found.' }
     & $msbuild (Join-Path $repoRoot 'AliceCoop.sln') /m /t:Build `
         "/p:Configuration=$Configuration" /p:Platform=x86
-    if ($LASTEXITCODE -ne 0) {
-        throw "MSBuild failed with exit code $LASTEXITCODE."
-    }
+    if ($LASTEXITCODE -ne 0) { throw "MSBuild failed: $LASTEXITCODE" }
 }
 
 $buildPath = Join-Path $repoRoot "bin\$Configuration"
 $builtDll = Join-Path $buildPath 'dinput8.dll'
 $builtServer = Join-Path $buildPath 'AliceCoopServer.exe'
-foreach ($requiredFile in @($builtDll, $builtServer)) {
-    if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
-        throw "Required build output is missing: $requiredFile"
+$builtLauncher = Join-Path $buildPath 'AliceCoopLauncher.exe'
+foreach ($required in @($builtDll, $builtServer, $builtLauncher)) {
+    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw "Required build output is missing: $required"
+    }
+}
+& $builtServer --self-test
+if ($LASTEXITCODE -ne 0) { throw 'AliceCoopServer self-test failed.' }
+$launcherTest = Start-Process -FilePath $builtLauncher -ArgumentList '--self-test' `
+    -Wait -PassThru
+if ($launcherTest.ExitCode -ne 0) { throw 'AliceCoopLauncher self-test failed.' }
+$protocolVersion = Get-AliceCoopProtocolVersion -ServerPath $builtServer
+
+$artifactsRoot = Join-Path $repoRoot 'artifacts\deploy'
+$installerName = "AliceCoop-$Version-installer"
+$installerRoot = Join-Path $artifactsRoot $installerName
+$installerArchive = Join-Path $artifactsRoot "$installerName.zip"
+$dropInName = "AliceCoop-$Version-drop-in"
+$dropInRoot = Join-Path $artifactsRoot $dropInName
+$dropInArchive = Join-Path $artifactsRoot "$dropInName.zip"
+$archiveChecksums = Join-Path $artifactsRoot "AliceCoop-$Version-SHA256SUMS.txt"
+New-Item -ItemType Directory -Force -Path $artifactsRoot | Out-Null
+Reset-StagingPath -Path $installerRoot -AllowedRoot $artifactsRoot
+Reset-StagingPath -Path $dropInRoot -AllowedRoot $artifactsRoot
+foreach ($archive in @($installerArchive, $dropInArchive)) {
+    if (Test-Path -LiteralPath $archive -PathType Leaf) {
+        Remove-Item -LiteralPath $archive -Force
     }
 }
 
-& $builtServer --self-test
-if ($LASTEXITCODE -ne 0) {
-    throw "AliceCoopServer self-test failed with exit code $LASTEXITCODE."
-}
-$protocolVersion = Get-AliceCoopProtocolVersion -ServerPath $builtServer
+$advanced = Join-Path $installerRoot 'Advanced'
+$payload = Join-Path $advanced 'Payload'
+$payloadImages = Join-Path $payload 'Images'
+$payloadManual = Join-Path $payload 'Manual'
+$documentation = Join-Path $advanced 'Documentation'
+$tools = Join-Path $advanced 'Tools'
+$licenses = Join-Path $advanced 'Licenses'
+New-Item -ItemType Directory -Force -Path $installerRoot, $advanced,
+    $payload, $payloadImages, $payloadManual, $documentation, $tools,
+    $licenses | Out-Null
 
-New-Item -ItemType Directory -Force -Path $artifactsRoot | Out-Null
-if (Test-Path -LiteralPath $stagingPath) {
-    Remove-Item -LiteralPath $stagingPath -Recurse -Force
-}
-if (Test-Path -LiteralPath $archivePath -PathType Leaf) {
-    Remove-Item -LiteralPath $archivePath -Force
-}
-if (Test-Path -LiteralPath $dropInStagingPath) {
-    Remove-Item -LiteralPath $dropInStagingPath -Recurse -Force
-}
-if (Test-Path -LiteralPath $dropInArchivePath -PathType Leaf) {
-    Remove-Item -LiteralPath $dropInArchivePath -Force
-}
-New-Item -ItemType Directory -Force -Path `
-    $payloadPath, $payloadDocsPath, (Join-Path $payloadPath 'images'), `
-    (Join-Path $stagingPath 'tools') | Out-Null
+# The archive root contains only the user-facing executables and Advanced.
+Copy-Item -LiteralPath $builtLauncher -Destination $installerRoot
+Copy-Item -LiteralPath $builtServer -Destination $installerRoot
+Copy-Item -LiteralPath $builtDll -Destination $payload
+Copy-Item -LiteralPath (Join-Path $repoRoot 'AliceCoop.ini') -Destination $payload
+Copy-Item -LiteralPath (Join-Path $repoRoot 'client\MadnessPatch.ini') -Destination $payload
 
-Copy-Item -LiteralPath $builtDll -Destination (Join-Path $payloadPath 'dinput8.dll')
-Copy-Item -LiteralPath $builtServer -Destination (Join-Path $payloadPath 'AliceCoopServer.exe')
-Copy-Item -LiteralPath (Join-Path $repoRoot 'AliceCoop.ini') -Destination $payloadPath
-Copy-Item -LiteralPath (Join-Path $repoRoot 'client\MadnessPatch.ini') -Destination $payloadPath
-Copy-Item -LiteralPath (Join-Path $repoRoot 'README.md') `
-    -Destination (Join-Path $payloadPath 'README.md')
-Copy-Item -LiteralPath (Join-Path $repoRoot 'README_RU.md') `
-    -Destination (Join-Path $payloadPath 'README_RU.md')
+foreach ($name in @('cutsceneWatch2.png', 'aliceWhait.png', 'aliceSoloLevel.png')) {
+    Copy-Item -LiteralPath (Join-Path $repoRoot "images\$name") -Destination $payloadImages
+}
 foreach ($name in @(
-    'CONFIGURATION.md',
-    'DEVELOPMENT.md',
-    'INSTALL.md',
-    'INSTALL_RU.md',
-    'KNOWN_ISSUES.md',
-    'SMOKE_TEST.md',
-    'TROUBLESHOOTING.md'
+    'AliceCoop-LaunchConfig.bat', 'AliceCoop-Server.bat',
+    'AliceCoop-Host.bat', 'AliceCoop-Client.bat', 'AliceCoop-Both.bat',
+    'AliceCoop-Diagnostic-Both.bat', 'AliceCoop-Animation-Test.bat',
+    'Get-PhysicalScreenWidth.ps1'
 )) {
-    Copy-Item -LiteralPath (Join-Path $repoRoot "docs\$name") `
-        -Destination $payloadDocsPath
+    Copy-Item -LiteralPath (Join-Path $repoRoot "manual-launch\$name") `
+        -Destination $payloadManual
+}
+Copy-Item -LiteralPath (Join-Path $repoRoot 'README.md') -Destination $documentation
+Copy-Item -LiteralPath (Join-Path $repoRoot 'README_RU.md') -Destination $documentation
+foreach ($name in @('CONFIGURATION.md', 'DEVELOPMENT.md', 'INSTALL.md',
+    'INSTALL_RU.md', 'KNOWN_ISSUES.md', 'SMOKE_TEST.md', 'TROUBLESHOOTING.md')) {
+    Copy-Item -LiteralPath (Join-Path $repoRoot "docs\$name") -Destination $documentation
 }
 foreach ($name in @('LICENSE', 'NOTICE.md', 'THIRD_PARTY_NOTICES.md')) {
-    Copy-Item -LiteralPath (Join-Path $repoRoot $name) -Destination $payloadPath
+    Copy-Item -LiteralPath (Join-Path $repoRoot $name) -Destination $licenses
 }
-
-# Keep release packages compact while preserving the README artwork links.
-# Promotional media remains in the tagged source tree instead of being copied
-# into the game installation archive.
-$taggedMediaRoot = "https://raw.githubusercontent.com/docwitson/" +
-    "Alice-Madness-Returns-Co-op/v$Version/docs/media/"
-foreach ($name in @('README.md', 'README_RU.md')) {
-    $readmePath = Join-Path $payloadPath $name
-    $readmeText = [System.IO.File]::ReadAllText($readmePath)
-    $readmeText = $readmeText.Replace('(docs/media/', "($taggedMediaRoot")
-    [System.IO.File]::WriteAllText(
-        $readmePath,
-        $readmeText,
-        [System.Text.UTF8Encoding]::new($false))
-}
+Get-ChildItem -LiteralPath (Join-Path $repoRoot 'third_party\licenses') -Force |
+    Copy-Item -Destination $licenses -Recurse
+Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\Install-AliceCoop-Package.ps1') `
+    -Destination $tools
 Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\Uninstall-AliceCoop.ps1') `
-    -Destination $payloadPath
+    -Destination $tools
 Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\Uninstall-AliceCoop.bat') `
-    -Destination $payloadPath
-Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination $stagingPath
-Copy-Item -LiteralPath (Join-Path $repoRoot 'NOTICE.md') -Destination $stagingPath
-Copy-Item -LiteralPath (Join-Path $repoRoot 'THIRD_PARTY_NOTICES.md') -Destination $stagingPath
-Copy-Item -LiteralPath (Join-Path $repoRoot 'third_party\licenses') `
-    -Destination (Join-Path $stagingPath 'third-party-licenses') -Recurse
+    -Destination $tools
+
+$commit = (& git -C $repoRoot rev-parse --short HEAD | Out-String).Trim()
+$manifest = [ordered]@{
+    schemaVersion = 2
+    name = 'AliceCoop'
+    version = $Version
+    architecture = 'Win32'
+    launcherFramework = '.NET Framework 4.8'
+    protocolVersion = $protocolVersion
+    buildUtc = [DateTime]::UtcNow.ToString('o')
+    sourceCommit = $commit
+    sourceDirty = $sourceStatus.Length -gt 0
+    madnessPatchBase = '3.1.1'
+    installMode = 'AliceCoop launcher + combined MadnessPatch client DLL'
+    license = 'GPL-2.0-only'
+    sourceRepository = 'https://github.com/docwitson/Alice-Madness-Returns-Co-op'
+    dinput8Sha256 = (Get-FileHash -LiteralPath $builtDll -Algorithm SHA256).Hash
+    serverSha256 = (Get-FileHash -LiteralPath $builtServer -Algorithm SHA256).Hash
+    launcherSha256 = (Get-FileHash -LiteralPath $builtLauncher -Algorithm SHA256).Hash
+}
+$manifestPath = Join-Path $advanced 'package-manifest.json'
+$manifest | ConvertTo-Json | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 $sourceNotice = @"
 Alice Co-op $Version corresponding source code
 
@@ -179,120 +187,48 @@ Release tag: https://github.com/docwitson/Alice-Madness-Returns-Co-op/tree/v$Ver
 Alice Co-op is distributed under GNU GPL version 2.0. The tagged repository
 contains the source and build scripts corresponding to the release binaries.
 "@
-$sourceNotice | Set-Content -LiteralPath `
-    (Join-Path $stagingPath 'SOURCE_CODE.txt') -Encoding UTF8
-
-foreach ($name in @(
-    'AliceCoop-LaunchConfig.bat',
-    'AliceCoop-Server.bat',
-    'AliceCoop-Both.bat',
-    'AliceCoop-Diagnostic-Both.bat',
-    'AliceCoop-Animation-Test.bat',
-    'Get-PhysicalScreenWidth.ps1'
-)) {
-    Copy-Item -LiteralPath (Join-Path $repoRoot "manual-launch\$name") `
-        -Destination $payloadPath
-}
-foreach ($name in @('AliceCoop-Host.bat', 'AliceCoop-Client.bat')) {
-    Copy-Item -LiteralPath (Join-Path $repoRoot "manual-launch\$name") `
-        -Destination $payloadPath
-}
-foreach ($name in @('cutsceneWatch2.png', 'aliceWhait.png', 'aliceSoloLevel.png')) {
-    Copy-Item -LiteralPath (Join-Path $repoRoot "images\$name") `
-        -Destination (Join-Path $payloadPath 'images')
-}
-
-Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\Install-AliceCoop-Package.ps1') `
-    -Destination (Join-Path $stagingPath 'tools')
-Copy-Item -LiteralPath (Join-Path $repoRoot 'tools\Install-AliceCoop-Package.bat') `
-    -Destination (Join-Path $stagingPath 'Install-AliceCoop.bat')
-Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\INSTALL.md') `
-    -Destination (Join-Path $stagingPath 'INSTALL.md')
-Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\INSTALL_RU.md') `
-    -Destination (Join-Path $stagingPath 'INSTALL_RU.md')
-
-$commit = & git -C $repoRoot rev-parse --short HEAD
-$dirty = $sourceStatus.Length -gt 0
-$manifest = [ordered]@{
-    schemaVersion = 1
-    name = 'AliceCoop'
-    version = $Version
-    architecture = 'Win32'
-    protocolVersion = $protocolVersion
-    buildUtc = [DateTime]::UtcNow.ToString('o')
-    sourceCommit = $commit
-    sourceDirty = $dirty
-    madnessPatchBase = '3.1.1'
-    installMode = 'Standalone MadnessPatch 3.1.1 + AliceCoop combined DLL'
-    license = 'GPL-2.0-only'
-    sourceRepository = 'https://github.com/docwitson/Alice-Madness-Returns-Co-op'
-    dinput8Sha256 = (Get-FileHash -LiteralPath $builtDll -Algorithm SHA256).Hash
-    serverSha256 = (Get-FileHash -LiteralPath $builtServer -Algorithm SHA256).Hash
-}
-$manifest | ConvertTo-Json |
-    Set-Content -LiteralPath (Join-Path $stagingPath 'package-manifest.json') -Encoding UTF8
-
-$hashLines = Get-ChildItem -LiteralPath $stagingPath -Recurse -File |
-    Where-Object Name -ne 'SHA256SUMS.txt' |
-    Sort-Object FullName |
-    ForEach-Object {
-        $relative = $_.FullName.Substring($stagingPath.Length + 1)
-        $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
-        "$hash  $relative"
-    }
-$hashLines | Set-Content -LiteralPath (Join-Path $stagingPath 'SHA256SUMS.txt') -Encoding ASCII
-
-Compress-Archive -LiteralPath $stagingPath -DestinationPath $archivePath `
+$sourceNotice | Set-Content -LiteralPath (Join-Path $advanced 'SOURCE_CODE.txt') `
+    -Encoding UTF8
+$installerChecksums = Join-Path $advanced 'SHA256SUMS.txt'
+Write-Checksums -Root $installerRoot -Destination $installerChecksums
+Compress-Archive -LiteralPath $installerRoot -DestinationPath $installerArchive `
     -CompressionLevel Optimal
 
-# Direct-copy package. Its archive root is the game's Binaries\Win32 directory:
-# dinput8.dll and MadnessPatch.ini sit next to AliceMadnessReturns.exe, while
-# co-op launchers and data live in the AliceCoop subdirectory.
-$dropInCoopPath = Join-Path $dropInStagingPath 'AliceCoop'
-New-Item -ItemType Directory -Force -Path $dropInCoopPath | Out-Null
-Copy-Item -LiteralPath (Join-Path $payloadPath 'dinput8.dll') -Destination $dropInStagingPath
-Copy-Item -LiteralPath (Join-Path $payloadPath 'MadnessPatch.ini') -Destination $dropInStagingPath
-Get-ChildItem -LiteralPath $payloadPath -Force |
-    Where-Object Name -notin @(
-        'dinput8.dll',
-        'MadnessPatch.ini',
-        'Uninstall-AliceCoop.ps1',
-        'Uninstall-AliceCoop.bat'
-    ) |
-    Copy-Item -Destination $dropInCoopPath -Recurse
-Copy-Item -LiteralPath (Join-Path $stagingPath 'package-manifest.json') -Destination $dropInCoopPath
-Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\INSTALL.md') `
-    -Destination (Join-Path $dropInStagingPath 'ALICECOOP_INSTALL.md')
-Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\INSTALL_RU.md') `
-    -Destination (Join-Path $dropInStagingPath 'ALICECOOP_INSTALL_RU.md')
-Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE') -Destination $dropInCoopPath
-Copy-Item -LiteralPath (Join-Path $repoRoot 'NOTICE.md') -Destination $dropInCoopPath
-Copy-Item -LiteralPath (Join-Path $repoRoot 'THIRD_PARTY_NOTICES.md') -Destination $dropInCoopPath
-Copy-Item -LiteralPath (Join-Path $stagingPath 'third-party-licenses') `
-    -Destination (Join-Path $dropInCoopPath 'third-party-licenses') -Recurse
-Copy-Item -LiteralPath (Join-Path $stagingPath 'SOURCE_CODE.txt') -Destination $dropInCoopPath
-
-$dropInHashes = Get-ChildItem -LiteralPath $dropInStagingPath -Recurse -File |
-    Where-Object Name -ne 'SHA256SUMS.txt' |
-    Sort-Object FullName |
-    ForEach-Object {
-        $relative = $_.FullName.Substring($dropInStagingPath.Length + 1)
-        $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
-        "$hash  $relative"
-    }
-$dropInHashes | Set-Content -LiteralPath (Join-Path $dropInStagingPath 'SHA256SUMS.txt') -Encoding ASCII
-Compress-Archive -Path (Join-Path $dropInStagingPath '*') -DestinationPath $dropInArchivePath `
+# Drop-in root is exactly Binaries\Win32: two proxy files and AliceCoop.
+$dropCoop = Join-Path $dropInRoot 'AliceCoop'
+$dropAdvanced = Join-Path $dropCoop 'Advanced'
+New-Item -ItemType Directory -Force -Path $dropCoop, $dropAdvanced | Out-Null
+Copy-Item -LiteralPath $builtDll -Destination $dropInRoot
+Copy-Item -LiteralPath (Join-Path $repoRoot 'client\MadnessPatch.ini') -Destination $dropInRoot
+Copy-Item -LiteralPath $builtLauncher -Destination $dropCoop
+Copy-Item -LiteralPath $builtServer -Destination $dropCoop
+Copy-Item -LiteralPath (Join-Path $payload 'AliceCoop.ini') -Destination $dropCoop
+Copy-Item -LiteralPath $payloadImages -Destination (Join-Path $dropCoop 'images') -Recurse
+Copy-Item -LiteralPath $payloadManual -Destination (Join-Path $dropAdvanced 'Manual') -Recurse
+Copy-Item -LiteralPath $documentation -Destination (Join-Path $dropAdvanced 'Documentation') -Recurse
+Copy-Item -LiteralPath $licenses -Destination (Join-Path $dropAdvanced 'Licenses') -Recurse
+New-Item -ItemType Directory -Force -Path (Join-Path $dropAdvanced 'Tools') | Out-Null
+Copy-Item -LiteralPath (Join-Path $tools 'Uninstall-AliceCoop.ps1') `
+    -Destination (Join-Path $dropAdvanced 'Tools')
+Copy-Item -LiteralPath (Join-Path $tools 'Uninstall-AliceCoop.bat') `
+    -Destination (Join-Path $dropAdvanced 'Tools')
+Copy-Item -LiteralPath $manifestPath -Destination $dropAdvanced
+Copy-Item -LiteralPath (Join-Path $advanced 'SOURCE_CODE.txt') -Destination $dropAdvanced
+$dropChecksums = Join-Path $dropAdvanced 'SHA256SUMS.txt'
+Write-Checksums -Root $dropInRoot -Destination $dropChecksums
+Compress-Archive -Path (Join-Path $dropInRoot '*') -DestinationPath $dropInArchive `
     -CompressionLevel Optimal
 
-$archiveHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash
-$dropInArchiveHash = (Get-FileHash -LiteralPath $dropInArchivePath -Algorithm SHA256).Hash
+$installerHash = (Get-FileHash -LiteralPath $installerArchive -Algorithm SHA256).Hash
+$dropHash = (Get-FileHash -LiteralPath $dropInArchive -Algorithm SHA256).Hash
 @(
-    "$archiveHash  $([System.IO.Path]::GetFileName($archivePath))"
-    "$dropInArchiveHash  $([System.IO.Path]::GetFileName($dropInArchivePath))"
-) | Set-Content -LiteralPath $archiveChecksumsPath -Encoding ASCII
+    "$installerHash  $([System.IO.Path]::GetFileName($installerArchive))"
+    "$dropHash  $([System.IO.Path]::GetFileName($dropInArchive))"
+) | Set-Content -LiteralPath $archiveChecksums -Encoding ASCII
+
 Write-Host ''
-Write-Host "Installer package: $archivePath"
-Write-Host "SHA256:           $archiveHash"
-Write-Host "Drop-in package:  $dropInArchivePath"
-Write-Host "SHA256:           $dropInArchiveHash"
-Write-Host "Archive checksums: $archiveChecksumsPath"
+Write-Host "Installer package: $installerArchive"
+Write-Host "SHA256:           $installerHash"
+Write-Host "Drop-in package:  $dropInArchive"
+Write-Host "SHA256:           $dropHash"
+Write-Host "Archive checksums: $archiveChecksums"

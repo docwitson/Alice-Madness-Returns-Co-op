@@ -15,9 +15,14 @@ if not "%~2"=="" set "COOP_PORT=%~2"
 set "WINDOW_WIDTH=%TEST_WINDOW_WIDTH%"
 set "WINDOW_HEIGHT=%TEST_WINDOW_HEIGHT%"
 
-for %%I in ("%SCRIPT_DIR%\..") do set "GAME_DIR=%%~fI"
-if not exist "%GAME_DIR%\AliceMadnessReturns.exe" (
-    for %%I in ("%SCRIPT_DIR%\..\..\Binaries\Win32") do set "GAME_DIR=%%~fI"
+for %%I in ("%SCRIPT_DIR%\..\..") do set "INSTALLED_COOP_DIR=%%~fI"
+if exist "%INSTALLED_COOP_DIR%\AliceCoop.ini" (
+    for %%I in ("%INSTALLED_COOP_DIR%\..") do set "GAME_DIR=%%~fI"
+) else (
+    for %%I in ("%SCRIPT_DIR%\..") do set "GAME_DIR=%%~fI"
+    if not exist "%GAME_DIR%\AliceMadnessReturns.exe" (
+        for %%I in ("%SCRIPT_DIR%\..\..\Binaries\Win32") do set "GAME_DIR=%%~fI"
+    )
 )
 set "GAME_EXE=%GAME_DIR%\AliceMadnessReturns.exe"
 if not exist "%GAME_EXE%" (

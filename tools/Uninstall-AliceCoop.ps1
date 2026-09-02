@@ -1,23 +1,32 @@
 [CmdletBinding()]
 param(
     [string]$GameRoot,
+    [string]$Win32Path,
     [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
-if (-not $GameRoot) {
+if (-not $Win32Path) {
     $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
-    if ((Split-Path -Leaf $scriptDirectory) -eq 'AliceCoop') {
-        $GameRoot = [System.IO.Path]::GetFullPath((Join-Path $scriptDirectory '..\..\..'))
+    if ((Split-Path -Leaf $scriptDirectory) -eq 'Tools' -and
+        (Split-Path -Leaf (Split-Path -Parent $scriptDirectory)) -eq 'Advanced') {
+        $coopFromScript = [System.IO.Path]::GetFullPath(
+            (Join-Path $scriptDirectory '..\..'))
+        $Win32Path = Split-Path -Parent $coopFromScript
+    }
+    elseif ((Split-Path -Leaf $scriptDirectory) -eq 'AliceCoop') {
+        $Win32Path = Split-Path -Parent $scriptDirectory
+    }
+    elseif ($GameRoot) {
+        $Win32Path = Join-Path $GameRoot 'Binaries\Win32'
     }
     else {
         $repoRoot = Split-Path -Parent $PSScriptRoot
-        $GameRoot = Split-Path -Parent $repoRoot
+        $Win32Path = Join-Path (Split-Path -Parent $repoRoot) 'Binaries\Win32'
     }
 }
 
-$gameRootPath = [System.IO.Path]::GetFullPath($GameRoot)
-$win32Path = Join-Path $gameRootPath 'Binaries\Win32'
+$win32Path = [System.IO.Path]::GetFullPath($Win32Path)
 $coopPath = Join-Path $win32Path 'AliceCoop'
 $targetDll = Join-Path $win32Path 'dinput8.dll'
 $madnessPatchIni = Join-Path $win32Path 'MadnessPatch.ini'
@@ -69,6 +78,8 @@ if ($manifest -and
 }
 foreach ($name in @(
     'AliceCoopServer.exe',
+    'AliceCoopLauncher.exe',
+    'AliceCoopLauncher.exe.config',
     'AliceCoop.ini',
     'README.md',
     'install-manifest.json',
@@ -90,6 +101,18 @@ foreach ($name in @(
 if (Test-Path -LiteralPath (Join-Path $coopPath 'images') -PathType Container) {
     Remove-Item -LiteralPath (Join-Path $coopPath 'images') -Recurse -Force
 }
+foreach ($name in @('Manual', 'Documentation', 'Licenses')) {
+    $directory = Join-Path $coopPath "Advanced\$name"
+    if (Test-Path -LiteralPath $directory -PathType Container) {
+        Remove-Item -LiteralPath $directory -Recurse -Force
+    }
+}
+foreach ($name in @('SOURCE_CODE.txt', 'package-manifest.json', 'SHA256SUMS.txt')) {
+    $file = Join-Path $coopPath "Advanced\$name"
+    if (Test-Path -LiteralPath $file -PathType Leaf) {
+        Remove-Item -LiteralPath $file -Force
+    }
+}
 
 if ($hadPreviousDinput8) {
     Write-Host "The previous dinput8.dll was restored."
@@ -97,4 +120,4 @@ if ($hadPreviousDinput8) {
 else {
     Write-Host "The AliceCoop dinput8.dll was removed."
 }
-Write-Host "Logs, client-saves, the backup, and this uninstall script were preserved in: $coopPath"
+Write-Host "Logs, client-saves, the backup, and Advanced\Tools were preserved in: $coopPath"

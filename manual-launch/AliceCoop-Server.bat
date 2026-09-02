@@ -15,6 +15,9 @@ if not "%~2"=="" set "COOP_PORT=%~2"
 
 set "COOP_DIR=%SCRIPT_DIR%"
 if not exist "%COOP_DIR%\AliceCoopServer.exe" (
+    for %%I in ("%SCRIPT_DIR%\..\..") do set "COOP_DIR=%%~fI"
+)
+if not exist "%COOP_DIR%\AliceCoopServer.exe" (
     for %%I in ("%SCRIPT_DIR%\..\..\Binaries\Win32\AliceCoop") do set "COOP_DIR=%%~fI"
 )
 set "SERVER_EXE=%COOP_DIR%\AliceCoopServer.exe"

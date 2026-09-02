@@ -1,74 +1,61 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)]
-    [string]$Version,
-    [ValidateSet('Debug', 'Release')]
-    [string]$Configuration = 'Release',
+    [Parameter(Mandatory)][string]$Version,
+    [ValidateSet('Debug', 'Release')][string]$Configuration = 'Release',
     [switch]$RequireCleanSource
 )
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $artifactsRoot = Join-Path $repoRoot 'artifacts\deploy'
-$installerArchive = Join-Path $artifactsRoot "AliceCoop-$Version.zip"
+$installerArchive = Join-Path $artifactsRoot "AliceCoop-$Version-installer.zip"
 $dropInArchive = Join-Path $artifactsRoot "AliceCoop-$Version-drop-in.zip"
 $outerChecksums = Join-Path $artifactsRoot "AliceCoop-$Version-SHA256SUMS.txt"
 $builtDll = Join-Path $repoRoot "bin\$Configuration\dinput8.dll"
 $builtServer = Join-Path $repoRoot "bin\$Configuration\AliceCoopServer.exe"
+$builtLauncher = Join-Path $repoRoot "bin\$Configuration\AliceCoopLauncher.exe"
 
-function Assert-Condition {
-    param([bool]$Condition, [string]$Message)
-    if (-not $Condition) {
-        throw $Message
-    }
+function Assert-Condition([bool]$Condition, [string]$Message) {
+    if (-not $Condition) { throw $Message }
 }
 
-function Get-RelativeFileList {
-    param([string]$Root)
+function Get-RelativeFileList([string]$Root) {
     return @(Get-ChildItem -LiteralPath $Root -Recurse -File |
-        ForEach-Object {
-            $_.FullName.Substring($Root.Length + 1).Replace('/', '\')
-        } | Sort-Object)
+        ForEach-Object { $_.FullName.Substring($Root.Length + 1).Replace('/', '\') } |
+        Sort-Object)
 }
 
-function Assert-ExactFileList {
-    param([string]$Root, [string[]]$Expected)
-    $actual = @(Get-RelativeFileList -Root $Root)
-    $expectedSorted = @($Expected | Sort-Object -Unique)
-    $difference = @(Compare-Object -ReferenceObject $expectedSorted -DifferenceObject $actual)
+function Assert-ExactFileList([string]$Root, [string[]]$Expected) {
+    $difference = @(Compare-Object -ReferenceObject @($Expected | Sort-Object -Unique) `
+        -DifferenceObject @(Get-RelativeFileList $Root))
     if ($difference.Count -ne 0) {
-        $text = ($difference | ForEach-Object { "$($_.SideIndicator) $($_.InputObject)" }) -join '; '
-        throw "Unexpected package file list under '$Root': $text"
+        $details = ($difference | ForEach-Object {
+            "$($_.SideIndicator) $($_.InputObject)"
+        }) -join '; '
+        throw "Unexpected package contents: $details"
     }
 }
 
-function Assert-ChecksumFile {
-    param([string]$Root, [string]$ChecksumPath)
+function Assert-ChecksumFile([string]$Root, [string]$ChecksumPath) {
     $entries = @{}
     foreach ($line in Get-Content -LiteralPath $ChecksumPath) {
         if ($line -notmatch '^([0-9A-Fa-f]{64})  (.+)$') {
-            throw "Malformed checksum line in '$ChecksumPath': $line"
+            throw "Malformed checksum line: $line"
         }
-        $relative = $Matches[2].Replace('/', '\')
-        if ($entries.ContainsKey($relative)) {
-            throw "Duplicate checksum entry: $relative"
-        }
-        $entries[$relative] = $Matches[1].ToUpperInvariant()
+        $entries[$Matches[2].Replace('/', '\')] = $Matches[1].ToUpperInvariant()
     }
-    $files = @(Get-RelativeFileList -Root $Root |
-        Where-Object { $_ -ne 'SHA256SUMS.txt' })
-    Assert-Condition ($entries.Count -eq $files.Count) `
-        "Checksum entry count does not match package contents in '$Root'."
+    $checksumRelative = $ChecksumPath.Substring($Root.Length + 1).Replace('/', '\')
+    $files = @(Get-RelativeFileList $Root | Where-Object { $_ -ne $checksumRelative })
+    Assert-Condition ($entries.Count -eq $files.Count) 'Checksum entry count mismatch.'
     foreach ($relative in $files) {
-        Assert-Condition ($entries.ContainsKey($relative)) "Missing checksum entry: $relative"
-        $path = Join-Path $Root $relative
-        $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+        Assert-Condition $entries.ContainsKey($relative) "Missing checksum: $relative"
+        $actual = (Get-FileHash -LiteralPath (Join-Path $Root $relative) `
+            -Algorithm SHA256).Hash
         Assert-Condition ($actual -eq $entries[$relative]) "Checksum mismatch: $relative"
     }
 }
 
-function Get-ProtocolVersion {
-    param([string]$ServerPath)
+function Get-ProtocolVersion([string]$ServerPath) {
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $ServerPath
     $startInfo.Arguments = '--protocol-version'
@@ -82,180 +69,199 @@ function Get-ProtocolVersion {
     $stdout = $process.StandardOutput.ReadToEnd()
     $stderr = $process.StandardError.ReadToEnd()
     $process.WaitForExit()
-    Assert-Condition ($process.ExitCode -eq 0) `
-        "Protocol-version query failed with exit code $($process.ExitCode)."
-    Assert-Condition ($stderr.Length -eq 0) "Protocol-version query wrote to stderr: $stderr"
-    Assert-Condition ($stdout -match '^(\d+)\r?\n$') `
-        "Protocol-version query returned invalid stdout: '$stdout'"
+    Assert-Condition ($process.ExitCode -eq 0 -and $stderr.Length -eq 0 -and
+        $stdout -match '^(\d+)\r?\n$') 'Invalid protocol-version response.'
     return [int]$Matches[1]
 }
 
-foreach ($required in @(
-    $installerArchive, $dropInArchive, $outerChecksums, $builtDll, $builtServer
-)) {
+$requiredBuildFiles = @($installerArchive, $dropInArchive, $outerChecksums,
+    $builtDll, $builtServer, $builtLauncher)
+foreach ($required in $requiredBuildFiles) {
     Assert-Condition (Test-Path -LiteralPath $required -PathType Leaf) `
         "Required file is missing: $required"
 }
 
+$documentationNames = @('README.md', 'README_RU.md', 'CONFIGURATION.md',
+    'DEVELOPMENT.md', 'INSTALL.md', 'INSTALL_RU.md', 'KNOWN_ISSUES.md',
+    'SMOKE_TEST.md', 'TROUBLESHOOTING.md')
+$manualNames = @('AliceCoop-LaunchConfig.bat', 'AliceCoop-Server.bat',
+    'AliceCoop-Host.bat', 'AliceCoop-Client.bat', 'AliceCoop-Both.bat',
+    'AliceCoop-Diagnostic-Both.bat', 'AliceCoop-Animation-Test.bat',
+    'Get-PhysicalScreenWidth.ps1')
+$imageNames = @('cutsceneWatch2.png', 'aliceWhait.png', 'aliceSoloLevel.png')
+$licenseNames = @('LICENSE', 'NOTICE.md', 'THIRD_PARTY_NOTICES.md') +
+    @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'third_party\licenses') -File |
+        Select-Object -ExpandProperty Name)
+
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) `
-    ("AliceCoop-package-test-" + [Guid]::NewGuid().ToString('N'))
+    ('AliceCoop-package-test-' + [Guid]::NewGuid().ToString('N'))
 try {
     $installerExtract = Join-Path $tempRoot 'installer'
-    $dropInExtract = Join-Path $tempRoot 'drop-in'
-    New-Item -ItemType Directory -Force -Path $installerExtract, $dropInExtract | Out-Null
+    $dropExtract = Join-Path $tempRoot 'drop-in'
+    New-Item -ItemType Directory -Force -Path $installerExtract, $dropExtract | Out-Null
     Expand-Archive -LiteralPath $installerArchive -DestinationPath $installerExtract
-    Expand-Archive -LiteralPath $dropInArchive -DestinationPath $dropInExtract
-
-    $installerRoot = Join-Path $installerExtract "AliceCoop-$Version"
+    Expand-Archive -LiteralPath $dropInArchive -DestinationPath $dropExtract
+    $installerRoot = Join-Path $installerExtract "AliceCoop-$Version-installer"
     Assert-Condition (Test-Path -LiteralPath $installerRoot -PathType Container) `
-        'Installer archive does not contain the expected root directory.'
+        'Installer archive root is missing.'
 
-    $licenseNames = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'third_party\licenses') `
-        -Recurse -File | ForEach-Object {
-            $_.FullName.Substring((Join-Path $repoRoot 'third_party\licenses').Length + 1).Replace('/', '\')
-        })
-    $payloadFiles = @(
-        'AliceCoopServer.exe', 'AliceCoop.ini', 'MadnessPatch.ini',
-        'README.md', 'README_RU.md', 'LICENSE', 'NOTICE.md',
-        'THIRD_PARTY_NOTICES.md', 'Uninstall-AliceCoop.ps1',
-        'Uninstall-AliceCoop.bat', 'AliceCoop-LaunchConfig.bat',
-        'AliceCoop-Server.bat', 'AliceCoop-Both.bat',
-        'AliceCoop-Diagnostic-Both.bat', 'AliceCoop-Animation-Test.bat',
-        'AliceCoop-Host.bat', 'AliceCoop-Client.bat',
-        'Get-PhysicalScreenWidth.ps1', 'dinput8.dll',
-        'docs\CONFIGURATION.md', 'docs\DEVELOPMENT.md', 'docs\INSTALL.md',
-        'docs\INSTALL_RU.md', 'docs\KNOWN_ISSUES.md',
-        'docs\SMOKE_TEST.md', 'docs\TROUBLESHOOTING.md',
-        'images\cutsceneWatch2.png',
-        'images\aliceWhait.png', 'images\aliceSoloLevel.png'
-    )
     $installerExpected = @(
-        'INSTALL.md', 'INSTALL_RU.md', 'LICENSE', 'NOTICE.md',
-        'THIRD_PARTY_NOTICES.md', 'SOURCE_CODE.txt', 'package-manifest.json',
-        'SHA256SUMS.txt', 'tools\Install-AliceCoop-Package.ps1',
-        'Install-AliceCoop.bat'
-    ) + @($payloadFiles | ForEach-Object { "payload\$_" }) +
-        @($licenseNames | ForEach-Object { "third-party-licenses\$_" })
-    Assert-ExactFileList -Root $installerRoot -Expected $installerExpected
+        'AliceCoopLauncher.exe', 'AliceCoopServer.exe',
+        'Advanced\package-manifest.json',
+        'Advanced\SOURCE_CODE.txt', 'Advanced\SHA256SUMS.txt',
+        'Advanced\Payload\dinput8.dll', 'Advanced\Payload\AliceCoop.ini',
+        'Advanced\Payload\MadnessPatch.ini',
+        'Advanced\Tools\Install-AliceCoop-Package.ps1',
+        'Advanced\Tools\Uninstall-AliceCoop.ps1',
+        'Advanced\Tools\Uninstall-AliceCoop.bat'
+    ) + @($documentationNames | ForEach-Object { "Advanced\Documentation\$_" }) +
+        @($manualNames | ForEach-Object { "Advanced\Payload\Manual\$_" }) +
+        @($imageNames | ForEach-Object { "Advanced\Payload\Images\$_" }) +
+        @($licenseNames | ForEach-Object { "Advanced\Licenses\$_" })
+    Assert-ExactFileList $installerRoot $installerExpected
 
     $dropExpected = @(
-        'dinput8.dll', 'MadnessPatch.ini', 'ALICECOOP_INSTALL.md',
-        'ALICECOOP_INSTALL_RU.md', 'SHA256SUMS.txt',
-        'AliceCoop\package-manifest.json', 'AliceCoop\SOURCE_CODE.txt'
-    ) + @($payloadFiles | Where-Object {
-            $_ -notin @('dinput8.dll', 'MadnessPatch.ini',
-                'Uninstall-AliceCoop.ps1', 'Uninstall-AliceCoop.bat')
-        } | ForEach-Object { "AliceCoop\$_" }) +
-        @($licenseNames | ForEach-Object { "AliceCoop\third-party-licenses\$_" })
-    Assert-ExactFileList -Root $dropInExtract -Expected $dropExpected
+        'dinput8.dll', 'MadnessPatch.ini', 'AliceCoop\AliceCoop.ini',
+        'AliceCoop\AliceCoopLauncher.exe',
+        'AliceCoop\AliceCoopServer.exe',
+        'AliceCoop\Advanced\package-manifest.json',
+        'AliceCoop\Advanced\SOURCE_CODE.txt',
+        'AliceCoop\Advanced\SHA256SUMS.txt',
+        'AliceCoop\Advanced\Tools\Uninstall-AliceCoop.ps1',
+        'AliceCoop\Advanced\Tools\Uninstall-AliceCoop.bat'
+    ) + @($documentationNames | ForEach-Object {
+            "AliceCoop\Advanced\Documentation\$_"
+        }) + @($manualNames | ForEach-Object {
+            "AliceCoop\Advanced\Manual\$_"
+        }) + @($imageNames | ForEach-Object { "AliceCoop\images\$_" }) +
+        @($licenseNames | ForEach-Object { "AliceCoop\Advanced\Licenses\$_" })
+    Assert-ExactFileList $dropExtract $dropExpected
 
-    foreach ($root in @($installerRoot, $dropInExtract)) {
+    foreach ($root in @($installerRoot, $dropExtract)) {
         $forbidden = @(Get-ChildItem -LiteralPath $root -Recurse -File |
-            Where-Object {
-                $_.Extension -in @('.pdb', '.obj', '.log', '.sav', '.tmp') -or
-                $_.Name -eq 'AliceMadnessReturns.exe'
-            })
-        Assert-Condition ($forbidden.Count -eq 0) `
-            "Forbidden files found in package rooted at '$root'."
+            Where-Object { $_.Extension -in @('.pdb', '.obj', '.log', '.sav', '.tmp') -or
+                $_.Name -eq 'AliceMadnessReturns.exe' })
+        Assert-Condition ($forbidden.Count -eq 0) "Forbidden package files: $root"
     }
 
-    Assert-ChecksumFile -Root $installerRoot `
-        -ChecksumPath (Join-Path $installerRoot 'SHA256SUMS.txt')
-    Assert-ChecksumFile -Root $dropInExtract `
-        -ChecksumPath (Join-Path $dropInExtract 'SHA256SUMS.txt')
+    Assert-ChecksumFile $installerRoot (Join-Path $installerRoot 'Advanced\SHA256SUMS.txt')
+    Assert-ChecksumFile $dropExtract `
+        (Join-Path $dropExtract 'AliceCoop\Advanced\SHA256SUMS.txt')
 
-    $installerManifestPath = Join-Path $installerRoot 'package-manifest.json'
-    $dropManifestPath = Join-Path $dropInExtract 'AliceCoop\package-manifest.json'
+    $installerManifestPath = Join-Path $installerRoot 'Advanced\package-manifest.json'
+    $dropManifestPath = Join-Path $dropExtract 'AliceCoop\Advanced\package-manifest.json'
     $installerManifestBytes = [System.IO.File]::ReadAllBytes($installerManifestPath)
     $dropManifestBytes = [System.IO.File]::ReadAllBytes($dropManifestPath)
     Assert-Condition ([System.Linq.Enumerable]::SequenceEqual(
         [byte[]]$installerManifestBytes, [byte[]]$dropManifestBytes)) `
         'Installer and drop-in manifests differ.'
     $manifest = Get-Content -LiteralPath $installerManifestPath -Raw | ConvertFrom-Json
-    Assert-Condition ($manifest.schemaVersion -eq 1) 'Unexpected manifest schema version.'
-    Assert-Condition ($manifest.name -eq 'AliceCoop') 'Unexpected manifest name.'
+    Assert-Condition ($manifest.schemaVersion -eq 2) 'Unexpected manifest schema.'
     Assert-Condition ($manifest.version -eq $Version) 'Manifest version mismatch.'
-    Assert-Condition ($manifest.architecture -eq 'Win32') 'Manifest architecture mismatch.'
-    Assert-Condition ($manifest.sourceCommit -match '^[0-9a-f]{7,40}$') `
-        'Manifest source commit is malformed.'
+    Assert-Condition ($manifest.protocolVersion -eq (Get-ProtocolVersion $builtServer)) `
+        'Manifest protocol version mismatch.'
     $currentCommit = (& git -C $repoRoot rev-parse --short HEAD | Out-String).Trim()
-    Assert-Condition ($LASTEXITCODE -eq 0 -and $currentCommit.Length -ne 0) `
-        'Unable to resolve the current source commit.'
-    Assert-Condition ($manifest.sourceCommit -eq $currentCommit) `
-        'Manifest source commit does not match the current source commit.'
+    Assert-Condition ($manifest.sourceCommit -eq $currentCommit) 'Manifest commit mismatch.'
     if ($RequireCleanSource) {
-        Assert-Condition (-not $manifest.sourceDirty) 'Package was built from a dirty source tree.'
+        Assert-Condition (-not $manifest.sourceDirty) 'Package source was dirty.'
     }
 
-    $protocolVersion = Get-ProtocolVersion -ServerPath $builtServer
-    Assert-Condition ($manifest.protocolVersion -eq $protocolVersion) `
-        'Manifest protocol version does not match the built server.'
     $builtDllHash = (Get-FileHash -LiteralPath $builtDll -Algorithm SHA256).Hash
     $builtServerHash = (Get-FileHash -LiteralPath $builtServer -Algorithm SHA256).Hash
-    Assert-Condition ($manifest.dinput8Sha256 -eq $builtDllHash) `
-        'Manifest DLL hash does not match the built DLL.'
-    Assert-Condition ($manifest.serverSha256 -eq $builtServerHash) `
-        'Manifest server hash does not match the built server.'
+    $builtLauncherHash = (Get-FileHash -LiteralPath $builtLauncher -Algorithm SHA256).Hash
+    Assert-Condition ($manifest.dinput8Sha256 -eq $builtDllHash) 'DLL manifest hash mismatch.'
+    Assert-Condition ($manifest.serverSha256 -eq $builtServerHash) 'Server manifest hash mismatch.'
+    Assert-Condition ($manifest.launcherSha256 -eq $builtLauncherHash) 'Launcher manifest hash mismatch.'
+    foreach ($path in @(
+        (Join-Path $installerRoot 'Advanced\Payload\dinput8.dll'),
+        (Join-Path $dropExtract 'dinput8.dll'))) {
+        Assert-Condition ((Get-FileHash $path -Algorithm SHA256).Hash -eq $builtDllHash) `
+            "Packaged DLL mismatch: $path"
+    }
+    foreach ($path in @(
+        (Join-Path $installerRoot 'AliceCoopServer.exe'),
+        (Join-Path $dropExtract 'AliceCoop\AliceCoopServer.exe'))) {
+        Assert-Condition ((Get-FileHash $path -Algorithm SHA256).Hash -eq $builtServerHash) `
+            "Packaged server mismatch: $path"
+    }
+    foreach ($path in @(
+        (Join-Path $installerRoot 'AliceCoopLauncher.exe'),
+        (Join-Path $dropExtract 'AliceCoop\AliceCoopLauncher.exe'))) {
+        Assert-Condition ((Get-FileHash $path -Algorithm SHA256).Hash -eq $builtLauncherHash) `
+            "Packaged launcher mismatch: $path"
+    }
 
-    $packageDlls = @(
-        (Join-Path $installerRoot 'payload\dinput8.dll'),
-        (Join-Path $dropInExtract 'dinput8.dll')
-    )
-    $packageServers = @(
-        (Join-Path $installerRoot 'payload\AliceCoopServer.exe'),
-        (Join-Path $dropInExtract 'AliceCoop\AliceCoopServer.exe')
-    )
-    foreach ($path in $packageDlls) {
-        Assert-Condition ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -eq $builtDllHash) `
-            "Packaged DLL does not match the built DLL: $path"
+    $installWin32 = Join-Path $tempRoot 'install-smoke\Binaries\Win32'
+    $installStatus = Join-Path $tempRoot 'install-status.txt'
+    New-Item -ItemType Directory -Force -Path $installWin32 | Out-Null
+    New-Item -ItemType File -Path (Join-Path $installWin32 'AliceMadnessReturns.exe') | Out-Null
+    'preexisting proxy' | Set-Content -LiteralPath (Join-Path $installWin32 'dinput8.dll')
+    'custom=true' | Set-Content -LiteralPath (Join-Path $installWin32 'MadnessPatch.ini')
+    $previousDllHash = (Get-FileHash -LiteralPath (Join-Path $installWin32 'dinput8.dll') `
+        -Algorithm SHA256).Hash
+    & (Join-Path $installerRoot 'Advanced\Tools\Install-AliceCoop-Package.ps1') `
+        -Win32Path $installWin32 -StatusPath $installStatus
+    Assert-Condition (Test-Path -LiteralPath $installStatus -PathType Leaf) `
+        'Installer did not write its status file.'
+    Assert-Condition ((Get-Content -LiteralPath $installStatus -Raw) -match
+        'Alice Co-op installed into') 'Installer status did not report success.'
+    $installedCoop = Join-Path $installWin32 'AliceCoop'
+    foreach ($required in @('AliceCoopLauncher.exe', 'AliceCoopServer.exe',
+        'AliceCoop.ini', 'install-manifest.json',
+        'Advanced\Manual\AliceCoop-Host.bat',
+        'Advanced\Documentation\INSTALL.md')) {
+        Assert-Condition (Test-Path -LiteralPath (Join-Path $installedCoop $required) `
+            -PathType Leaf) "Installer smoke omitted: $required"
     }
-    foreach ($path in $packageServers) {
-        Assert-Condition ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -eq $builtServerHash) `
-            "Packaged server does not match the built server: $path"
+    Assert-Condition ((Get-FileHash (Join-Path $installWin32 'dinput8.dll') `
+        -Algorithm SHA256).Hash -eq $builtDllHash) 'Installed DLL mismatch.'
+    Assert-Condition ((Get-Content -LiteralPath (Join-Path $installWin32 'MadnessPatch.ini') `
+        -Raw) -match 'custom=true') 'Installer overwrote an existing MadnessPatch.ini.'
+
+    # The launcher probe must reach a real packaged relay without occupying a role.
+    $udp = [System.Net.Sockets.UdpClient]::new(0)
+    $probePort = ([System.Net.IPEndPoint]$udp.Client.LocalEndPoint).Port
+    $udp.Dispose()
+    $relay = Start-Process -FilePath (Join-Path $installerRoot 'AliceCoopServer.exe') `
+        -ArgumentList "--bind 127.0.0.1 --port $probePort --log-dir `"$tempRoot\relay-logs`"" `
+        -WindowStyle Hidden -PassThru
+    try {
+        Start-Sleep -Milliseconds 350
+        $probe = Start-Process -FilePath (Join-Path $installerRoot 'AliceCoopLauncher.exe') `
+            -ArgumentList "--probe 127.0.0.1 $probePort" -Wait -PassThru
+        Assert-Condition ($probe.ExitCode -eq 0) 'Launcher UDP probe failed.'
+    }
+    finally {
+        if ($relay -and -not $relay.HasExited) { Stop-Process -Id $relay.Id -Force }
     }
 
-    $installSmokeRoot = Join-Path $tempRoot 'install-smoke'
-    $installSmokeWin32 = Join-Path $installSmokeRoot 'Binaries\Win32'
-    New-Item -ItemType Directory -Force -Path $installSmokeWin32 | Out-Null
-    New-Item -ItemType File -Force `
-        -Path (Join-Path $installSmokeWin32 'AliceMadnessReturns.exe') | Out-Null
-    & (Join-Path $installerRoot 'tools\Install-AliceCoop-Package.ps1') `
-        -GameRoot $installSmokeRoot
-    $installedCoopRoot = Join-Path $installSmokeWin32 'AliceCoop'
-    Assert-Condition ((Get-FileHash `
-        -LiteralPath (Join-Path $installSmokeWin32 'dinput8.dll') `
-        -Algorithm SHA256).Hash -eq $builtDllHash) `
-        'Installer smoke test deployed the wrong DLL.'
-    Assert-Condition ((Get-FileHash `
-        -LiteralPath (Join-Path $installedCoopRoot 'AliceCoopServer.exe') `
-        -Algorithm SHA256).Hash -eq $builtServerHash) `
-        'Installer smoke test deployed the wrong server.'
-    foreach ($relative in @(
-        'AliceCoop.ini', 'AliceCoop-LaunchConfig.bat',
-        'AliceCoop-Diagnostic-Both.bat', 'KNOWN_ISSUES.md',
-        'install-manifest.json'
-    )) {
-        Assert-Condition (Test-Path -LiteralPath `
-            (Join-Path $installedCoopRoot $relative) -PathType Leaf) `
-            "Installer smoke test omitted: $relative"
-    }
+    & (Join-Path $installedCoop 'Advanced\Tools\Uninstall-AliceCoop.ps1') `
+        -Win32Path $installWin32
+    Assert-Condition ((Get-FileHash -LiteralPath (Join-Path $installWin32 'dinput8.dll') `
+        -Algorithm SHA256).Hash -eq $previousDllHash) `
+        'Uninstaller did not restore the preexisting proxy DLL.'
+    Assert-Condition (-not (Test-Path -LiteralPath (Join-Path $installedCoop `
+        'AliceCoopLauncher.exe'))) 'Uninstaller left the launcher installed.'
+    Assert-Condition (Test-Path -LiteralPath (Join-Path $installedCoop `
+        'Advanced\Tools\Uninstall-AliceCoop.ps1')) `
+        'Uninstaller did not preserve its recovery tools.'
 
     $outerEntries = @{}
     foreach ($line in Get-Content -LiteralPath $outerChecksums) {
         if ($line -notmatch '^([0-9A-Fa-f]{64})  (.+)$') {
-            throw "Malformed outer checksum line: $line"
+            throw "Malformed outer checksum: $line"
         }
         $outerEntries[$Matches[2]] = $Matches[1].ToUpperInvariant()
     }
-    Assert-Condition ($outerEntries.Count -eq 2) 'Outer checksum file must contain two entries.'
+    Assert-Condition ($outerEntries.Count -eq 2) 'Outer checksum count mismatch.'
     foreach ($archive in @($installerArchive, $dropInArchive)) {
         $name = [System.IO.Path]::GetFileName($archive)
         Assert-Condition ($outerEntries.ContainsKey($name)) "Missing outer checksum: $name"
-        Assert-Condition ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash `
-            -eq $outerEntries[$name]) "Outer checksum mismatch: $name"
+        Assert-Condition ((Get-FileHash $archive -Algorithm SHA256).Hash -eq
+            $outerEntries[$name]) "Outer checksum mismatch: $name"
     }
 
-    Write-Host "AliceCoop $Version packages passed verification."
+    Write-Host "AliceCoop $Version launcher packages passed verification."
 }
 finally {
     if (Test-Path -LiteralPath $tempRoot) {

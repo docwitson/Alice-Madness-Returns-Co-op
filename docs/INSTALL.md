@@ -18,9 +18,9 @@ same Alice Co-op release on both computers.
 2. Back up your saves. A separate co-op profile is strongly recommended.
 3. Extract the installer archive into a normal writable folder.
 4. Run `AliceCoopLauncher.exe`. It searches Steam libraries automatically; use
-   **Browse** if the required copy is not selected.
+   **Add game** to register another installed copy and select the active one.
 5. Verify that the selected directory contains `AliceMadnessReturns.exe`, then
-   choose **Install / Repair** and approve the Windows prompt.
+   choose **Install** and approve the Windows prompt.
 6. The same window can now start a host or join a session. Keep it open while
    the game is running so Steam relaunches retain the selected role.
 
@@ -41,17 +41,17 @@ Its status log is `%LOCALAPPDATA%\AliceCoop\installer-status.txt`.
 
 1. Select a LAN or trusted VPN address to share with the other player.
 2. Keep the default UDP port `27018` unless both players intentionally change it.
-3. Use **Allow relay in Firewall** once, or allow `AliceCoopServer.exe` for
+3. Use **Allow through Windows Firewall** once, or allow `AliceCoopServer.exe` for
    private networks when Windows asks.
-4. Choose **Start Host**. The launcher starts one relay and launches the game.
-5. Send the displayed `address:port` to the other player.
+4. Choose **Host Game**. The launcher starts one relay and launches the game.
+5. Use **Copy IP:port** and send the resulting endpoint to the other player.
 
 ### Client
 
 1. Enter the host's LAN/VPN IPv4 address and the same port.
 2. Choose **Test connection**. If it fails, check the address, VPN, host relay
    and host firewall before continuing.
-3. Choose **Join Session** to launch the game as the client.
+3. Choose **Join Game** to launch the game as the client.
 
 When connected, the host launcher log shows both `HOST connected` and
 `CLIENT connected`. Load compatible profiles. The client can use
@@ -90,7 +90,7 @@ users who need them. The combined `dinput8.dll` already includes MadnessPatch
 ## Updating
 
 For the installer package, close both the game and relay, start the new
-launcher and choose **Install / Repair** for the same game directory. For a
+launcher and choose **Repair** for the same game directory. For a
 drop-in update, replace the packaged files while preserving your customized
 `AliceCoop.ini` and `MadnessPatch.ini`. Always update both players to the same
 release and protocol version.
@@ -109,6 +109,7 @@ Do not close either game or the relay during the transfer.
 
 ## Uninstall
 
-Run `AliceCoop\Advanced\Tools\Uninstall-AliceCoop.bat`. If the installer
-backed up a previous `dinput8.dll`, it offers to restore it. Retail game files,
-logs and client save backups are not removed.
+Use **Remove** beside the selected installation in the launcher, or run
+`AliceCoop\Advanced\Tools\Uninstall-AliceCoop.bat`. If the installer backed up
+a previous `dinput8.dll`, it restores it. Retail game files, logs and client
+save backups are not removed.

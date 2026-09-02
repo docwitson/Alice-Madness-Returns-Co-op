@@ -27,7 +27,7 @@ namespace AliceCoopLauncher
             var results = new List<GameInstallation>();
             AddSteamInstallations(results);
             AddInstalledLauncherDirectory(results);
-            AddSavedDirectory(results);
+            AddSavedDirectories(results);
             return results
                 .Where(item => IsGameDirectory(item.Win32Directory))
                 .GroupBy(item => Normalize(item.Win32Directory),
@@ -50,15 +50,17 @@ namespace AliceCoopLauncher
             }
         }
 
-        private static void AddSavedDirectory(List<GameInstallation> results)
+        private static void AddSavedDirectories(List<GameInstallation> results)
         {
-            var saved = LauncherSession.ReadPreference("GameDirectory", string.Empty);
-            if (IsGameDirectory(saved))
+            foreach (var saved in LauncherSession.ReadGameDirectories())
             {
-                results.Add(new GameInstallation {
-                    Win32Directory = saved,
-                    Store = "Saved location"
-                });
+                if (IsGameDirectory(saved))
+                {
+                    results.Add(new GameInstallation {
+                        Win32Directory = saved,
+                        Store = "Added game"
+                    });
+                }
             }
         }
 

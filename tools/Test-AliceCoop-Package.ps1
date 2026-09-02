@@ -235,8 +235,13 @@ try {
         if ($relay -and -not $relay.HasExited) { Stop-Process -Id $relay.Id -Force }
     }
 
+    $uninstallStatus = Join-Path $tempRoot 'uninstall-status.txt'
     & (Join-Path $installedCoop 'Advanced\Tools\Uninstall-AliceCoop.ps1') `
-        -Win32Path $installWin32
+        -Win32Path $installWin32 -StatusPath $uninstallStatus
+    Assert-Condition (Test-Path -LiteralPath $uninstallStatus -PathType Leaf) `
+        'Uninstaller did not write its status file.'
+    Assert-Condition ((Get-Content -LiteralPath $uninstallStatus -Raw) -match
+        'Alice Co-op was removed from') 'Uninstaller status did not report success.'
     Assert-Condition ((Get-FileHash -LiteralPath (Join-Path $installWin32 'dinput8.dll') `
         -Algorithm SHA256).Hash -eq $previousDllHash) `
         'Uninstaller did not restore the preexisting proxy DLL.'

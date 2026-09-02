@@ -7,9 +7,10 @@ namespace AliceCoopLauncher
     internal sealed class RelayController : IDisposable
     {
         private Process process;
+        private bool stopRequested;
 
         public event Action<string> OutputReceived;
-        public event Action Exited;
+        public event Action<bool> Exited;
 
         public bool IsRunning => process != null && !process.HasExited;
 
@@ -17,6 +18,9 @@ namespace AliceCoopLauncher
         {
             if (IsRunning)
                 return;
+            process?.Dispose();
+            process = null;
+            stopRequested = false;
             Directory.CreateDirectory(logDirectory);
             var info = new ProcessStartInfo {
                 FileName = executable,
@@ -37,7 +41,7 @@ namespace AliceCoopLauncher
                 if (!string.IsNullOrWhiteSpace(e.Data))
                     OutputReceived?.Invoke(e.Data);
             };
-            process.Exited += (_, __) => Exited?.Invoke();
+            process.Exited += (_, __) => Exited?.Invoke(stopRequested);
             if (!process.Start())
                 throw new InvalidOperationException("The relay process did not start.");
             process.BeginOutputReadLine();
@@ -48,6 +52,7 @@ namespace AliceCoopLauncher
         {
             if (!IsRunning)
                 return;
+            stopRequested = true;
             process.Kill();
             process.WaitForExit(3000);
         }

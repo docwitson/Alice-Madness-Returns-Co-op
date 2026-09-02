@@ -65,12 +65,13 @@ A separate MadnessPatch installation is not required.
 2. Download the latest `AliceCoop-*-installer.zip` from
    [Releases](https://github.com/docwitson/Alice-Madness-Returns-Co-op/releases).
 3. Extract it anywhere, run `AliceCoopLauncher.exe`, select the folder
-   containing `AliceMadnessReturns.exe`, and choose **Install / Repair**.
+   containing `AliceMadnessReturns.exe`, and choose **Install**. Use **Add game**
+   if you keep more than one installed copy.
 4. On the host PC, choose a trusted LAN/VPN address, allow the relay through
-   the private-network firewall when prompted, and press **Start Host**. Send
-   the displayed address to the other player.
+   the private-network firewall when prompted, and press **Host Game**. Use
+   **Copy IP:port** and send the copied endpoint to the other player.
 5. On the second PC, enter that address, press **Test connection**, then
-   **Join Session**. The launcher uses the matching Steam installation when it
+   **Join Game**. The launcher uses the matching Steam installation when it
    can identify one; other installations are started directly.
 6. Keep both launchers open during the session. The host launcher reports when
    both game processes have connected to the relay and owns the relay process.

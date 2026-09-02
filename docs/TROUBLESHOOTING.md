@@ -4,7 +4,7 @@
 
 - Confirm the mod is in the directory containing `AliceMadnessReturns.exe`.
 - In the launcher, confirm that the selected path is the same copy of the game
-  that Steam or EA App starts. Use **Browse** when multiple copies exist.
+  that Steam or EA App starts. Use **Add game** when multiple copies exist.
 - Install Microsoft Visual C++ Redistributable 2015–2022 x86.
 - Install or repair .NET Framework 4.8 if the launcher itself does not open.
 - Remove unrelated `dinput8.dll` proxy mods temporarily; only one file with that
@@ -15,7 +15,7 @@
 
 ## Installation failed
 
-- Close every game and relay process, then retry **Install / Repair**.
+- Close every game and hosting process, then retry **Repair**.
 - Approve the Windows administrator prompt.
 - Read `%LOCALAPPDATA%\AliceCoop\installer-status.txt` for the exact failure.
 - Extract the installer before running it; do not start the launcher inside the

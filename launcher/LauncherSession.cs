@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 
@@ -45,19 +47,51 @@ namespace AliceCoopLauncher
             WriteAtomically(SessionPath, text);
         }
 
-        public static void SavePreferences(string gameDirectory, string serverAddress,
+        public static void SavePreferences(string gameDirectory,
+            IEnumerable<string> gameDirectories, string serverAddress,
             int port, string displayMode)
         {
             Directory.CreateDirectory(SettingsDirectory);
+            var directories = (gameDirectories ?? Enumerable.Empty<string>())
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (!string.IsNullOrWhiteSpace(gameDirectory) &&
+                !directories.Contains(gameDirectory, StringComparer.OrdinalIgnoreCase))
+                directories.Insert(0, gameDirectory);
+
             var text = new StringBuilder()
                 .AppendLine("[Launcher]")
-                .AppendLine("SettingsVersion=2")
+                .AppendLine("SettingsVersion=3")
                 .AppendLine("GameDirectory=" + gameDirectory)
+                .AppendLine("GameDirectoryCount=" + directories.Count)
                 .AppendLine("ServerAddress=" + serverAddress)
                 .AppendLine("Port=" + port)
-                .AppendLine("DisplayMode=" + displayMode)
-                .ToString();
-            WriteAtomically(PreferencesPath, text);
+                .AppendLine("DisplayMode=" + displayMode);
+            for (var index = 0; index < directories.Count; ++index)
+                text.AppendLine("GameDirectory" + index + "=" + directories[index]);
+            WriteAtomically(PreferencesPath, text.ToString());
+        }
+
+        public static IReadOnlyList<string> ReadGameDirectories()
+        {
+            var results = new List<string>();
+            if (int.TryParse(ReadPreference("GameDirectoryCount", "0"),
+                out var count) && count > 0 && count < 100)
+            {
+                for (var index = 0; index < count; ++index)
+                {
+                    var value = ReadPreference("GameDirectory" + index, string.Empty);
+                    if (!string.IsNullOrWhiteSpace(value))
+                        results.Add(value);
+                }
+            }
+
+            var legacy = ReadPreference("GameDirectory", string.Empty);
+            if (!string.IsNullOrWhiteSpace(legacy) &&
+                !results.Contains(legacy, StringComparer.OrdinalIgnoreCase))
+                results.Insert(0, legacy);
+            return results;
         }
 
         public static string ReadPreference(string key, string fallback)

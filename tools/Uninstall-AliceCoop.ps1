@@ -2,10 +2,23 @@
 param(
     [string]$GameRoot,
     [string]$Win32Path,
+    [string]$StatusPath,
     [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
+trap {
+    if ($StatusPath) {
+        $statusDirectory = Split-Path -Parent $StatusPath
+        if ($statusDirectory) {
+            New-Item -ItemType Directory -Force -Path $statusDirectory | Out-Null
+        }
+        "Alice Co-op removal failed: $($_.Exception.Message)" |
+            Set-Content -LiteralPath $StatusPath -Encoding UTF8
+    }
+    [Console]::Error.WriteLine($_.Exception.Message)
+    exit 1
+}
 if (-not $Win32Path) {
     $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
     if ((Split-Path -Leaf $scriptDirectory) -eq 'Tools' -and
@@ -121,3 +134,7 @@ else {
     Write-Host "The AliceCoop dinput8.dll was removed."
 }
 Write-Host "Logs, client-saves, the backup, and Advanced\Tools were preserved in: $coopPath"
+if ($StatusPath) {
+    "Alice Co-op was removed from $win32Path" |
+        Set-Content -LiteralPath $StatusPath -Encoding UTF8
+}

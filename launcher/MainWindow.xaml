@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Title="Alice Co-op Launcher" Width="940" Height="740"
+        Title="Alice Co-op Launcher" Width="940" Height="700"
         MinWidth="820" MinHeight="620" WindowStartupLocation="CenterScreen"
         Background="{StaticResource WindowBrush}" WindowStyle="None"
         ResizeMode="CanResize" Icon="/Assets/aliceWhait.png">
@@ -68,10 +68,10 @@
                 </Border>
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalAlignment="Stretch" PanningMode="VerticalOnly">
                     <Grid Margin="30,26,24,30">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -83,6 +83,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="88" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <Border Width="72" Height="72" Background="#C4302C3D"
                                     CornerRadius="16" HorizontalAlignment="Left">
@@ -91,38 +92,56 @@
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Text="ALICE CO-OP" FontSize="28"
                                            FontWeight="Bold" />
-                                <TextBlock Text="Two-player launcher and connection setup"
+                                <TextBlock Text="Two-player co-op setup"
                                            Foreground="{StaticResource MutedTextBrush}"
                                            FontSize="14" />
                             </StackPanel>
+                            <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                       HorizontalAlignment="Right" TextAlignment="Right"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       FontSize="12">
+                                <Run Text="Created by Docwitson" />
+                                <LineBreak />
+                                <Hyperlink NavigateUri="https://github.com/docwitson/Alice-Madness-Returns-Co-op"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           RequestNavigate="OpenRepository_Click">GitHub repository</Hyperlink>
+                                <Run Text=" · GPL-2.0" />
+                            </TextBlock>
                         </Grid>
 
                         <Border x:Name="InstallPanel" Grid.Row="1"
                                 Background="{StaticResource PanelBrush}"
-                                CornerRadius="12" Padding="20" Margin="0,0,0,18">
-                            <StackPanel>
-                                <TextBlock Text="INSTALLATION" FontWeight="Bold" FontSize="16" />
-                                <TextBlock x:Name="InstallationStatusText" Margin="0,6,0,14"
-                                           Foreground="{StaticResource MutedTextBrush}"
-                                           Text="Select the folder containing AliceMadnessReturns.exe." />
-                                <TextBlock Text="Game location" FontWeight="SemiBold"
-                                           Margin="0,0,0,6" />
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="GameDirectoryTextBox"
-                                             VerticalContentAlignment="Center" />
-                                    <Button Grid.Column="1" Content="Browse…" Margin="10,0,0,0"
-                                            Click="BrowseGame_Click" />
-                                    <Button x:Name="InstallButton" Grid.Column="2"
-                                            Content="Install / Repair"
-                                            Style="{StaticResource PrimaryButton}"
-                                            Margin="10,0,0,0" Click="Install_Click" />
-                                </Grid>
-                            </StackPanel>
+                                CornerRadius="12" Padding="16" Margin="0,0,0,18">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" Grid.ColumnSpan="4"
+                                            Margin="0,0,0,9">
+                                    <TextBlock Text="INSTALLATION" FontWeight="Bold"
+                                               FontSize="15" />
+                                    <TextBlock x:Name="InstallationStatusText" Margin="12,1,0,0"
+                                               Foreground="{StaticResource MutedTextBrush}"
+                                               Text="Select an installed game." />
+                                </StackPanel>
+                                <ComboBox x:Name="GameInstallationComboBox" Grid.Row="1"
+                                          SelectionChanged="GameInstallationComboBox_SelectionChanged" />
+                                <Button Grid.Row="1" Grid.Column="1" Content="Add game…"
+                                        Margin="8,0,0,0" Click="BrowseGame_Click" />
+                                <Button x:Name="InstallButton" Grid.Row="1" Grid.Column="2"
+                                        Content="Install" Style="{StaticResource PrimaryButton}"
+                                        Margin="8,0,0,0" Click="Install_Click" />
+                                <Button x:Name="RemoveButton" Grid.Row="1" Grid.Column="3"
+                                        Content="Remove" Margin="8,0,0,0"
+                                        Visibility="Collapsed" Click="Remove_Click" />
+                            </Grid>
                         </Border>
 
                         <Grid Grid.Row="2">
@@ -140,18 +159,19 @@
                                                TextWrapping="Wrap" Margin="0,6,0,16"
                                                Foreground="{StaticResource MutedTextBrush}" />
                                     <TextBlock Text="Address to share" FontWeight="SemiBold" />
-                                    <Grid Margin="0,6,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <ComboBox x:Name="LocalAddressComboBox" />
-                                        <Button Grid.Column="1" Content="Copy address"
-                                                Margin="8,0,0,0" Click="CopyAddress_Click" />
+                                    <ComboBox x:Name="LocalAddressComboBox" Margin="0,6,0,0"
+                                              SelectionChanged="LocalAddressComboBox_SelectionChanged" />
+                                    <Grid Margin="0,7,0,0">
+                                        <TextBlock x:Name="RecommendedAddressText"
+                                                   Text="Recommended network"
+                                                   Foreground="{StaticResource SuccessBrush}"
+                                                   FontSize="12" VerticalAlignment="Center" />
+                                        <Button Content="Copy IP:port" HorizontalAlignment="Right"
+                                                Padding="10,5" Click="CopyAddress_Click" />
                                     </Grid>
                                     <Button x:Name="HostButton" Content="HOST GAME"
                                             Style="{StaticResource PrimaryButton}"
-                                            Margin="0,22,0,0" Click="Host_Click" />
+                                            Margin="0,18,0,0" Click="Host_Click" />
                                 </StackPanel>
                             </Border>
 
@@ -163,12 +183,19 @@
                                                TextWrapping="Wrap" Margin="0,6,0,16"
                                                Foreground="{StaticResource MutedTextBrush}" />
                                     <TextBlock Text="Host address" FontWeight="SemiBold" />
-                                    <TextBox x:Name="ServerAddressTextBox" Text=""
-                                             ToolTip="For example: 26.10.20.30:27018"
-                                             Margin="0,6,0,10" />
+                                    <Grid Margin="0,6,0,10">
+                                        <TextBox x:Name="ServerAddressTextBox" Text=""
+                                                 ToolTip="For example: 26.10.20.30:27018"
+                                                 TextChanged="ServerAddressTextBox_TextChanged" />
+                                        <TextBlock x:Name="HostAddressPlaceholder"
+                                                   Text="Enter host IP or paste IP:port"
+                                                   Foreground="#777282" Margin="11,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   IsHitTestVisible="False" />
+                                    </Grid>
                                     <StackPanel Orientation="Horizontal">
                                         <Button x:Name="TestConnectionButton"
-                                                Content="Test connection"
+                                                Content="Test connection" IsEnabled="False"
                                                 Click="TestConnection_Click" />
                                         <TextBlock x:Name="ProbeStatusText" Margin="12,0,0,0"
                                                    VerticalAlignment="Center"
@@ -176,13 +203,14 @@
                                     </StackPanel>
                                     <Button x:Name="JoinButton" Content="JOIN GAME"
                                             Style="{StaticResource PrimaryButton}"
-                                            Margin="0,22,0,0" Click="Join_Click" />
+                                            IsEnabled="False" Margin="0,18,0,0"
+                                            Click="Join_Click" />
                                 </StackPanel>
                             </Border>
                         </Grid>
 
                         <Border Grid.Row="3" Background="{StaticResource PanelLightBrush}"
-                                CornerRadius="12" Padding="18" Margin="0,18,0,0">
+                                CornerRadius="12" Padding="16" Margin="0,18,0,0">
                             <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -192,25 +220,30 @@
                                     <StackPanel>
                                         <TextBlock Text="SESSION STATUS" FontWeight="Bold" />
                                         <TextBlock x:Name="SessionStatusText" Text="Ready"
-                                                   Margin="0,5,0,0"
+                                                   Margin="0,4,0,0"
                                                    Foreground="{StaticResource SuccessBrush}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                        <Button Content="Open logs" Margin="0,0,8,0"
+                                        <Button x:Name="SessionDetailsButton"
+                                                Content="Show details" Margin="0,0,8,0"
+                                                Click="ToggleSessionDetails_Click" />
+                                        <Button Content="Open logs folder" Margin="0,0,8,0"
                                                 Click="OpenLogs_Click" />
-                                        <Button Content="Stop relay" Click="StopRelay_Click" />
+                                        <Button x:Name="StopHostingButton"
+                                                Content="Stop hosting" Visibility="Collapsed"
+                                                Click="StopRelay_Click" />
                                     </StackPanel>
                                 </Grid>
                                 <TextBox x:Name="SessionLogTextBox" Height="98"
-                                         Margin="0,14,0,0" IsReadOnly="True"
-                                         Visibility="Collapsed"
-                                         TextWrapping="Wrap"
+                                         Margin="0,12,0,0" IsReadOnly="True"
+                                         Visibility="Collapsed" TextWrapping="Wrap"
                                          VerticalScrollBarVisibility="Auto" />
                             </StackPanel>
                         </Border>
 
                         <Expander Grid.Row="4" Header="Advanced settings"
-                                  Margin="0,18,0,0" Foreground="{StaticResource TextBrush}">
+                                  Margin="0,18,0,0" Foreground="{StaticResource TextBrush}"
+                                  IsExpanded="False">
                             <Border Background="{StaticResource PanelBrush}" CornerRadius="12"
                                     Padding="18" Margin="0,10,0,0">
                                 <Grid>
@@ -224,7 +257,8 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="UDP port" VerticalAlignment="Center" />
                                     <TextBox x:Name="PortTextBox" Grid.Column="1" Text="27018"
-                                             Margin="10,0,0,0" />
+                                             Margin="10,0,0,0"
+                                             TextChanged="PortTextBox_TextChanged" />
                                     <TextBlock Grid.Column="3" Text="Game display mode"
                                                VerticalAlignment="Center" />
                                     <ComboBox x:Name="DisplayModeComboBox" Grid.Column="4"
@@ -238,17 +272,6 @@
                                 </Grid>
                             </Border>
                         </Expander>
-
-                        <TextBlock Grid.Row="5" HorizontalAlignment="Center"
-                                   Margin="0,22,0,0"
-                                   Foreground="{StaticResource MutedTextBrush}"
-                                   FontSize="12">
-                            <Run Text="Alice Co-op · " />
-                            <Hyperlink NavigateUri="https://github.com/docwitson/Alice-Madness-Returns-Co-op"
-                                       Foreground="{StaticResource AccentBrush}"
-                                       RequestNavigate="OpenRepository_Click">GitHub repository</Hyperlink>
-                            <Run Text=" · GPL-2.0" />
-                        </TextBlock>
                     </Grid>
                 </ScrollViewer>
             </Grid>

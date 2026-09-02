@@ -78,8 +78,7 @@ namespace AliceCoopLauncher
                 .Select(item => item.Item2)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            if (ordered.Count != 0)
-                ordered[0] += " · Recommended";
+            ordered.Add("127.0.0.1 — This PC only · Localhost");
             return ordered;
         }
 

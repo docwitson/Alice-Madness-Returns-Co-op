@@ -52,5 +52,44 @@ namespace AliceCoopLauncher
             }
             return process.ExitCode;
         }
+
+        public static bool CanUninstall(string win32Directory) =>
+            File.Exists(UninstallScript(win32Directory));
+
+        public static void StartUninstall(string win32Directory, int launcherProcessId)
+        {
+            var script = UninstallScript(win32Directory);
+            if (!File.Exists(script))
+                throw new FileNotFoundException("The uninstall support files are missing.", script);
+
+            Directory.CreateDirectory(LauncherSession.SettingsDirectory);
+            var statusPath = Path.Combine(LauncherSession.SettingsDirectory,
+                "uninstaller-status.txt");
+            if (File.Exists(statusPath))
+                File.Delete(statusPath);
+
+            var command = "& { Wait-Process -Id " + launcherProcessId +
+                " -ErrorAction SilentlyContinue; & '" + QuotePowerShell(script) +
+                "' -Win32Path '" + QuotePowerShell(win32Directory) +
+                "' -StatusPath '" + QuotePowerShell(statusPath) +
+                "'; exit 0 }";
+            var process = Process.Start(new ProcessStartInfo {
+                FileName = "powershell.exe",
+                Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden " +
+                    "-Command \"" + command.Replace("\"", "`\"") + "\"",
+                UseShellExecute = true,
+                Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+            if (process == null)
+                throw new InvalidOperationException("The uninstaller process did not start.");
+        }
+
+        private static string UninstallScript(string win32Directory) =>
+            Path.Combine(win32Directory, "AliceCoop", "Advanced", "Tools",
+                "Uninstall-AliceCoop.ps1");
+
+        private static string QuotePowerShell(string value) =>
+            value.Replace("'", "''");
     }
 }

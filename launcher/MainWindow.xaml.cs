@@ -43,8 +43,11 @@ namespace AliceCoopLauncher
             if (selected != null)
                 GameDirectoryTextBox.Text = selected.Win32Directory;
 
-            ServerAddressTextBox.Text = LauncherSession.ReadPreference(
-                "ServerAddress", string.Empty);
+            var currentPreferences = LauncherSession.ReadPreference(
+                "SettingsVersion", string.Empty) == "2";
+            ServerAddressTextBox.Text = currentPreferences
+                ? LauncherSession.ReadPreference("ServerAddress", string.Empty)
+                : string.Empty;
             PortTextBox.Text = LauncherSession.ReadPreference("Port", "27018");
             SelectDisplayMode(LauncherSession.ReadPreference("DisplayMode", "fullscreen"));
 

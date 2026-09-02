@@ -51,6 +51,7 @@ namespace AliceCoopLauncher
             Directory.CreateDirectory(SettingsDirectory);
             var text = new StringBuilder()
                 .AppendLine("[Launcher]")
+                .AppendLine("SettingsVersion=2")
                 .AppendLine("GameDirectory=" + gameDirectory)
                 .AppendLine("ServerAddress=" + serverAddress)
                 .AppendLine("Port=" + port)

@@ -209,6 +209,7 @@
     <ClInclude Include="..\src\Coop\CoopClient.hpp" />
 	<ClInclude Include="..\src\Coop\ProcessEventBridge.hpp" />
 	<ClInclude Include="..\src\Coop\Core\PureHelpers.hpp" />
+	<ClInclude Include="..\src\Coop\Detail\ProcessEventCallbacks.hpp" />
     <ClInclude Include="..\src\Coop\Detail\Diagnostics.inl" />
     <ClInclude Include="..\src\Coop\Detail\EngineInterop.inl" />
     <ClInclude Include="..\src\Coop\Detail\InteractionDiscovery.inl" />

@@ -1,5 +1,6 @@
 #include "Common.hpp"
 #include "Coop/CoopClient.hpp"
+#include "Coop/Detail/ProcessEventCallbacks.hpp"
 #include "Coop/ProcessEventBridge.hpp"
 
 #include <cmath>

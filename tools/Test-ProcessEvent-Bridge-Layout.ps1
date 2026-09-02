@@ -7,9 +7,11 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $enginePath = Join-Path $repositoryRoot 'src\Engine\ProcessEvent.cpp'
 $bridgePath = Join-Path $repositoryRoot 'src\Coop\ProcessEventBridge.cpp'
+$publicHeaderPath = Join-Path $repositoryRoot 'src\Coop\CoopClient.hpp'
 
 $engine = Get-Content -LiteralPath $enginePath -Raw
 $bridge = Get-Content -LiteralPath $bridgePath -Raw
+$publicHeader = Get-Content -LiteralPath $publicHeaderPath -Raw
 
 $hookStart = $engine.IndexOf('static void __fastcall ProcessEvent_Hook')
 $hookEnd = $engine.IndexOf('static void PatchPinballCannonPrompt', $hookStart)
@@ -90,6 +92,40 @@ if ($bridge.Contains('ProcessEvent.thiscall')) {
 }
 if ($bridge -match '(?i)\bsafetyhook\b') {
     throw 'ProcessEventBridge must not own or reference SafetyHook.'
+}
+
+$privateCallbacks = @(
+    'PumpLifecycleCommands',
+    'OnAlicePawnTicked',
+    'DrawTuningOverlay',
+    'RecordLocalAction',
+    'OnLocalPepperProjectileSpawn',
+    'OnLocalClockBombSpawn',
+    'OnLocalClockBombDetonate',
+    'OnLocalClockBombDestroyed',
+    'TraceProcessEvent',
+    'TraceWorldProcessEvent',
+    'HandleSharedCombatProcessEvent',
+    'ShouldSuppressSharedPlayerDamage',
+    'IsApplyingHostProgression',
+    'TraceLifecycleProcessEvent',
+    'RecordHostLoadChapter',
+    'ObservePauseMenuState',
+    'HandleSharedInteractionProcessEvent',
+    'TraceSequenceOpProcessEvent',
+    'ShouldDeferSequenceOpActivation',
+    'TraceInterpolationStarted',
+    'RepairRemoteVisibilityAfterLocalDodge',
+    'GetOverlayStatusLine',
+    'GetOverlayDebugDetails',
+    'ExecuteDevCommand',
+    'IsActionTraceEnabled',
+    'IsWorldTraceEnabled'
+)
+foreach ($callback in $privateCallbacks) {
+    if ($publicHeader -match "\b$callback\b") {
+        throw "ProcessEvent implementation callback remains public: $callback"
+    }
 }
 
 Write-Output 'ProcessEvent bridge layout is valid.'

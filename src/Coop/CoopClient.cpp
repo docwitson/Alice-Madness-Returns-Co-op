@@ -6,6 +6,7 @@
 #include "Common.hpp"
 #include "Coop/CoopClient.hpp"
 #include "Coop/Core/PureHelpers.hpp"
+#include "Coop/Detail/ProcessEventCallbacks.hpp"
 #include "Coop/Protocol.hpp"
 
 #include <array>

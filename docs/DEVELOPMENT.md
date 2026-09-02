@@ -71,6 +71,7 @@ specified.
 | `server/` | Standalone UDP relay |
 | `src/Coop/` | Protocol integration, proxy, world and lifecycle synchronization |
 | `src/Coop/Detail/` | Internal implementation fragments included only by `CoopClient.cpp` |
+| `src/Coop/ProcessEventBridge.*` | Alice Co-op boundary inside the shared MadnessPatch `ProcessEvent` hook |
 | `src/` | MadnessPatch base and shared hooks/features |
 | `include/` | Project headers, vendored dependencies and UE3 SDK declarations |
 | `lib/` | Vendored x86 static libraries required by the inherited build |
@@ -91,8 +92,9 @@ real player profile.
 
 The reproducible combined checklist and baseline recovery procedure are in
 [`SMOKE_TEST.md`](SMOKE_TEST.md). The diagnostic launcher also enables passive
-lifecycle invariant checks. Any `[CoopInvariant]` record must be investigated;
-the checks only report state and never repair or assert on it.
+lifecycle invariant checks and per-thread ProcessEvent bridge accounting. Any
+`[CoopInvariant]` or bridge balance failure must be investigated; the checks
+only report state and never repair or assert on it.
 
 ## Release checklist
 

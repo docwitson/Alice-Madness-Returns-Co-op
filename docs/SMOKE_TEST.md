@@ -2,7 +2,8 @@
 
 Use this checklist after structural, build-system or diagnostic changes. The
 pass condition is behavior no worse than the current baseline: no new crash,
-hang, desynchronization or `[CoopInvariant]` record.
+hang, desynchronization, `[CoopInvariant]` record or ProcessEvent bridge
+balance failure.
 
 ## Preparation
 
@@ -41,6 +42,9 @@ only when:
 - neither game nor the relay crashes, hangs or enters a new error loop;
 - connection, world and presentation behavior is not worse than baseline;
 - no line begins with `[CoopInvariant]`;
+- every `[CoopBridge] event=Summary` has `active=0` and satisfies
+  `entered = completed + suppressed + deferred`;
+- no `[CoopBridge] event=HookExit` line is present;
 - both packages contain the exact binaries used for the successful run and
   still pass the package verifier.
 

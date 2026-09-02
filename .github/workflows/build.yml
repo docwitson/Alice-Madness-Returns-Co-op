@@ -21,6 +21,10 @@ jobs:
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Verify ProcessEvent bridge layout
+        shell: pwsh
+        run: .\tools\Test-ProcessEvent-Bridge-Layout.ps1
+
       - name: Build Debug x86
         shell: pwsh
         run: msbuild AliceCoop.sln /m /t:Rebuild "/p:Configuration=Debug;Platform=x86"

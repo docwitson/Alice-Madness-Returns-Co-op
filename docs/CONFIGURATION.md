@@ -44,6 +44,12 @@ checks do not dereference stale objects, modify game state or run every frame.
 `AliceCoop-Diagnostic-Both.bat` enables this setting through the
 `ALICECOOP_INVARIANT_TRACE` environment override.
 
+`[Trace] ProcessEventBridgeEnabled = 1` enables per-thread accounting around
+the Alice Co-op portion of the shared engine `ProcessEvent` hook. Terminal
+decisions and quiescent map/menu summaries are emitted as `[CoopBridge]`
+records. The diagnostic launcher enables it through
+`ALICECOOP_PROCESS_EVENT_BRIDGE_TRACE`; leave it disabled for normal play.
+
 See [`SMOKE_TEST.md`](SMOKE_TEST.md) for the diagnostic test sequence and log
 acceptance criteria.
 

@@ -8,6 +8,9 @@
     <ClCompile Include="..\src\Coop\CoopClient.cpp">
       <Filter>src\Coop</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\Coop\ProcessEventBridge.cpp">
+      <Filter>src\Coop</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\Engine\ResolutionHook.cpp">
       <Filter>src\Engine</Filter>
     </ClCompile>
@@ -186,6 +189,9 @@
     <ClInclude Include="..\src\Coop\CoopClient.hpp">
       <Filter>src\Coop</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\Coop\ProcessEventBridge.hpp">
+      <Filter>src\Coop</Filter>
+    </ClInclude>
     <ClInclude Include="..\src\Coop\Core\PureHelpers.hpp">
       <Filter>src\Coop</Filter>
     </ClInclude>
@@ -202,6 +208,9 @@
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\InternalDeclarations.inl">
+      <Filter>src\Coop\Detail</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\Coop\Detail\ProcessEventCallbacks.hpp">
       <Filter>src\Coop\Detail</Filter>
     </ClInclude>
     <ClInclude Include="..\src\Coop\Detail\LifecycleAndStatus.inl">

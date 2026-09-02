@@ -327,6 +327,14 @@ int wmain(int argc, wchar_t** argv)
 				}
 
 				const auto now = Clock::now();
+				if (header->type == PacketType::Ping && header->payloadSize == 0)
+				{
+					Header pong = *header;
+					pong.type = PacketType::Pong;
+					pong.sessionId = sessionId;
+					SendBytes(socketHandle, source, &pong, sizeof(pong));
+					continue;
+				}
 				if (header->type == PacketType::Hello && header->payloadSize == sizeof(HelloPayload))
 				{
 					const auto* hello = reinterpret_cast<const HelloPayload*>(buffer.data() + sizeof(Header));
@@ -546,13 +554,6 @@ int wmain(int argc, wchar_t** argv)
 						if (destination.occupied)
 							SendBytes(socketHandle, destination.endpoint,
 								buffer.data(), received);
-					}
-					else if (header->type == PacketType::Ping)
-					{
-						Header pong = *header;
-						pong.type = PacketType::Pong;
-						pong.sessionId = sessionId;
-						SendBytes(socketHandle, source, &pong, sizeof(pong));
 					}
 				}
 			}

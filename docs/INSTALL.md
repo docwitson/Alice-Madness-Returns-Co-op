@@ -16,7 +16,8 @@ same Alice Co-op release on both computers.
 
 1. Close the game and any running Alice Co-op relay.
 2. Back up your saves. A separate co-op profile is strongly recommended.
-3. Extract the installer archive into a normal writable folder.
+3. Extract the installer archive into a normal writable folder and keep that
+   folder: the launcher and relay server run from it, not from the game folder.
 4. Run `AliceCoopLauncher.exe`. It searches Steam libraries automatically; use
    **Add game** to register another installed copy and select the active one.
 5. Verify that the selected directory contains `AliceMadnessReturns.exe`, then
@@ -34,6 +35,9 @@ EA App: <EA folder>\Alice Madness Returns\Game\Alice2\Binaries\Win32
 The installer preserves an existing `AliceCoop.ini` and `MadnessPatch.ini`,
 backs up a previous `dinput8.dll`, and records installed hashes for uninstall.
 Its status log is `%LOCALAPPDATA%\AliceCoop\installer-status.txt`.
+Only the runtime payload is copied into the game: the combined `dinput8.dll`,
+configuration, overlay images and recovery metadata. The launcher, relay,
+manual tools, source notices and documentation remain in the extracted package.
 
 ## Starting a session
 
@@ -60,7 +64,9 @@ When connected, the host launcher log shows both `HOST connected` and
 The launcher starts a Steam installation through Steam only when the selected
 game directory matches that installation's app manifest. EA App, copied and
 development installations are started directly. Its short-lived session file
-is accepted by the mod only while the originating launcher remains open.
+is accepted by the mod only while the originating launcher remains open and
+only by the selected game copy. Two launcher instances may therefore run a host
+and client from two different local installations.
 
 Do not expose the relay directly to the public Internet. The prototype protocol
 does not provide authentication or encryption; use localhost, trusted LAN or a
@@ -110,6 +116,7 @@ Do not close either game or the relay during the transfer.
 ## Uninstall
 
 Use **Remove** beside the selected installation in the launcher, or run
-`AliceCoop\Advanced\Tools\Uninstall-AliceCoop.bat`. If the installer backed up
-a previous `dinput8.dll`, it restores it. Retail game files, logs and client
-save backups are not removed.
+`Advanced\Tools\Uninstall-AliceCoop.bat` from the extracted installer package.
+For a drop-in installation, the script remains under `AliceCoop\Advanced\Tools`.
+If the installer backed up a previous `dinput8.dll`, it restores it. Retail game
+files, logs and client save backups are not removed.

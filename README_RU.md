@@ -103,23 +103,25 @@ Alice Co-op — экспериментальный кооперативный м
 
 ## Настройка
 
-Лаунчер сохраняет активную сессию в:
+Лаунчер сохраняет каждую активную сессию отдельно в:
 
 ```text
-%LOCALAPPDATA%\AliceCoop\session.ini
+%LOCALAPPDATA%\AliceCoop\sessions\session-<id>.ini
 ```
 
-Мод принимает её только пока открыт создавший её лаунчер, поэтому роль не
-теряется при перезапуске игры через Steam. Ручные параметры запуска и полная
-конфигурация находятся в:
+Мод принимает её только пока открыт создавший её лаунчер и только для выбранной
+копии игры. Поэтому две локальные установки не перезаписывают роли друг друга,
+а роль не теряется при перезапуске игры через Steam. Ручные параметры запуска и
+полная конфигурация находятся в:
 
 ```text
-AliceCoop\Advanced\Manual\AliceCoop-LaunchConfig.bat
+Advanced\Payload\Manual\AliceCoop-LaunchConfig.bat
 AliceCoop\AliceCoop.ini
 ```
 
-Настройки MadnessPatch находятся в `MadnessPatch.ini` рядом с exe игры. Смотрите
-[описание конфигурации (англ.)](docs/CONFIGURATION.md).
+В drop-in архиве ручные скрипты находятся в `AliceCoop\Advanced`. Настройки
+MadnessPatch лежат в `MadnessPatch.ini` рядом с exe игры. Смотрите [описание
+конфигурации (англ.)](docs/CONFIGURATION.md).
 
 ## Основные ограничения
 

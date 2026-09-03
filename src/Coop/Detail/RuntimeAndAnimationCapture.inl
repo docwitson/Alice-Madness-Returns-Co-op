@@ -389,25 +389,46 @@
 			return value.empty() ? fallback : _wtoi(value.c_str());
 		}
 
-		bool FindActiveLauncherSession(std::filesystem::path& sessionPath)
+		bool LauncherPathsEqual(const std::filesystem::path& first,
+			const std::filesystem::path& second)
 		{
-			std::array<wchar_t, 32768> localAppData{};
-			const DWORD length = GetEnvironmentVariableW(
-				L"LOCALAPPDATA", localAppData.data(),
-				static_cast<DWORD>(localAppData.size()));
-			if (length == 0 || length >= localAppData.size())
+			std::error_code error;
+			std::wstring firstValue = std::filesystem::absolute(first, error)
+				.lexically_normal().wstring();
+			if (error)
 				return false;
+			error.clear();
+			std::wstring secondValue = std::filesystem::absolute(second, error)
+				.lexically_normal().wstring();
+			if (error)
+				return false;
+			while (!firstValue.empty()
+				&& (firstValue.back() == L'\\' || firstValue.back() == L'/'))
+				firstValue.pop_back();
+			while (!secondValue.empty()
+				&& (secondValue.back() == L'\\' || secondValue.back() == L'/'))
+				secondValue.pop_back();
+			return _wcsicmp(firstValue.c_str(), secondValue.c_str()) == 0;
+		}
 
-			sessionPath = std::filesystem::path(localAppData.data())
-				/ L"AliceCoop" / L"session.ini";
-			if (ReadIniInt(sessionPath, L"Launcher", L"Active", 0) != 1)
+		bool IsActiveLauncherSessionFile(const std::filesystem::path& candidate,
+			const std::filesystem::path& moduleDirectory, bool requireGameDirectory)
+		{
+			if (ReadIniInt(candidate, L"Launcher", L"Active", 0) != 1)
 				return false;
+			const std::wstring configuredDirectory = ReadIniString(
+				candidate, L"Launcher", L"GameDirectory", L"");
+			if (requireGameDirectory
+				&& (configuredDirectory.empty()
+					|| !LauncherPathsEqual(configuredDirectory, moduleDirectory)))
+			{
+				return false;
+			}
 
 			const std::wstring mutexName = ReadIniString(
-				sessionPath, L"Launcher", L"MutexName", L"");
+				candidate, L"Launcher", L"MutexName", L"");
 			if (mutexName.empty())
 				return false;
-
 			const HANDLE launcherMutex = OpenMutexW(
 				SYNCHRONIZE, FALSE, mutexName.c_str());
 			if (!launcherMutex)
@@ -416,13 +437,65 @@
 			return true;
 		}
 
+		bool FindActiveLauncherSession(
+			const std::filesystem::path& moduleDirectory,
+			std::filesystem::path& sessionPath)
+		{
+			std::array<wchar_t, 32768> localAppData{};
+			const DWORD length = GetEnvironmentVariableW(
+				L"LOCALAPPDATA", localAppData.data(),
+				static_cast<DWORD>(localAppData.size()));
+			if (length == 0 || length >= localAppData.size())
+				return false;
+
+			const std::filesystem::path settingsDirectory =
+				std::filesystem::path(localAppData.data()) / L"AliceCoop";
+			const std::filesystem::path sessionsDirectory =
+				settingsDirectory / L"sessions";
+			std::error_code error;
+			std::filesystem::file_time_type newestTime{};
+			bool found = false;
+			for (std::filesystem::directory_iterator iterator(
+				sessionsDirectory, error), end; !error && iterator != end;
+				iterator.increment(error))
+			{
+				const std::filesystem::path candidate = iterator->path();
+				const std::wstring name = candidate.filename().wstring();
+				if (!iterator->is_regular_file(error)
+					|| name.rfind(L"session-", 0) != 0
+					|| candidate.extension() != L".ini"
+					|| !IsActiveLauncherSessionFile(
+						candidate, moduleDirectory, true))
+				{
+					error.clear();
+					continue;
+				}
+				error.clear();
+				const auto writeTime = std::filesystem::last_write_time(candidate, error);
+				if (!error && (!found || writeTime > newestTime))
+				{
+					newestTime = writeTime;
+					sessionPath = candidate;
+					found = true;
+				}
+				error.clear();
+			}
+			if (found)
+				return true;
+
+			// Compatibility with launchers released before per-install sessions.
+			sessionPath = settingsDirectory / L"session.ini";
+			return IsActiveLauncherSessionFile(
+				sessionPath, moduleDirectory, false);
+		}
+
 		void ReadConfig()
 		{
 			const std::filesystem::path moduleDirectory = SystemHelper::GetModulePath();
 			const std::filesystem::path iniPath = moduleDirectory / L"AliceCoop" / L"AliceCoop.ini";
 			std::filesystem::path launcherSessionPath;
 			const bool launcherSessionActive =
-				FindActiveLauncherSession(launcherSessionPath);
+				FindActiveLauncherSession(moduleDirectory, launcherSessionPath);
 
 			const std::wstring enabledEnvironment = ReadEnvironment(L"ALICECOOP_ENABLE");
 			g_config.enabled = IsTruthy(enabledEnvironment)

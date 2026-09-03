@@ -101,23 +101,25 @@ The normal game keeps ownership of these keys outside the listed contexts.
 
 ## Configuration
 
-The launcher stores its temporary live session in:
+The launcher stores each temporary live session in:
 
 ```text
-%LOCALAPPDATA%\AliceCoop\session.ini
+%LOCALAPPDATA%\AliceCoop\sessions\session-<id>.ini
 ```
 
-The session is accepted only while that launcher instance is alive, so Steam
-may restart the game without losing its role. Manual launch settings and the
-full mod configuration live in:
+The session is accepted only while that launcher instance is alive and only by
+the selected game installation, so two local copies do not overwrite each
+other. Steam may restart the game without losing its role. Manual launch
+settings and the full mod configuration live in:
 
 ```text
-AliceCoop\Advanced\Manual\AliceCoop-LaunchConfig.bat
+Advanced\Payload\Manual\AliceCoop-LaunchConfig.bat
 AliceCoop\AliceCoop.ini
 ```
 
-MadnessPatch settings remain in `MadnessPatch.ini` next to the game executable.
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+The drop-in archive places manual launch files under `AliceCoop\Advanced`
+instead. MadnessPatch settings remain in `MadnessPatch.ini` next to the game
+executable. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ## Known limitations
 

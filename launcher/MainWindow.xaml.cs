@@ -100,10 +100,7 @@ namespace AliceCoopLauncher
         {
             var path = SelectedGameDirectory;
             var gameFound = GameLocator.IsGameDirectory(path);
-            var installed = gameFound &&
-                File.Exists(Path.Combine(path, "dinput8.dll")) &&
-                File.Exists(Path.Combine(path, "AliceCoop", "AliceCoopServer.exe")) &&
-                File.Exists(Path.Combine(path, "AliceCoop", "AliceCoopLauncher.exe"));
+            var installed = gameFound && PackageInstaller.IsPayloadInstalled(path);
             activeWin32Directory = installed ? path : null;
 
             if (installed)
@@ -264,14 +261,15 @@ namespace AliceCoopLauncher
                 SessionStatusText.Text = "Starting host…";
                 SessionStatusText.Foreground = FindBrush("SuccessBrush");
                 var coopDirectory = Path.Combine(activeWin32Directory, "AliceCoop");
-                relay.Start(Path.Combine(coopDirectory, "AliceCoopServer.exe"), port,
+                relay.Start(PackageInstaller.ServerExecutablePath, port,
                     Path.Combine(coopDirectory, "logs"));
                 UpdateSessionControls();
                 await Task.Delay(250);
                 if (!relay.IsRunning)
                     throw new InvalidOperationException(
                         "The host service stopped immediately. The UDP port may already be in use.");
-                launcherSession.Activate("host", "127.0.0.1", port, displayMode);
+                launcherSession.Activate(activeWin32Directory,
+                    "host", "127.0.0.1", port, displayMode);
                 SavePreferences(port, displayMode);
                 LaunchSelectedGame();
                 SessionStatusText.Text = "Hosting — waiting for the game";
@@ -311,7 +309,8 @@ namespace AliceCoopLauncher
                     SessionStatusText.Text = "Ready";
                     return;
                 }
-                launcherSession.Activate("client", address, port, displayMode);
+                launcherSession.Activate(activeWin32Directory,
+                    "client", address, port, displayMode);
                 SavePreferences(port, displayMode);
                 LaunchSelectedGame();
                 SessionStatusText.Text = "Client launched — waiting to connect";
@@ -474,6 +473,30 @@ namespace AliceCoopLauncher
         private void ReceiveRelayLine(string line)
         {
             AppendStatus(line);
+            if (line.Contains("status: host=online") && line.Contains("client=online"))
+            {
+                SessionStatusText.Text = "Both players connected ✓";
+                SessionStatusText.Foreground = FindBrush("SuccessBrush");
+                return;
+            }
+            if (line.Contains("status: host=online") && line.Contains("client=waiting"))
+            {
+                SessionStatusText.Text = "Host connected — waiting for second player";
+                SessionStatusText.Foreground = FindBrush("SuccessBrush");
+                return;
+            }
+            if (line.Contains("status: host=waiting") && line.Contains("client=online"))
+            {
+                SessionStatusText.Text = "Client connected — waiting for host";
+                SessionStatusText.Foreground = FindBrush("WarningBrush");
+                return;
+            }
+            if (line.Contains("status: host=waiting") && line.Contains("client=waiting"))
+            {
+                SessionStatusText.Text = "Hosting — waiting for game clients";
+                SessionStatusText.Foreground = FindBrush("SuccessBrush");
+                return;
+            }
             if (line.Contains("HOST connected"))
                 SessionStatusText.Text = "Hosting — waiting for second player";
             if (line.Contains("CLIENT connected"))
@@ -558,8 +581,7 @@ namespace AliceCoopLauncher
                 return;
             try
             {
-                var server = Path.Combine(activeWin32Directory, "AliceCoop",
-                    "AliceCoopServer.exe");
+                var server = PackageInstaller.ServerExecutablePath;
                 var arguments = "advfirewall firewall add rule name=\"AliceCoop Relay\" " +
                     "dir=in action=allow program=\"" + server + "\" enable=yes " +
                     "profile=private protocol=UDP localport=" + port;

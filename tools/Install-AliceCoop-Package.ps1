@@ -48,25 +48,16 @@ if (-not (Test-Win32Directory $Win32Path)) {
 }
 
 $win32Path = [System.IO.Path]::GetFullPath($Win32Path)
-$gameExe = Join-Path $win32Path 'AliceMadnessReturns.exe'
 $targetDll = Join-Path $win32Path 'dinput8.dll'
 $madnessPatchIni = Join-Path $win32Path 'MadnessPatch.ini'
 $coopPath = Join-Path $win32Path 'AliceCoop'
-$targetServer = Join-Path $coopPath 'AliceCoopServer.exe'
-$targetLauncher = Join-Path $coopPath 'AliceCoopLauncher.exe'
 $backupPath = Join-Path $coopPath 'backup'
 $backupDll = Join-Path $backupPath 'dinput8.before-alicecoop.dll'
 $manifestPath = Join-Path $coopPath 'install-manifest.json'
 $packageManifestPath = Join-Path $advancedSource 'package-manifest.json'
-$targetAdvanced = Join-Path $coopPath 'Advanced'
 
 if (Get-Process AliceMadnessReturns -ErrorAction SilentlyContinue) {
     throw 'Close every AliceMadnessReturns.exe process before installing.'
-}
-$runningTargetRelay = @(Get-Process AliceCoopServer -ErrorAction SilentlyContinue |
-    Where-Object { $_.Path -and $_.Path -eq $targetServer })
-if ($runningTargetRelay.Count -ne 0) {
-    throw 'Close the installed AliceCoopServer.exe before installing.'
 }
 
 $requiredFiles = @(
@@ -89,21 +80,36 @@ foreach ($required in $requiredFiles) {
 
 New-Item -ItemType Directory -Force -Path $coopPath, $backupPath,
     (Join-Path $coopPath 'logs'), (Join-Path $coopPath 'client-saves'),
-    (Join-Path $coopPath 'images'), $targetAdvanced,
-    (Join-Path $targetAdvanced 'Manual'),
-    (Join-Path $targetAdvanced 'Documentation'),
-    (Join-Path $targetAdvanced 'Licenses'),
-    (Join-Path $targetAdvanced 'Tools') | Out-Null
+    (Join-Path $coopPath 'images') | Out-Null
 
-$hadPreviousDinput8 = Test-Path -LiteralPath $targetDll -PathType Leaf
-$existingHash = if ($hadPreviousDinput8) {
+$previousManifest = if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+    Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+} else { $null }
+$hadPreviousDinput8 = if ($previousManifest -and
+    $previousManifest.PSObject.Properties.Name -contains 'hadPreviousDinput8') {
+    [bool]$previousManifest.hadPreviousDinput8
+} else {
+    Test-Path -LiteralPath $targetDll -PathType Leaf
+}
+$existingHash = if ($previousManifest -and
+    $previousManifest.PSObject.Properties.Name -contains 'previousDinput8Sha256') {
+    $previousManifest.previousDinput8Sha256
+} elseif ($hadPreviousDinput8) {
     (Get-FileHash -LiteralPath $targetDll -Algorithm SHA256).Hash
 } else { $null }
-$hadPreviousMadnessPatchIni = Test-Path -LiteralPath $madnessPatchIni -PathType Leaf
+$hadPreviousMadnessPatchIni = if ($previousManifest -and
+    $previousManifest.PSObject.Properties.Name -contains 'hadPreviousMadnessPatchIni') {
+    [bool]$previousManifest.hadPreviousMadnessPatchIni
+} else {
+    Test-Path -LiteralPath $madnessPatchIni -PathType Leaf
+}
 $newDll = Join-Path $payloadPath 'dinput8.dll'
 $newHash = (Get-FileHash -LiteralPath $newDll -Algorithm SHA256).Hash
 
 if ($hadPreviousDinput8 -and -not (Test-Path -LiteralPath $backupDll -PathType Leaf)) {
+    if ($previousManifest) {
+        throw "The previous dinput8.dll backup is missing: $backupDll"
+    }
     Copy-Item -LiteralPath $targetDll -Destination $backupDll
 }
 $existingCoopIni = Join-Path $coopPath 'AliceCoop.ini'
@@ -112,12 +118,13 @@ if (Test-Path -LiteralPath $existingCoopIni -PathType Leaf) {
         -Destination (Join-Path $backupPath 'AliceCoop.before-update.ini') -Force
 }
 
-# Preserve a customized legacy manual-launch configuration while moving it
-# out of the normal user-facing directory.
+# Preserve a customized legacy manual-launch configuration before cleaning up
+# files installed by launcher prototypes.
 $legacyLaunchConfig = Join-Path $coopPath 'AliceCoop-LaunchConfig.bat'
-$advancedLaunchConfig = Join-Path $targetAdvanced 'Manual\AliceCoop-LaunchConfig.bat'
 if (Test-Path -LiteralPath $legacyLaunchConfig -PathType Leaf) {
-    Copy-Item -LiteralPath $legacyLaunchConfig -Destination $advancedLaunchConfig -Force
+    Copy-Item -LiteralPath $legacyLaunchConfig `
+        -Destination (Join-Path $backupPath 'AliceCoop-LaunchConfig.before-cleanup.bat') `
+        -Force
 }
 
 Copy-Item -LiteralPath $newDll -Destination $targetDll -Force
@@ -125,10 +132,6 @@ if (-not $hadPreviousMadnessPatchIni) {
     Copy-Item -LiteralPath (Join-Path $payloadPath 'MadnessPatch.ini') `
         -Destination $madnessPatchIni
 }
-Copy-Item -LiteralPath (Join-Path $packageRoot 'AliceCoopLauncher.exe') `
-    -Destination $targetLauncher -Force
-Copy-Item -LiteralPath (Join-Path $packageRoot 'AliceCoopServer.exe') `
-    -Destination $targetServer -Force
 if (-not (Test-Path -LiteralPath $existingCoopIni -PathType Leaf)) {
     Copy-Item -LiteralPath (Join-Path $payloadPath 'AliceCoop.ini') `
         -Destination $existingCoopIni
@@ -136,31 +139,16 @@ if (-not (Test-Path -LiteralPath $existingCoopIni -PathType Leaf)) {
 
 Get-ChildItem -LiteralPath (Join-Path $payloadPath 'Images') -File |
     Copy-Item -Destination (Join-Path $coopPath 'images') -Force
-Get-ChildItem -LiteralPath (Join-Path $payloadPath 'Manual') -File |
-    Copy-Item -Destination (Join-Path $targetAdvanced 'Manual') -Force
-if (Test-Path -LiteralPath $legacyLaunchConfig -PathType Leaf) {
-    Copy-Item -LiteralPath $legacyLaunchConfig -Destination $advancedLaunchConfig -Force
-}
-Get-ChildItem -LiteralPath (Join-Path $advancedSource 'Documentation') -File |
-    Copy-Item -Destination (Join-Path $targetAdvanced 'Documentation') -Force
-Get-ChildItem -LiteralPath (Join-Path $advancedSource 'Licenses') -Force |
-    Copy-Item -Destination (Join-Path $targetAdvanced 'Licenses') -Recurse -Force
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Uninstall-AliceCoop.ps1') `
-    -Destination (Join-Path $targetAdvanced 'Tools') -Force
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Uninstall-AliceCoop.bat') `
-    -Destination (Join-Path $targetAdvanced 'Tools') -Force
-Copy-Item -LiteralPath $packageManifestPath -Destination $targetAdvanced -Force
-Copy-Item -LiteralPath (Join-Path $advancedSource 'SOURCE_CODE.txt') `
-    -Destination $targetAdvanced -Force
 
-# Remove only known legacy AliceCoop package files after their replacements
-# have been installed under Advanced.
+# Remove only known files installed by older launcher prototypes.
 foreach ($name in @(
     'AliceCoop-LaunchConfig.bat', 'AliceCoop-Server.bat',
     'AliceCoop-Host.bat', 'AliceCoop-Client.bat', 'AliceCoop-Both.bat',
     'AliceCoop-Diagnostic-Both.bat', 'AliceCoop-Animation-Test.bat',
     'Get-PhysicalScreenWidth.ps1', 'README.md', 'README_RU.md',
-    'KNOWN_ISSUES.md', 'Uninstall-AliceCoop.ps1', 'Uninstall-AliceCoop.bat'
+    'KNOWN_ISSUES.md', 'Uninstall-AliceCoop.ps1', 'Uninstall-AliceCoop.bat',
+    'AliceCoopLauncher.exe', 'AliceCoopLauncher.exe.config',
+    'AliceCoopServer.exe'
 )) {
     $legacyFile = Join-Path $coopPath $name
     if (Test-Path -LiteralPath $legacyFile -PathType Leaf) {
@@ -171,7 +159,7 @@ foreach ($name in @(
 $packageManifest = Get-Content -LiteralPath $packageManifestPath -Raw |
     ConvertFrom-Json
 $manifest = [ordered]@{
-    schemaVersion = 3
+    schemaVersion = 4
     installedAtUtc = [DateTime]::UtcNow.ToString('o')
     packageVersion = $packageManifest.version
     protocolVersion = $packageManifest.protocolVersion
@@ -180,11 +168,9 @@ $manifest = [ordered]@{
     hadPreviousMadnessPatchIni = $hadPreviousMadnessPatchIni
     previousDinput8Sha256 = $existingHash
     installedDinput8Sha256 = $newHash
-    installedServerSha256 = (Get-FileHash -LiteralPath $targetServer -Algorithm SHA256).Hash
-    installedLauncherSha256 = (Get-FileHash -LiteralPath $targetLauncher -Algorithm SHA256).Hash
     installedMadnessPatchIniSha256 = (Get-FileHash -LiteralPath $madnessPatchIni -Algorithm SHA256).Hash
     backupPath = $backupDll
-    installMode = 'AliceCoop launcher + combined MadnessPatch client DLL'
+    installMode = 'AliceCoop runtime payload only'
 }
 $manifest | ConvertTo-Json | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 
@@ -194,4 +180,4 @@ if ($StatusPath) {
 }
 
 Write-Host "AliceCoop installed into: $coopPath"
-Write-Host 'Start AliceCoopLauncher.exe and choose Host Game or Join Game.'
+Write-Host 'Keep this installer folder and use its AliceCoopLauncher.exe to play.'

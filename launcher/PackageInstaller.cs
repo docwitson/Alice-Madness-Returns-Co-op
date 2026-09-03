@@ -6,6 +6,9 @@ namespace AliceCoopLauncher
 {
     internal static class PackageInstaller
     {
+        public static string ServerExecutablePath => Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory, "AliceCoopServer.exe");
+
         public static bool IsPackageMode
         {
             get
@@ -53,12 +56,23 @@ namespace AliceCoopLauncher
             return process.ExitCode;
         }
 
+        public static bool IsPayloadInstalled(string win32Directory) =>
+            !string.IsNullOrWhiteSpace(win32Directory) &&
+            File.Exists(Path.Combine(win32Directory, "dinput8.dll")) &&
+            File.Exists(Path.Combine(win32Directory, "AliceCoop", "AliceCoop.ini")) &&
+            File.Exists(Path.Combine(win32Directory, "AliceCoop", "images",
+                "aliceWhait.png")) &&
+            (File.Exists(Path.Combine(win32Directory, "AliceCoop",
+                "install-manifest.json")) ||
+             File.Exists(Path.Combine(win32Directory, "AliceCoop", "Advanced",
+                "package-manifest.json")));
+
         public static bool CanUninstall(string win32Directory) =>
-            File.Exists(UninstallScript(win32Directory));
+            IsPayloadInstalled(win32Directory) && File.Exists(UninstallScript());
 
         public static void StartUninstall(string win32Directory, int launcherProcessId)
         {
-            var script = UninstallScript(win32Directory);
+            var script = UninstallScript();
             if (!File.Exists(script))
                 throw new FileNotFoundException("The uninstall support files are missing.", script);
 
@@ -85,8 +99,8 @@ namespace AliceCoopLauncher
                 throw new InvalidOperationException("The uninstaller process did not start.");
         }
 
-        private static string UninstallScript(string win32Directory) =>
-            Path.Combine(win32Directory, "AliceCoop", "Advanced", "Tools",
+        private static string UninstallScript() =>
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Advanced", "Tools",
                 "Uninstall-AliceCoop.ps1");
 
         private static string QuotePowerShell(string value) =>

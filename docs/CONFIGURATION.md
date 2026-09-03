@@ -3,26 +3,30 @@
 ## Launcher session
 
 The graphical launcher is the normal entry point. It writes the selected role,
-relay address, port and display mode atomically to:
+game directory, role, relay address, port and display mode atomically to a
+per-launcher file under:
 
 ```text
-%LOCALAPPDATA%\AliceCoop\session.ini
+%LOCALAPPDATA%\AliceCoop\sessions\session-<id>.ini
 ```
 
 The file contains a unique named-mutex identifier. The client DLL accepts this
-session only while the launcher instance that created it is alive. This lets a
-Steam relaunch keep the intended role without leaving a permanent host/client
-setting behind. Environment overrides still take priority, and `AliceCoop.ini`
-remains the fallback when no live launcher session exists.
+session only while the launcher instance that created it is alive and only when
+its game directory matches the DLL's own installation. This lets two launcher
+instances control two different local game copies without overwriting each
+other, while a Steam relaunch keeps the intended role. Environment overrides
+still take priority, and `AliceCoop.ini` remains the fallback when no matching
+live launcher session exists.
 
 The launcher remembers non-sensitive UI preferences separately in
 `%LOCALAPPDATA%\AliceCoop\launcher.ini`.
 
 ## Manual launch configuration
 
-Advanced users can edit
-`AliceCoop\Advanced\Manual\AliceCoop-LaunchConfig.bat` when launching through
-the supplied host/client BAT files in the same directory.
+Advanced users can edit `Advanced\Payload\Manual\AliceCoop-LaunchConfig.bat`
+in the extracted installer package. In a drop-in installation, the same files
+are under `AliceCoop\Advanced\Manual`. The supplied host/client BAT files read
+that shared configuration.
 
 | Variable | Default | Description |
 | --- | --- | --- |

@@ -10,10 +10,14 @@ namespace AliceCoopLauncher
     internal sealed class LauncherSession : IDisposable
     {
         private readonly Mutex sessionMutex;
+        private readonly string sessionPath;
 
         public LauncherSession()
         {
-            MutexName = "Local\\AliceCoopLauncher-" + Guid.NewGuid().ToString("N");
+            var sessionId = Guid.NewGuid().ToString("N");
+            MutexName = "Local\\AliceCoopLauncher-" + sessionId;
+            sessionPath = Path.Combine(SessionsDirectory,
+                "session-" + sessionId + ".ini");
             sessionMutex = new Mutex(true, MutexName);
         }
 
@@ -23,18 +27,22 @@ namespace AliceCoopLauncher
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "AliceCoop");
 
-        public static string SessionPath => Path.Combine(SettingsDirectory, "session.ini");
+        public static string SessionsDirectory => Path.Combine(
+            SettingsDirectory, "sessions");
+
+        public string SessionPath => sessionPath;
 
         public static string PreferencesPath => Path.Combine(SettingsDirectory, "launcher.ini");
 
-        public void Activate(string role, string serverAddress, int port,
-            string displayMode)
+        public void Activate(string gameDirectory, string role,
+            string serverAddress, int port, string displayMode)
         {
-            Directory.CreateDirectory(SettingsDirectory);
+            Directory.CreateDirectory(SessionsDirectory);
             var text = new StringBuilder()
                 .AppendLine("[Launcher]")
                 .AppendLine("Active=1")
                 .AppendLine("MutexName=" + MutexName)
+                .AppendLine("GameDirectory=" + Path.GetFullPath(gameDirectory))
                 .AppendLine()
                 .AppendLine("[Network]")
                 .AppendLine("Role=" + role)
@@ -44,7 +52,7 @@ namespace AliceCoopLauncher
                 .AppendLine("[Window]")
                 .AppendLine("DisplayMode=" + displayMode)
                 .ToString();
-            WriteAtomically(SessionPath, text);
+            WriteAtomically(sessionPath, text);
         }
 
         public static void SavePreferences(string gameDirectory,
@@ -124,6 +132,15 @@ namespace AliceCoopLauncher
 
         public void Dispose()
         {
+            try
+            {
+                if (File.Exists(sessionPath))
+                    File.Delete(sessionPath);
+            }
+            catch (IOException)
+            {
+                // The mutex still makes an undeleted session file inactive.
+            }
             sessionMutex.Dispose();
         }
     }

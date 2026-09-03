@@ -206,13 +206,23 @@ try {
     Assert-Condition ((Get-Content -LiteralPath $installStatus -Raw) -match
         'Alice Co-op installed into') 'Installer status did not report success.'
     $installedCoop = Join-Path $installWin32 'AliceCoop'
-    foreach ($required in @('AliceCoopLauncher.exe', 'AliceCoopServer.exe',
-        'AliceCoop.ini', 'install-manifest.json',
-        'Advanced\Manual\AliceCoop-Host.bat',
-        'Advanced\Documentation\INSTALL.md')) {
+    foreach ($required in @('AliceCoop.ini', 'install-manifest.json',
+        'images\aliceWhait.png', 'images\cutsceneWatch2.png')) {
         Assert-Condition (Test-Path -LiteralPath (Join-Path $installedCoop $required) `
             -PathType Leaf) "Installer smoke omitted: $required"
     }
+    foreach ($notInstalled in @('AliceCoopLauncher.exe', 'AliceCoopServer.exe',
+        'Advanced\Documentation\INSTALL.md')) {
+        Assert-Condition (-not (Test-Path -LiteralPath `
+            (Join-Path $installedCoop $notInstalled) -PathType Leaf)) `
+            "Installer copied a non-runtime file into the game: $notInstalled"
+    }
+    $installManifest = Get-Content -LiteralPath `
+        (Join-Path $installedCoop 'install-manifest.json') -Raw | ConvertFrom-Json
+    Assert-Condition ($installManifest.schemaVersion -eq 4) `
+        'Unexpected installed payload manifest schema.'
+    Assert-Condition ($installManifest.installMode -eq 'AliceCoop runtime payload only') `
+        'Installed manifest does not identify the runtime-only payload.'
     Assert-Condition ((Get-FileHash (Join-Path $installWin32 'dinput8.dll') `
         -Algorithm SHA256).Hash -eq $builtDllHash) 'Installed DLL mismatch.'
     Assert-Condition ((Get-Content -LiteralPath (Join-Path $installWin32 'MadnessPatch.ini') `
@@ -236,7 +246,7 @@ try {
     }
 
     $uninstallStatus = Join-Path $tempRoot 'uninstall-status.txt'
-    & (Join-Path $installedCoop 'Advanced\Tools\Uninstall-AliceCoop.ps1') `
+    & (Join-Path $installerRoot 'Advanced\Tools\Uninstall-AliceCoop.ps1') `
         -Win32Path $installWin32 -StatusPath $uninstallStatus
     Assert-Condition (Test-Path -LiteralPath $uninstallStatus -PathType Leaf) `
         'Uninstaller did not write its status file.'
@@ -246,10 +256,27 @@ try {
         -Algorithm SHA256).Hash -eq $previousDllHash) `
         'Uninstaller did not restore the preexisting proxy DLL.'
     Assert-Condition (-not (Test-Path -LiteralPath (Join-Path $installedCoop `
-        'AliceCoopLauncher.exe'))) 'Uninstaller left the launcher installed.'
-    Assert-Condition (Test-Path -LiteralPath (Join-Path $installedCoop `
-        'Advanced\Tools\Uninstall-AliceCoop.ps1')) `
-        'Uninstaller did not preserve its recovery tools.'
+        'AliceCoop.ini'))) 'Uninstaller left the runtime configuration installed.'
+    Assert-Condition (-not (Test-Path -LiteralPath (Join-Path $installedCoop `
+        'images\aliceWhait.png'))) 'Uninstaller left runtime images installed.'
+
+    # Repair must preserve the original no-proxy/no-INI state for uninstall.
+    $cleanWin32 = Join-Path $tempRoot 'repair-smoke\Binaries\Win32'
+    New-Item -ItemType Directory -Force -Path $cleanWin32 | Out-Null
+    New-Item -ItemType File -Path `
+        (Join-Path $cleanWin32 'AliceMadnessReturns.exe') | Out-Null
+    & (Join-Path $installerRoot 'Advanced\Tools\Install-AliceCoop-Package.ps1') `
+        -Win32Path $cleanWin32
+    & (Join-Path $installerRoot 'Advanced\Tools\Install-AliceCoop-Package.ps1') `
+        -Win32Path $cleanWin32
+    & (Join-Path $installerRoot 'Advanced\Tools\Uninstall-AliceCoop.ps1') `
+        -Win32Path $cleanWin32
+    Assert-Condition (-not (Test-Path -LiteralPath `
+        (Join-Path $cleanWin32 'dinput8.dll') -PathType Leaf)) `
+        'Repair changed the original no-proxy state used by uninstall.'
+    Assert-Condition (-not (Test-Path -LiteralPath `
+        (Join-Path $cleanWin32 'MadnessPatch.ini') -PathType Leaf)) `
+        'Repair changed the original no-INI state used by uninstall.'
 
     $outerEntries = @{}
     foreach ($line in Get-Content -LiteralPath $outerChecksums) {

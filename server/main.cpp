@@ -114,6 +114,21 @@ namespace
 		return nullptr;
 	}
 
+	bool RefreshPingSender(std::array<ClientSlot, 2>& clients,
+		const sockaddr_in& endpoint, std::uint32_t playerId,
+		std::uint32_t packetSessionId, std::uint32_t serverSessionId,
+		Clock::time_point now)
+	{
+		ClientSlot* sender = FindClient(clients, endpoint, playerId);
+		if (!sender || (packetSessionId != 0
+			&& packetSessionId != serverSessionId))
+		{
+			return false;
+		}
+		sender->lastSeen = now;
+		return true;
+	}
+
 	bool SendBytes(SOCKET socket, const sockaddr_in& endpoint, const void* bytes, int size)
 	{
 		return sendto(socket, static_cast<const char*>(bytes), size, 0,
@@ -195,7 +210,26 @@ namespace
 		saveChunk.dataSize = 3;
 		auto saveChunkPacket = MakePacket(
 			PacketType::SaveSyncChunk, 123, 1, 104, saveChunk);
-		const bool valid = IsValidHeader(commandPacket.header, sizeof(commandPacket))
+		std::array<ClientSlot, 2> pingClients{};
+		sockaddr_in pingEndpoint{};
+		pingEndpoint.sin_family = AF_INET;
+		pingEndpoint.sin_port = htons(27018);
+		pingEndpoint.sin_addr.S_un.S_addr = htonl(INADDR_LOOPBACK);
+		pingClients[0].occupied = true;
+		pingClients[0].playerId = 1;
+		pingClients[0].endpoint = pingEndpoint;
+		const auto originalLastSeen = Clock::now() - std::chrono::seconds(10);
+		const auto refreshedLastSeen = Clock::now();
+		pingClients[0].lastSeen = originalLastSeen;
+		const bool validPingRefresh = RefreshPingSender(pingClients,
+			pingEndpoint, 1, 123, 123, refreshedLastSeen)
+			&& pingClients[0].lastSeen == refreshedLastSeen;
+		const bool rejectedWrongSession = !RefreshPingSender(pingClients,
+			pingEndpoint, 1, 456, 123, Clock::now())
+			&& pingClients[0].lastSeen == refreshedLastSeen;
+
+		const bool valid = validPingRefresh && rejectedWrongSession
+			&& IsValidHeader(commandPacket.header, sizeof(commandPacket))
 			&& commandPacket.header.payloadSize == sizeof(ClientCommandPayload)
 			&& commandPacket.header.type == PacketType::ClientCommand
 			&& IsValidHeader(snapshotPacket.header, sizeof(snapshotPacket))
@@ -329,6 +363,8 @@ int wmain(int argc, wchar_t** argv)
 				const auto now = Clock::now();
 				if (header->type == PacketType::Ping && header->payloadSize == 0)
 				{
+					RefreshPingSender(clients, source, header->playerId,
+						header->sessionId, sessionId, now);
 					Header pong = *header;
 					pong.type = PacketType::Pong;
 					pong.sessionId = sessionId;

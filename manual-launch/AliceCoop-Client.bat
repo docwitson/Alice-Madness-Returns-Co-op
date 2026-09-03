@@ -43,9 +43,14 @@ if /i "%DISPLAY_MODE%"=="borderless" (
     if not "%WINDOW_WIDTH%"=="0" if not "%WINDOW_HEIGHT%"=="0" set "GAME_ARGUMENTS=-windowed -ResX=%WINDOW_WIDTH% -ResY=%WINDOW_HEIGHT%"
 )
 
-for %%I in ("%SCRIPT_DIR%\..") do set "GAME_DIR=%%~fI"
-if not exist "%GAME_DIR%\AliceMadnessReturns.exe" (
-    for %%I in ("%SCRIPT_DIR%\..\..\Binaries\Win32") do set "GAME_DIR=%%~fI"
+for %%I in ("%SCRIPT_DIR%\..\..") do set "INSTALLED_COOP_DIR=%%~fI"
+if exist "%INSTALLED_COOP_DIR%\AliceCoop.ini" (
+    for %%I in ("%INSTALLED_COOP_DIR%\..") do set "GAME_DIR=%%~fI"
+) else (
+    for %%I in ("%SCRIPT_DIR%\..") do set "GAME_DIR=%%~fI"
+    if not exist "%GAME_DIR%\AliceMadnessReturns.exe" (
+        for %%I in ("%SCRIPT_DIR%\..\..\Binaries\Win32") do set "GAME_DIR=%%~fI"
+    )
 )
 set "GAME_EXE=%GAME_DIR%\AliceMadnessReturns.exe"
 if not exist "%GAME_EXE%" (

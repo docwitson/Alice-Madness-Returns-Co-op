@@ -1,9 +1,32 @@
 # Configuration reference
 
-## Launch configuration
+## Launcher session
 
-Edit `AliceCoop-LaunchConfig.bat` when launching the game through the supplied
-host/client BAT files.
+The graphical launcher is the normal entry point. It writes the selected role,
+game directory, role, relay address, port and display mode atomically to a
+per-launcher file under:
+
+```text
+%LOCALAPPDATA%\AliceCoop\sessions\session-<id>.ini
+```
+
+The file contains a unique named-mutex identifier. The client DLL accepts this
+session only while the launcher instance that created it is alive and only when
+its game directory matches the DLL's own installation. This lets two launcher
+instances control two different local game copies without overwriting each
+other, while a Steam relaunch keeps the intended role. Environment overrides
+still take priority, and `AliceCoop.ini` remains the fallback when no matching
+live launcher session exists.
+
+The launcher remembers non-sensitive UI preferences separately in
+`%LOCALAPPDATA%\AliceCoop\launcher.ini`.
+
+## Manual launch configuration
+
+Advanced users can edit `Advanced\Payload\Manual\AliceCoop-LaunchConfig.bat`
+in the extracted installer package. In a drop-in installation, the same files
+are under `AliceCoop\Advanced\Manual`. The supplied host/client BAT files read
+that shared configuration.
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -32,8 +55,8 @@ Normal releases ship conservative defaults. The most relevant sections are:
 - `[VisualProxy]`: interpolation, collision policy, hair alignment and optional
   movement-trail history.
 - `[SharedWorld]`: enemy health/transform authority and reconciliation limits.
-- `[Window]`: legacy per-process window management; launch scripts normally
-  override it.
+- `[Window]`: fallback per-process window management; the graphical launcher
+  or manual launch scripts normally override it.
 - `[Performance]`: process FPS and worker-thread limits.
 - `[Trace]`: diagnostic logging. Leave every trace disabled for normal play.
 
@@ -53,7 +76,8 @@ records. The diagnostic launcher enables it through
 See [`SMOKE_TEST.md`](SMOKE_TEST.md) for the diagnostic test sequence and log
 acceptance criteria.
 
-For a normal Steam launch, set `EnableWithoutLauncher = 1` and explicitly set
+For a manual Steam launch without the graphical launcher, set
+`EnableWithoutLauncher = 1` and explicitly set
 `Role = host` or `Role = client`. Steam may relaunch the game from its existing
 client process, which discards the per-process environment supplied by the BAT
 files. Set `ServerAddress` to the relay PC's reachable LAN/VPN address, or to

@@ -10,7 +10,7 @@ body:
     id: version
     attributes:
       label: Alice Co-op version
-      placeholder: 0.1.0-alpha.1 / protocol 29
+      placeholder: 0.1.0-alpha.2 / protocol 29
     validations:
       required: true
   - type: dropdown

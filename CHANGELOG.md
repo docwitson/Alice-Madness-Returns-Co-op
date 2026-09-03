@@ -4,6 +4,26 @@ All notable user-facing changes are documented here. Alice Co-op follows
 [Semantic Versioning](https://semver.org/) where practical; compatibility also
 depends on the protocol version shown in each release.
 
+## 0.1.0-alpha.2 — 2026-09-03
+
+### Added
+
+- A graphical launcher and installer for managing game installations, hosting,
+  joining and common connection settings.
+- Automated protocol, package and lifecycle checks used by development and CI.
+
+### Changed
+
+- Reorganized the AliceCoop client internals and isolated its ProcessEvent bridge
+  without changing the wire protocol or intended gameplay behavior.
+- Simplified the direct drop-in package and kept advanced/manual tools separate
+  from the normal launcher workflow.
+
+### Fixed
+
+- Overlay placement after game-window resolution changes.
+- Relay clients timing out while the game was still starting.
+
 ## 0.1.0-alpha.1 — 2026-08-27
 
 Initial alpha release.

@@ -389,24 +389,139 @@
 			return value.empty() ? fallback : _wtoi(value.c_str());
 		}
 
+		bool LauncherPathsEqual(const std::filesystem::path& first,
+			const std::filesystem::path& second)
+		{
+			std::error_code error;
+			std::wstring firstValue = std::filesystem::absolute(first, error)
+				.lexically_normal().wstring();
+			if (error)
+				return false;
+			error.clear();
+			std::wstring secondValue = std::filesystem::absolute(second, error)
+				.lexically_normal().wstring();
+			if (error)
+				return false;
+			while (!firstValue.empty()
+				&& (firstValue.back() == L'\\' || firstValue.back() == L'/'))
+				firstValue.pop_back();
+			while (!secondValue.empty()
+				&& (secondValue.back() == L'\\' || secondValue.back() == L'/'))
+				secondValue.pop_back();
+			return _wcsicmp(firstValue.c_str(), secondValue.c_str()) == 0;
+		}
+
+		bool IsActiveLauncherSessionFile(const std::filesystem::path& candidate,
+			const std::filesystem::path& moduleDirectory, bool requireGameDirectory)
+		{
+			if (ReadIniInt(candidate, L"Launcher", L"Active", 0) != 1)
+				return false;
+			const std::wstring configuredDirectory = ReadIniString(
+				candidate, L"Launcher", L"GameDirectory", L"");
+			if (requireGameDirectory
+				&& (configuredDirectory.empty()
+					|| !LauncherPathsEqual(configuredDirectory, moduleDirectory)))
+			{
+				return false;
+			}
+
+			const std::wstring mutexName = ReadIniString(
+				candidate, L"Launcher", L"MutexName", L"");
+			if (mutexName.empty())
+				return false;
+			const HANDLE launcherMutex = OpenMutexW(
+				SYNCHRONIZE, FALSE, mutexName.c_str());
+			if (!launcherMutex)
+				return false;
+			CloseHandle(launcherMutex);
+			return true;
+		}
+
+		bool FindActiveLauncherSession(
+			const std::filesystem::path& moduleDirectory,
+			std::filesystem::path& sessionPath)
+		{
+			std::array<wchar_t, 32768> localAppData{};
+			const DWORD length = GetEnvironmentVariableW(
+				L"LOCALAPPDATA", localAppData.data(),
+				static_cast<DWORD>(localAppData.size()));
+			if (length == 0 || length >= localAppData.size())
+				return false;
+
+			const std::filesystem::path settingsDirectory =
+				std::filesystem::path(localAppData.data()) / L"AliceCoop";
+			const std::filesystem::path sessionsDirectory =
+				settingsDirectory / L"sessions";
+			std::error_code error;
+			std::filesystem::file_time_type newestTime{};
+			bool found = false;
+			for (std::filesystem::directory_iterator iterator(
+				sessionsDirectory, error), end; !error && iterator != end;
+				iterator.increment(error))
+			{
+				const std::filesystem::path candidate = iterator->path();
+				const std::wstring name = candidate.filename().wstring();
+				if (!iterator->is_regular_file(error)
+					|| name.rfind(L"session-", 0) != 0
+					|| candidate.extension() != L".ini"
+					|| !IsActiveLauncherSessionFile(
+						candidate, moduleDirectory, true))
+				{
+					error.clear();
+					continue;
+				}
+				error.clear();
+				const auto writeTime = std::filesystem::last_write_time(candidate, error);
+				if (!error && (!found || writeTime > newestTime))
+				{
+					newestTime = writeTime;
+					sessionPath = candidate;
+					found = true;
+				}
+				error.clear();
+			}
+			if (found)
+				return true;
+
+			// Compatibility with launchers released before per-install sessions.
+			sessionPath = settingsDirectory / L"session.ini";
+			return IsActiveLauncherSessionFile(
+				sessionPath, moduleDirectory, false);
+		}
+
 		void ReadConfig()
 		{
 			const std::filesystem::path moduleDirectory = SystemHelper::GetModulePath();
 			const std::filesystem::path iniPath = moduleDirectory / L"AliceCoop" / L"AliceCoop.ini";
+			std::filesystem::path launcherSessionPath;
+			const bool launcherSessionActive =
+				FindActiveLauncherSession(moduleDirectory, launcherSessionPath);
 
 			const std::wstring enabledEnvironment = ReadEnvironment(L"ALICECOOP_ENABLE");
 			g_config.enabled = IsTruthy(enabledEnvironment)
+				|| launcherSessionActive
 				|| ReadIniInt(iniPath, L"Network", L"EnableWithoutLauncher", 0) == 1;
 			g_config.role = ParseRole(ReadEnvironment(L"ALICECOOP_ROLE"));
+			if (g_config.role == Role::Unknown && launcherSessionActive)
+				g_config.role = ParseRole(ReadIniString(
+					launcherSessionPath, L"Network", L"Role", L""));
 			if (g_config.role == Role::Unknown)
 				g_config.role = ParseRole(ReadIniString(iniPath, L"Network", L"Role", L""));
 
 			std::wstring server = ReadEnvironment(L"ALICECOOP_SERVER");
+			if (server.empty() && launcherSessionActive)
+				server = ReadIniString(launcherSessionPath,
+					L"Network", L"ServerAddress", L"");
 			if (server.empty())
 				server = ReadIniString(iniPath, L"Network", L"ServerAddress", L"127.0.0.1");
 			g_config.serverAddress = NarrowAscii(server);
-			g_config.port = static_cast<std::uint16_t>(EnvironmentInt(L"ALICECOOP_PORT",
-				ReadIniInt(iniPath, L"Network", L"Port", DefaultPort)));
+			int configuredPort = ReadIniInt(iniPath,
+				L"Network", L"Port", DefaultPort);
+			if (launcherSessionActive)
+				configuredPort = ReadIniInt(launcherSessionPath,
+					L"Network", L"Port", configuredPort);
+			g_config.port = static_cast<std::uint16_t>(EnvironmentInt(
+				L"ALICECOOP_PORT", configuredPort));
 			g_config.sendRateHz = std::clamp(ReadIniInt(iniPath, L"Network", L"SendRateHz", 20), 5, 60);
 			g_config.peerTimeoutMs = std::clamp(ReadIniInt(iniPath, L"Network", L"PeerTimeoutMs", 3000), 1000, 15000);
 			g_config.showOnScreenStatus = ReadIniInt(iniPath, L"Debug", L"OnScreenStatus", 0) == 1;
@@ -505,11 +620,23 @@
 				1, static_cast<int>(HairRotationCandidate::Count));
 			g_hairRotationCandidate =
 				static_cast<HairRotationCandidate>(hairTarget - 1);
+			const std::wstring launcherDisplayMode = launcherSessionActive
+				? ReadIniString(launcherSessionPath,
+					L"Window", L"DisplayMode", L"fullscreen")
+				: L"";
+			const bool launcherWindowed = launcherSessionActive
+				&& (_wcsicmp(launcherDisplayMode.c_str(), L"windowed") == 0
+					|| _wcsicmp(launcherDisplayMode.c_str(), L"borderless") == 0);
+			const bool launcherBorderless = launcherSessionActive
+				&& _wcsicmp(launcherDisplayMode.c_str(), L"borderless") == 0;
 			g_config.forceWindowed = EnvironmentInt(L"ALICECOOP_FORCE_WINDOWED",
+				launcherSessionActive ? (launcherWindowed ? 1 : 0) :
 				ReadIniInt(iniPath, L"Window", L"ForceWindowed", 0)) == 1;
 			g_config.manageWindowGeometry = EnvironmentInt(L"ALICECOOP_MANAGE_WINDOW",
+				launcherSessionActive ? (launcherWindowed ? 1 : 0) :
 				ReadIniInt(iniPath, L"Window", L"ManageGeometry", 0)) == 1;
-			g_config.borderlessWindow = EnvironmentInt(L"ALICECOOP_BORDERLESS", 0) == 1;
+			g_config.borderlessWindow = EnvironmentInt(L"ALICECOOP_BORDERLESS",
+				launcherBorderless ? 1 : 0) == 1;
 			g_config.windowX = EnvironmentInt(L"ALICECOOP_WINDOW_X",
 				ReadIniInt(iniPath, L"Window", L"X", 0));
 			g_config.windowY = EnvironmentInt(L"ALICECOOP_WINDOW_Y",

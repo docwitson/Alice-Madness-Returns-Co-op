@@ -9,7 +9,7 @@ on:
       version:
         description: Package version without the v prefix
         required: true
-        default: 0.1.0-alpha.1
+        default: 0.1.0-alpha.2
 
 permissions:
   contents: write
@@ -66,7 +66,11 @@ jobs:
           if ($assets.Count -ne 3) {
             throw "Expected two ZIP archives and one checksum file; found $($assets.Count)."
           }
+          $notes = "docs/RELEASE_NOTES_${{ steps.version.outputs.value }}.md"
+          if (-not (Test-Path -LiteralPath $notes -PathType Leaf)) {
+            throw "Release notes are missing: $notes"
+          }
           gh release create "${{ github.ref_name }}" @assets `
             --title "Alice Co-op ${{ steps.version.outputs.value }}" `
-            --notes-file docs/RELEASE_NOTES_0.1.0-alpha.1.md `
+            --notes-file $notes `
             --prerelease

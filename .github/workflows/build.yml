@@ -25,6 +25,10 @@ jobs:
         shell: pwsh
         run: .\tools\Test-ProcessEvent-Bridge-Layout.ps1
 
+      - name: Restore launcher dependencies
+        shell: pwsh
+        run: msbuild AliceCoop.sln /t:Restore "/p:Configuration=Debug;Platform=x86"
+
       - name: Build Debug x86
         shell: pwsh
         run: msbuild AliceCoop.sln /m /t:Rebuild "/p:Configuration=Debug;Platform=x86"
@@ -40,6 +44,15 @@ jobs:
       - name: Relay self-test
         shell: pwsh
         run: .\bin\Release\AliceCoopServer.exe --self-test
+
+      - name: Launcher self-test
+        shell: pwsh
+        run: |
+          $process = Start-Process .\bin\Release\AliceCoopLauncher.exe `
+            -ArgumentList '--self-test' -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw 'AliceCoopLauncher self-test failed.'
+          }
 
       - name: Protocol version query
         shell: pwsh
@@ -63,3 +76,4 @@ jobs:
           path: |
             bin/Release/dinput8.dll
             bin/Release/AliceCoopServer.exe
+            bin/Release/AliceCoopLauncher.exe

@@ -4,7 +4,6 @@
 
 <p align="center">
   <strong><a href="https://www.youtube.com/watch?v=QO0yarqS1-k">▶ ПОСМОТРЕТЬ ПОЛНЫЙ РЕЛИЗНЫЙ ТРЕЙЛЕР</a></strong><br>
-  <strong><a href="https://www.youtube.com/watch?v=UzjCvp7MhTM">▶ ПОСМОТРЕТЬ ИНСТРУКЦИЮ ПО УСТАНОВКЕ И НАСТРОЙКЕ</a></strong><br>
   <strong><a href="https://www.youtube.com/watch?v=rALyp02Q-LE">▶ ПОСМОТРЕТЬ ПОЛНОЕ ПРОХОЖДЕНИЕ — ЧАСТЬ 1</a></strong>
 </p>
 
@@ -97,7 +96,8 @@ Steam-версию, поддерживает дополнительные коп
 Полная инструкция по рекомендуемому способу находится в
 [руководстве по лаунчеру](docs/INSTALL_RU.md). Архив `drop-in.zip` и запуск
 через BAT/INI отделены в [руководство по ручной установке](docs/MANUAL_INSTALL_RU.md)
-для опытных пользователей и разработки.
+для опытных пользователей и разработки. Этот процесс также показан в
+[видео по устаревшей ручной установке и настройке](https://www.youtube.com/watch?v=UzjCvp7MhTM).
 
 ## Управление модом
 

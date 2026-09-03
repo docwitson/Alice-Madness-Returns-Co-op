@@ -4,7 +4,6 @@
 
 <p align="center">
   <strong><a href="https://www.youtube.com/watch?v=QO0yarqS1-k">▶ WATCH THE FULL RELEASE TRAILER</a></strong><br>
-  <strong><a href="https://www.youtube.com/watch?v=UzjCvp7MhTM">▶ WATCH THE INSTALLATION &amp; SETUP GUIDE</a></strong><br>
   <strong><a href="https://www.youtube.com/watch?v=rALyp02Q-LE">▶ WATCH THE FULL PLAYTHROUGH — PART 1</a></strong>
 </p>
 
@@ -96,6 +95,8 @@ public Internet: the prototype protocol has no authentication or encryption.
 See the full [launcher installation and update guide](docs/INSTALL.md). The
 direct `drop-in.zip` and BAT/INI workflow remain available separately for
 advanced users and development in the [manual installation guide](docs/MANUAL_INSTALL.md).
+The [legacy manual installation and setup video](https://www.youtube.com/watch?v=UzjCvp7MhTM)
+also demonstrates this workflow.
 
 ## Controls
 

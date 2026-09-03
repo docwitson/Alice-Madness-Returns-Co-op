@@ -73,4 +73,4 @@ jobs:
           gh release create "${{ github.ref_name }}" @assets `
             --title "Alice Co-op ${{ steps.version.outputs.value }}" `
             --notes-file $notes `
-            --prerelease
+            --latest

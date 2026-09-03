@@ -106,9 +106,9 @@
 
         <Style x:Key="SessionPrimaryButton" TargetType="Button"
                BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#665A86" />
+            <Setter Property="Background" Value="#7565A0" />
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            <Setter Property="BorderBrush" Value="#8979AD" />
+            <Setter Property="BorderBrush" Value="#A18FCB" />
             <Setter Property="Padding" Value="18,11" />
             <Setter Property="FontSize" Value="15" />
             <Setter Property="Template">
@@ -126,13 +126,13 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="SessionButtonBorder"
-                                        Property="Background" Value="#75679A" />
+                                        Property="Background" Value="#8875B6" />
                                 <Setter TargetName="SessionButtonBorder"
-                                        Property="BorderBrush" Value="#A18EC9" />
+                                        Property="BorderBrush" Value="#B5A0DE" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="SessionButtonBorder"
-                                        Property="Background" Value="#574C73" />
+                                        Property="Background" Value="#645589" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.45" />

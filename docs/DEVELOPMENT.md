@@ -45,7 +45,7 @@ The relay reports the wire protocol version without opening logs or sockets:
 ## Packaging
 
 ```powershell
-& .\tools\Build-AliceCoop-Package.ps1 -Version 0.1.0-alpha.1
+& .\tools\Build-AliceCoop-Package.ps1 -Version 0.1.0-alpha.2
 ```
 
 The script rebuilds `Release|x86`, runs the server and launcher self-tests,
@@ -56,7 +56,7 @@ Validate both archives against their manifests, checksums, exact file layouts
 and the freshly built DLL/server binaries:
 
 ```powershell
-& .\tools\Test-AliceCoop-Package.ps1 -Version 0.1.0-alpha.1
+& .\tools\Test-AliceCoop-Package.ps1 -Version 0.1.0-alpha.2
 ```
 
 CI and release workflows add `-RequireCleanSource` to both packaging and

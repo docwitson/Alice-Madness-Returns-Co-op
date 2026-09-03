@@ -101,7 +101,7 @@
                                        HorizontalAlignment="Right" TextAlignment="Right"
                                        Foreground="{StaticResource MutedTextBrush}"
                                        FontSize="12">
-                                <Run Text="AliceCoop " />
+                                <Run Text="Alice Co-op " />
                                 <Run x:Name="VersionText" Text="Development build" />
                                 <Run Text=" — " />
                                 <Hyperlink NavigateUri="https://github.com/docwitson/Alice-Madness-Returns-Co-op"
@@ -109,10 +109,10 @@
                                            RequestNavigate="OpenRepository_Click">GitHub repository</Hyperlink>
                                 <LineBreak />
                                 <Run Text="By Docwitson and contributors" />
-                                <LineBreak />
+                                <Run Text=" · " />
                                 <Hyperlink NavigateUri="https://github.com/docwitson/Alice-Madness-Returns-Co-op/blob/main/THIRD_PARTY_NOTICES.md"
                                            Foreground="{StaticResource AccentBrush}"
-                                           RequestNavigate="OpenRepository_Click">Third-party</Hyperlink>
+                                           RequestNavigate="OpenRepository_Click">Third-party credits</Hyperlink>
                                 <Run Text=" · GPL-2.0" />
                             </TextBlock>
                         </Grid>
@@ -183,7 +183,7 @@
                                                    Text="Recommended network"
                                                    Foreground="{StaticResource SuccessBrush}"
                                                    FontSize="12" VerticalAlignment="Center" />
-                                        <Button Content="Copy IP address" HorizontalAlignment="Right"
+                                        <Button Content="Copy address" HorizontalAlignment="Right"
                                                 Padding="10,5" Click="CopyAddress_Click"
                                                 ToolTip="Copies the IP address and UDP port" />
                                     </Grid>
@@ -238,7 +238,7 @@
                         </Grid>
 
                         <TextBlock Grid.Row="3"
-                                   Text="One launcher window controls one game. Use a second window for another local copy."
+                                   Text="One launcher window controls one game. Local two-copy testing usually requires a separate non-Steam installation."
                                    Margin="4,9,4,0" FontSize="11" TextAlignment="Center"
                                    Foreground="{StaticResource MutedTextBrush}" />
 

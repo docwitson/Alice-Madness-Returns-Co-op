@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Navigation;
+using System.Windows.Threading;
 
 namespace AliceCoopLauncher
 {
@@ -17,9 +18,20 @@ namespace AliceCoopLauncher
     {
         private readonly LauncherSession launcherSession = new LauncherSession();
         private readonly RelayController relay = new RelayController();
+        private readonly DispatcherTimer clientLogTimer = new DispatcherTimer();
         private readonly List<GameInstallation> installations =
             new List<GameInstallation>();
         private string activeWin32Directory;
+        private string clientLogDirectory;
+        private string clientLogPath;
+        private string monitoredGameDirectory;
+        private long clientLogPosition;
+        private DateTime clientSessionStartedUtc;
+        private bool clientGameObserved;
+        private bool monitoredClientRole;
+        private bool hostGameObserved;
+        private bool hostPeerObserved;
+        private bool hostSessionEnded;
         private bool isLoading = true;
         private bool closeForUninstall;
 
@@ -30,6 +42,8 @@ namespace AliceCoopLauncher
                 ReceiveRelayLine(line)));
             relay.Exited += expected => Dispatcher.BeginInvoke(new Action(() =>
                 RelayExited(expected)));
+            clientLogTimer.Interval = TimeSpan.FromSeconds(1);
+            clientLogTimer.Tick += ClientLogTimer_Tick;
             Loaded += MainWindow_Loaded;
             Closing += MainWindow_Closing;
             StateChanged += (_, __) =>
@@ -257,9 +271,11 @@ namespace AliceCoopLauncher
                 return;
             try
             {
-                ShowSessionDetails();
-                SessionStatusText.Text = "Starting host…";
-                SessionStatusText.Foreground = FindBrush("SuccessBrush");
+                StopClientLogMonitor();
+                hostGameObserved = false;
+                hostPeerObserved = false;
+                hostSessionEnded = false;
+                SetSessionStatus("Starting session…");
                 var coopDirectory = Path.Combine(activeWin32Directory, "AliceCoop");
                 relay.Start(PackageInstaller.ServerExecutablePath, port,
                     Path.Combine(coopDirectory, "logs"));
@@ -271,14 +287,15 @@ namespace AliceCoopLauncher
                 launcherSession.Activate(activeWin32Directory,
                     "host", "127.0.0.1", port, displayMode);
                 SavePreferences(port, displayMode);
+                StartGameMonitor(activeWin32Directory, false);
+                SetSessionStatus("Launching game…");
                 LaunchSelectedGame();
-                SessionStatusText.Text = "Hosting — waiting for the game";
+                SetSessionStatus("Waiting for player…");
             }
             catch (Exception exception)
             {
                 relay.Stop();
-                SessionStatusText.Text = "Unable to host";
-                SessionStatusText.Foreground = FindBrush("WarningBrush");
+                SetSessionStatus("Unable to host", true);
                 AppendStatus("Host launch failed: " + exception.Message, true);
                 MessageBox.Show(this, exception.Message, "Unable to host",
                     MessageBoxButton.OK, MessageBoxImage.Error);
@@ -294,8 +311,7 @@ namespace AliceCoopLauncher
                 return;
             try
             {
-                SessionStatusText.Text = "Checking host…";
-                SessionStatusText.Foreground = FindBrush("SuccessBrush");
+                SetSessionStatus("Testing host…");
                 ProbeStatusText.Text = "Checking…";
                 var reachable = await NetworkTools.ProbeAsync(address, port);
                 ProbeStatusText.Text = reachable ? "Host reachable ✓" : "No reply";
@@ -306,19 +322,21 @@ namespace AliceCoopLauncher
                     "Start the game anyway?", "Host not reached",
                     MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                 {
-                    SessionStatusText.Text = "Ready";
+                    SetSessionStatus("Ready");
                     return;
                 }
                 launcherSession.Activate(activeWin32Directory,
                     "client", address, port, displayMode);
                 SavePreferences(port, displayMode);
+                StartGameMonitor(activeWin32Directory, true);
+                SetSessionStatus("Launching game…");
                 LaunchSelectedGame();
-                SessionStatusText.Text = "Client launched — waiting to connect";
+                SetSessionStatus("Connecting to host…");
             }
             catch (Exception exception)
             {
-                SessionStatusText.Text = "Unable to join";
-                SessionStatusText.Foreground = FindBrush("WarningBrush");
+                StopClientLogMonitor();
+                SetSessionStatus("Unable to join", true);
                 AppendStatus("Client launch failed: " + exception.Message, true);
                 MessageBox.Show(this, exception.Message, "Unable to join",
                     MessageBoxButton.OK, MessageBoxImage.Error);
@@ -470,55 +488,240 @@ namespace AliceCoopLauncher
             AppendStatus("Launch requested through " + installation.Store + ".");
         }
 
+        private void SetSessionStatus(string text, bool warning = false)
+        {
+            SessionStatusText.Text = text;
+            SessionStatusText.Foreground = FindBrush(
+                warning ? "WarningBrush" : "SuccessBrush");
+        }
+
         private void ReceiveRelayLine(string line)
         {
             AppendStatus(line);
+            if (hostSessionEnded && !line.Contains("HOST connected"))
+                return;
+            if (line.Contains("HOST connected"))
+                hostSessionEnded = false;
             if (line.Contains("status: host=online") && line.Contains("client=online"))
             {
-                SessionStatusText.Text = "Both players connected ✓";
-                SessionStatusText.Foreground = FindBrush("SuccessBrush");
+                hostGameObserved = true;
+                hostPeerObserved = true;
+                var gameplayActive =
+                    (TryReadLogCounter(line, "snapshots=", out var snapshots)
+                        && snapshots > 0)
+                    || (TryReadLogCounter(line, "commands=", out var commands)
+                        && commands > 0);
+                SetSessionStatus(gameplayActive
+                    ? "In session ✓"
+                    : "Player connected ✓");
                 return;
             }
             if (line.Contains("status: host=online") && line.Contains("client=waiting"))
             {
-                SessionStatusText.Text = "Host connected — waiting for second player";
-                SessionStatusText.Foreground = FindBrush("SuccessBrush");
+                hostGameObserved = true;
+                hostPeerObserved = false;
+                SetSessionStatus("Waiting for player…");
                 return;
             }
             if (line.Contains("status: host=waiting") && line.Contains("client=online"))
             {
-                SessionStatusText.Text = "Client connected — waiting for host";
-                SessionStatusText.Foreground = FindBrush("WarningBrush");
+                hostGameObserved = false;
+                hostPeerObserved = true;
+                SetSessionStatus("Game disconnected — player is waiting", true);
                 return;
             }
             if (line.Contains("status: host=waiting") && line.Contains("client=waiting"))
             {
-                SessionStatusText.Text = "Hosting — waiting for game clients";
-                SessionStatusText.Foreground = FindBrush("SuccessBrush");
+                SetSessionStatus(hostGameObserved || hostPeerObserved
+                    ? "Connection lost — waiting for game…"
+                    : "Waiting for game…", hostGameObserved || hostPeerObserved);
+                hostGameObserved = false;
+                hostPeerObserved = false;
                 return;
             }
             if (line.Contains("HOST connected"))
-                SessionStatusText.Text = "Hosting — waiting for second player";
+            {
+                hostGameObserved = true;
+                SetSessionStatus(hostPeerObserved ? "In session ✓" : "Waiting for player…");
+            }
             if (line.Contains("CLIENT connected"))
-                SessionStatusText.Text = "Both players connected ✓";
-            SessionStatusText.Foreground = FindBrush("SuccessBrush");
+            {
+                hostPeerObserved = true;
+                SetSessionStatus(hostGameObserved
+                    ? "Player connected ✓"
+                    : "Player connected — waiting for game…");
+            }
         }
 
         private void RelayExited(bool expected)
         {
             if (!expected)
             {
-                SessionStatusText.Text = "Hosting stopped unexpectedly";
-                SessionStatusText.Foreground = FindBrush("WarningBrush");
+                SetSessionStatus("Hosting stopped unexpectedly", true);
                 AppendStatus("The host service stopped unexpectedly.", true);
             }
             else if (!SessionStatusText.Text.StartsWith("Unable to host",
                 StringComparison.Ordinal))
             {
-                SessionStatusText.Text = "Ready";
-                SessionStatusText.Foreground = FindBrush("SuccessBrush");
+                SetSessionStatus("Hosting stopped");
             }
+            hostGameObserved = false;
+            hostPeerObserved = false;
             UpdateSessionControls();
+        }
+
+        private void StartGameMonitor(string gameDirectory, bool clientRole)
+        {
+            clientLogDirectory = clientRole
+                ? Path.Combine(gameDirectory, "AliceCoop", "logs")
+                : null;
+            monitoredGameDirectory = gameDirectory;
+            monitoredClientRole = clientRole;
+            clientSessionStartedUtc = DateTime.UtcNow;
+            clientLogPath = null;
+            clientLogPosition = 0;
+            clientGameObserved = false;
+            clientLogTimer.Start();
+        }
+
+        private void StopClientLogMonitor()
+        {
+            clientLogTimer.Stop();
+            clientLogDirectory = null;
+            clientLogPath = null;
+            monitoredGameDirectory = null;
+            monitoredClientRole = false;
+            clientLogPosition = 0;
+            clientGameObserved = false;
+        }
+
+        private void ClientLogTimer_Tick(object sender, EventArgs e)
+        {
+            TryAttachClientLog();
+            ReadClientLogLines();
+
+            if (string.IsNullOrWhiteSpace(monitoredGameDirectory))
+                return;
+            var selectedExecutable = Path.Combine(monitoredGameDirectory,
+                GameLocator.GameExecutableName);
+            var gameRunning = GameLocator.RunningGameExecutables().Any(item =>
+                File.Exists(item) && GameLocator.PathsEqual(item, selectedExecutable));
+            if (gameRunning)
+            {
+                clientGameObserved = true;
+            }
+            else if (clientGameObserved)
+            {
+                SetSessionStatus("Session ended");
+                AppendStatus(monitoredClientRole
+                    ? "Client game closed."
+                    : "Host game closed.");
+                if (!monitoredClientRole)
+                    hostSessionEnded = true;
+                StopClientLogMonitor();
+            }
+        }
+
+        private void TryAttachClientLog()
+        {
+            if (!string.IsNullOrWhiteSpace(clientLogPath) ||
+                string.IsNullOrWhiteSpace(clientLogDirectory) ||
+                !Directory.Exists(clientLogDirectory))
+            {
+                return;
+            }
+            try
+            {
+                clientLogPath = Directory.GetFiles(clientLogDirectory,
+                        "AliceCoop_client_*.log")
+                    .Where(path => File.GetLastWriteTimeUtc(path) >=
+                        clientSessionStartedUtc.AddSeconds(-2))
+                    .OrderByDescending(File.GetLastWriteTimeUtc)
+                    .FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(clientLogPath))
+                    AppendStatus("Client log detected: " + Path.GetFileName(clientLogPath));
+            }
+            catch (IOException)
+            {
+                // The game may be creating the log while this poll runs.
+            }
+        }
+
+        private void ReadClientLogLines()
+        {
+            if (string.IsNullOrWhiteSpace(clientLogPath) ||
+                !File.Exists(clientLogPath))
+            {
+                return;
+            }
+            try
+            {
+                using (var stream = new FileStream(clientLogPath, FileMode.Open,
+                    FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                {
+                    if (clientLogPosition > stream.Length)
+                        clientLogPosition = 0;
+                    stream.Position = clientLogPosition;
+                    using (var reader = new StreamReader(stream))
+                    {
+                        var text = reader.ReadToEnd();
+                        clientLogPosition = stream.Length;
+                        foreach (var line in text.Split(
+                            new[] { "\r\n", "\n" },
+                            StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            ReceiveClientLogLine(line);
+                        }
+                    }
+                }
+            }
+            catch (IOException)
+            {
+                // A later timer tick will retry the shared log file.
+            }
+        }
+
+        private void ReceiveClientLogLine(string line)
+        {
+            AppendStatus(line);
+            if (line.Contains("Connected to relay."))
+            {
+                SetSessionStatus("Connected — waiting for host…");
+            }
+            else if (line.Contains("SHAREDPOSE client")
+                && TryReadLogCounter(line, "received=", out var received)
+                && received > 0)
+            {
+                SetSessionStatus("In session ✓");
+            }
+            else if (line.Contains("Relay heartbeat timed out"))
+            {
+                SetSessionStatus("Connection lost — reconnecting…", true);
+            }
+            else if (line.Contains("Peer disconnected from relay."))
+            {
+                SetSessionStatus("Host disconnected — waiting for host…", true);
+            }
+            else if (line.Contains("Relay rejected connection:"))
+            {
+                SetSessionStatus("Connection rejected", true);
+                ShowSessionDetails();
+            }
+        }
+
+        private static bool TryReadLogCounter(string line, string marker,
+            out int value)
+        {
+            value = 0;
+            var start = line.IndexOf(marker, StringComparison.Ordinal);
+            if (start < 0)
+                return false;
+            start += marker.Length;
+            var end = start;
+            while (end < line.Length && char.IsDigit(line[end]))
+                ++end;
+            return end > start && int.TryParse(line.Substring(start, end - start),
+                out value);
         }
 
         private void AppendStatus(string message, bool revealDetails = false)
@@ -617,8 +820,7 @@ namespace AliceCoopLauncher
         private void StopRelay_Click(object sender, RoutedEventArgs e)
         {
             relay.Stop();
-            SessionStatusText.Text = "Ready";
-            SessionStatusText.Foreground = FindBrush("SuccessBrush");
+            SetSessionStatus("Hosting stopped");
             AppendStatus("Hosting stopped.");
             UpdateSessionControls();
         }
@@ -686,6 +888,7 @@ namespace AliceCoopLauncher
                 e.Cancel = true;
                 return;
             }
+            clientLogTimer.Stop();
             relay.Dispose();
             launcherSession.Dispose();
         }

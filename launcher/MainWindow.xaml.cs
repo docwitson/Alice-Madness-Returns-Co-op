@@ -6,6 +6,8 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -799,9 +801,37 @@ namespace AliceCoopLauncher
                 LocalAddressComboBox.SelectedItem as string);
             if (IPAddress.TryParse(address, out _))
             {
-                Clipboard.SetText(address + ":" + port);
-                AppendStatus("Address copied: " + address + ":" + port);
+                var endpoint = address + ":" + port;
+                if (TrySetClipboardText(endpoint))
+                {
+                    AppendStatus("Address copied: " + endpoint);
+                    return;
+                }
+
+                AppendStatus("Clipboard was busy; address was not copied.");
+                MessageBox.Show(this,
+                    "Windows could not access the clipboard. Please try again.",
+                    "Copy address", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+        }
+
+        private static bool TrySetClipboardText(string text)
+        {
+            const int attemptCount = 5;
+            for (var attempt = 0; attempt < attemptCount; ++attempt)
+            {
+                try
+                {
+                    Clipboard.SetDataObject(text, true);
+                    return true;
+                }
+                catch (ExternalException)
+                {
+                    if (attempt + 1 < attemptCount)
+                        Thread.Sleep(30);
+                }
+            }
+            return false;
         }
 
         private void Firewall_Click(object sender, RoutedEventArgs e)

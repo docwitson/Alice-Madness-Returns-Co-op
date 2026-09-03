@@ -18,6 +18,33 @@ namespace AliceCoopLauncher
 {
     public partial class MainWindow : Window
     {
+        private const uint GmemMoveable = 0x0002;
+        private const uint ClipboardUnicodeText = 13;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool OpenClipboard(IntPtr owner);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool EmptyClipboard();
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr SetClipboardData(uint format, IntPtr memory);
+
+        [DllImport("user32.dll")]
+        private static extern bool CloseClipboard();
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr GlobalAlloc(uint flags, UIntPtr bytes);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr GlobalLock(IntPtr memory);
+
+        [DllImport("kernel32.dll")]
+        private static extern bool GlobalUnlock(IntPtr memory);
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GlobalFree(IntPtr memory);
+
         private readonly LauncherSession launcherSession = new LauncherSession();
         private readonly RelayController relay = new RelayController();
         private readonly DispatcherTimer clientLogTimer = new DispatcherTimer();
@@ -820,15 +847,45 @@ namespace AliceCoopLauncher
             const int attemptCount = 5;
             for (var attempt = 0; attempt < attemptCount; ++attempt)
             {
-                try
-                {
-                    Clipboard.SetDataObject(text, true);
-                    return true;
-                }
-                catch (ExternalException)
+                if (!OpenClipboard(IntPtr.Zero))
                 {
                     if (attempt + 1 < attemptCount)
                         Thread.Sleep(30);
+                    continue;
+                }
+
+                IntPtr memory = IntPtr.Zero;
+                IntPtr destination = IntPtr.Zero;
+                try
+                {
+                    var characters = text.ToCharArray();
+                    var byteCount = checked((characters.Length + 1) * sizeof(char));
+                    memory = GlobalAlloc(GmemMoveable, (UIntPtr)(uint)byteCount);
+                    if (memory == IntPtr.Zero)
+                        return false;
+
+                    destination = GlobalLock(memory);
+                    if (destination == IntPtr.Zero)
+                        return false;
+                    Marshal.Copy(characters, 0, destination, characters.Length);
+                    Marshal.WriteInt16(destination, characters.Length * sizeof(char), 0);
+                    GlobalUnlock(memory);
+                    destination = IntPtr.Zero;
+
+                    if (!EmptyClipboard() ||
+                        SetClipboardData(ClipboardUnicodeText, memory) == IntPtr.Zero)
+                        return false;
+
+                    memory = IntPtr.Zero;
+                    return true;
+                }
+                finally
+                {
+                    if (destination != IntPtr.Zero)
+                        GlobalUnlock(memory);
+                    if (memory != IntPtr.Zero)
+                        GlobalFree(memory);
+                    CloseClipboard();
                 }
             }
             return false;

@@ -68,6 +68,7 @@ $requiredFiles = @(
     (Join-Path $packageRoot 'AliceCoopServer.exe'),
     (Join-Path $payloadPath 'dinput8.dll'),
     (Join-Path $payloadPath 'AliceCoop.ini'),
+    (Join-Path $payloadPath 'AliceCoop.version'),
     (Join-Path $payloadPath 'MadnessPatch.ini'),
     (Join-Path $payloadPath 'Manual\AliceCoop-LaunchConfig.bat'),
     (Join-Path $advancedSource 'Documentation\INSTALL.md'),
@@ -139,6 +140,8 @@ if (-not (Test-Path -LiteralPath $existingCoopIni -PathType Leaf)) {
     Copy-Item -LiteralPath (Join-Path $payloadPath 'AliceCoop.ini') `
         -Destination $existingCoopIni
 }
+Copy-Item -LiteralPath (Join-Path $payloadPath 'AliceCoop.version') `
+    -Destination $coopPath -Force
 
 Get-ChildItem -LiteralPath (Join-Path $payloadPath 'Images') -File |
     Copy-Item -Destination (Join-Path $coopPath 'images') -Force

@@ -97,6 +97,7 @@ foreach ($name in @(
     'AliceCoopLauncher.exe',
     'AliceCoopLauncher.exe.config',
     'AliceCoop.ini',
+    'AliceCoop.version',
     'README.md',
     'install-manifest.json',
     'AliceCoop-Server.bat',

@@ -10,10 +10,31 @@ namespace AliceCoopLauncher
         public static string ServerExecutablePath => Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory, "AliceCoopServer.exe");
 
-        public static string PackageVersion
+        public static string ModVersion
         {
             get
             {
+                foreach (var versionFile in new[] {
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                        "Advanced", "Payload", "AliceCoop.version"),
+                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                        "AliceCoop.version")
+                })
+                {
+                    try
+                    {
+                        if (File.Exists(versionFile))
+                        {
+                            var version = File.ReadAllText(versionFile).Trim();
+                            if (!string.IsNullOrWhiteSpace(version))
+                                return version;
+                        }
+                    }
+                    catch (IOException)
+                    {
+                    }
+                }
+
                 var manifest = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                     "Advanced", "package-manifest.json");
                 if (!File.Exists(manifest))

@@ -53,7 +53,7 @@ namespace AliceCoopLauncher
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            VersionText.Text = PackageInstaller.PackageVersion;
+            VersionText.Text = PackageInstaller.ModVersion;
             var settingsVersion = LauncherSession.ReadPreference(
                 "SettingsVersion", string.Empty);
             var currentPreferences = settingsVersion == "2" || settingsVersion == "3";

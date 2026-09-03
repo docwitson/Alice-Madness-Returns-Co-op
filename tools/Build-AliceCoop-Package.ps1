@@ -126,6 +126,8 @@ Copy-Item -LiteralPath $builtServer -Destination $installerRoot
 Copy-Item -LiteralPath $builtDll -Destination $payload
 Copy-Item -LiteralPath (Join-Path $repoRoot 'AliceCoop.ini') -Destination $payload
 Copy-Item -LiteralPath (Join-Path $repoRoot 'client\MadnessPatch.ini') -Destination $payload
+$Version | Set-Content -LiteralPath (Join-Path $payload 'AliceCoop.version') `
+    -Encoding ASCII
 
 foreach ($name in @('cutsceneWatch2.png', 'aliceWhait.png', 'aliceSoloLevel.png')) {
     Copy-Item -LiteralPath (Join-Path $repoRoot "images\$name") -Destination $payloadImages
@@ -203,6 +205,7 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'client\MadnessPatch.ini') -Destinat
 Copy-Item -LiteralPath $builtLauncher -Destination $dropCoop
 Copy-Item -LiteralPath $builtServer -Destination $dropCoop
 Copy-Item -LiteralPath (Join-Path $payload 'AliceCoop.ini') -Destination $dropCoop
+Copy-Item -LiteralPath (Join-Path $payload 'AliceCoop.version') -Destination $dropCoop
 Copy-Item -LiteralPath $payloadImages -Destination (Join-Path $dropCoop 'images') -Recurse
 Copy-Item -LiteralPath $payloadManual -Destination (Join-Path $dropAdvanced 'Manual') -Recurse
 Copy-Item -LiteralPath $documentation -Destination (Join-Path $dropAdvanced 'Documentation') -Recurse

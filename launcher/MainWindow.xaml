@@ -70,8 +70,9 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled"
                               VerticalAlignment="Stretch" PanningMode="VerticalOnly">
-                    <Grid Margin="30,26,24,30">
+                    <Grid Margin="30,22,24,20">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -79,7 +80,7 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <Grid Grid.Row="0" Margin="0,0,0,24">
+                        <Grid Grid.Row="0" Margin="0,0,0,20">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="88" />
                                 <ColumnDefinition Width="*" />
@@ -100,6 +101,7 @@
                                        HorizontalAlignment="Right" TextAlignment="Right"
                                        Foreground="{StaticResource MutedTextBrush}"
                                        FontSize="12">
+                                <Run Text="AliceCoop " />
                                 <Run x:Name="VersionText" Text="Development build" />
                                 <Run Text=" — " />
                                 <Hyperlink NavigateUri="https://github.com/docwitson/Alice-Madness-Returns-Co-op"
@@ -117,7 +119,7 @@
 
                         <Border x:Name="InstallPanel" Grid.Row="1"
                                 Background="{StaticResource PanelBrush}"
-                                CornerRadius="12" Padding="16" Margin="0,0,0,18">
+                                CornerRadius="12" Padding="16" Margin="0,0,0,16">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
@@ -159,15 +161,24 @@
 
                             <Border Grid.Column="0" Background="{StaticResource PanelBrush}"
                                     CornerRadius="12" Padding="22">
-                                <StackPanel>
-                                    <TextBlock Text="HOST GAME" FontSize="20" FontWeight="Bold" />
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="HOST GAME" FontSize="20" FontWeight="Bold" />
                                     <TextBlock Text="Start a co-op session on this PC."
+                                               Grid.Row="1"
                                                TextWrapping="Wrap" Margin="0,6,0,16"
                                                Foreground="{StaticResource MutedTextBrush}" />
-                                    <TextBlock Text="Address to share" FontWeight="SemiBold" />
-                                    <ComboBox x:Name="LocalAddressComboBox" Margin="0,6,0,0"
+                                    <TextBlock Grid.Row="2" Text="Address to share" FontWeight="SemiBold" />
+                                    <ComboBox x:Name="LocalAddressComboBox" Grid.Row="3" Margin="0,6,0,0"
                                               SelectionChanged="LocalAddressComboBox_SelectionChanged" />
-                                    <Grid Margin="0,7,0,0">
+                                    <Grid Grid.Row="4" Margin="0,7,0,0" VerticalAlignment="Top">
                                         <TextBlock x:Name="RecommendedAddressText"
                                                    Text="Recommended network"
                                                    Foreground="{StaticResource SuccessBrush}"
@@ -176,21 +187,30 @@
                                                 Padding="10,5" Click="CopyAddress_Click"
                                                 ToolTip="Copies the IP address and UDP port" />
                                     </Grid>
-                                    <Button x:Name="HostButton" Content="HOST GAME"
-                                            Style="{StaticResource PrimaryButton}"
+                                    <Button x:Name="HostButton" Grid.Row="5" Content="HOST GAME"
+                                            Style="{StaticResource SessionPrimaryButton}"
                                             Margin="0,18,0,0" Click="Host_Click" />
-                                </StackPanel>
+                                </Grid>
                             </Border>
 
                             <Border Grid.Column="2" Background="{StaticResource PanelBrush}"
                                     CornerRadius="12" Padding="22">
-                                <StackPanel>
-                                    <TextBlock Text="JOIN GAME" FontSize="20" FontWeight="Bold" />
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="JOIN GAME" FontSize="20" FontWeight="Bold" />
                                     <TextBlock Text="Enter the LAN or trusted VPN address shared by the host."
+                                               Grid.Row="1"
                                                TextWrapping="Wrap" Margin="0,6,0,16"
                                                Foreground="{StaticResource MutedTextBrush}" />
-                                    <TextBlock Text="Host address" FontWeight="SemiBold" />
-                                    <Grid Margin="0,6,0,10">
+                                    <TextBlock Grid.Row="2" Text="Host address" FontWeight="SemiBold" />
+                                    <Grid Grid.Row="3" Margin="0,6,0,10">
                                         <TextBox x:Name="ServerAddressTextBox" Text=""
                                                  ToolTip="For example: 26.10.20.30:27018"
                                                  TextChanged="ServerAddressTextBox_TextChanged" />
@@ -200,7 +220,8 @@
                                                    VerticalAlignment="Center"
                                                    IsHitTestVisible="False" />
                                     </Grid>
-                                    <StackPanel Orientation="Horizontal">
+                                    <StackPanel Grid.Row="4" Orientation="Horizontal"
+                                                VerticalAlignment="Top">
                                         <Button x:Name="TestConnectionButton"
                                                 Content="Test connection" IsEnabled="False"
                                                 Click="TestConnection_Click" />
@@ -208,16 +229,21 @@
                                                    VerticalAlignment="Center"
                                                    Foreground="{StaticResource MutedTextBrush}" />
                                     </StackPanel>
-                                    <Button x:Name="JoinButton" Content="JOIN GAME"
-                                            Style="{StaticResource PrimaryButton}"
+                                    <Button x:Name="JoinButton" Grid.Row="5" Content="JOIN GAME"
+                                            Style="{StaticResource SessionPrimaryButton}"
                                             IsEnabled="False" Margin="0,18,0,0"
                                             Click="Join_Click" />
-                                </StackPanel>
+                                </Grid>
                             </Border>
                         </Grid>
 
-                        <Border Grid.Row="3" Background="{StaticResource PanelLightBrush}"
-                                CornerRadius="12" Padding="16" Margin="0,18,0,0">
+                        <TextBlock Grid.Row="3"
+                                   Text="One launcher window controls one game. Use a second window for another local copy."
+                                   Margin="4,9,4,0" FontSize="11" TextAlignment="Center"
+                                   Foreground="{StaticResource MutedTextBrush}" />
+
+                        <Border Grid.Row="4" Background="{StaticResource PanelLightBrush}"
+                                CornerRadius="12" Padding="16" Margin="0,9,0,0">
                             <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -229,9 +255,6 @@
                                         <TextBlock x:Name="SessionStatusText" Text="Ready"
                                                    Margin="0,4,0,0"
                                                    Foreground="{StaticResource SuccessBrush}" />
-                                        <TextBlock Text="One launcher window controls one game. Use a second window for another local copy."
-                                                   Margin="0,3,0,0" FontSize="11"
-                                                   Foreground="{StaticResource MutedTextBrush}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal">
                                         <Button x:Name="SessionDetailsButton"
@@ -251,8 +274,8 @@
                             </StackPanel>
                         </Border>
 
-                        <Expander Grid.Row="4" Header="Advanced settings"
-                                  Margin="0,18,0,0" Foreground="{StaticResource TextBrush}"
+                        <Expander Grid.Row="5" Header="Advanced settings"
+                                  Margin="0,14,0,0" Foreground="{StaticResource TextBrush}"
                                   IsExpanded="False">
                             <Border Background="{StaticResource PanelBrush}" CornerRadius="12"
                                     Padding="18" Margin="0,10,0,0">

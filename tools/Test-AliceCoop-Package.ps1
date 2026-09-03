@@ -110,6 +110,7 @@ try {
         'Advanced\package-manifest.json',
         'Advanced\SOURCE_CODE.txt', 'Advanced\SHA256SUMS.txt',
         'Advanced\Payload\dinput8.dll', 'Advanced\Payload\AliceCoop.ini',
+        'Advanced\Payload\AliceCoop.version',
         'Advanced\Payload\MadnessPatch.ini',
         'Advanced\Tools\Install-AliceCoop-Package.ps1',
         'Advanced\Tools\Uninstall-AliceCoop.ps1',
@@ -122,6 +123,7 @@ try {
 
     $dropExpected = @(
         'dinput8.dll', 'MadnessPatch.ini', 'AliceCoop\AliceCoop.ini',
+        'AliceCoop\AliceCoop.version',
         'AliceCoop\AliceCoopLauncher.exe',
         'AliceCoop\AliceCoopServer.exe',
         'AliceCoop\Advanced\package-manifest.json',
@@ -206,7 +208,7 @@ try {
     Assert-Condition ((Get-Content -LiteralPath $installStatus -Raw) -match
         'Alice Co-op installed into') 'Installer status did not report success.'
     $installedCoop = Join-Path $installWin32 'AliceCoop'
-    foreach ($required in @('AliceCoop.ini', 'install-manifest.json',
+    foreach ($required in @('AliceCoop.ini', 'AliceCoop.version', 'install-manifest.json',
         'images\aliceWhait.png', 'images\cutsceneWatch2.png')) {
         Assert-Condition (Test-Path -LiteralPath (Join-Path $installedCoop $required) `
             -PathType Leaf) "Installer smoke omitted: $required"
@@ -223,6 +225,9 @@ try {
         'Unexpected installed payload manifest schema.'
     Assert-Condition ($installManifest.installMode -eq 'AliceCoop runtime payload only') `
         'Installed manifest does not identify the runtime-only payload.'
+    Assert-Condition ((Get-Content -LiteralPath `
+        (Join-Path $installedCoop 'AliceCoop.version') -Raw).Trim() -eq $Version) `
+        'Installed AliceCoop version mismatch.'
     Assert-Condition ((Get-FileHash (Join-Path $installWin32 'dinput8.dll') `
         -Algorithm SHA256).Hash -eq $builtDllHash) 'Installed DLL mismatch.'
     Assert-Condition ((Get-Content -LiteralPath (Join-Path $installWin32 'MadnessPatch.ini') `
@@ -257,6 +262,8 @@ try {
         'Uninstaller did not restore the preexisting proxy DLL.'
     Assert-Condition (-not (Test-Path -LiteralPath (Join-Path $installedCoop `
         'AliceCoop.ini'))) 'Uninstaller left the runtime configuration installed.'
+    Assert-Condition (-not (Test-Path -LiteralPath (Join-Path $installedCoop `
+        'AliceCoop.version'))) 'Uninstaller left the runtime version installed.'
     Assert-Condition (-not (Test-Path -LiteralPath (Join-Path $installedCoop `
         'images\aliceWhait.png'))) 'Uninstaller left runtime images installed.'
 

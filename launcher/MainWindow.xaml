@@ -100,15 +100,17 @@
                                        HorizontalAlignment="Right" TextAlignment="Right"
                                        Foreground="{StaticResource MutedTextBrush}"
                                        FontSize="12">
-                                <Run Text="By Docwitson and contributors" />
-                                <LineBreak />
+                                <Run x:Name="VersionText" Text="Development build" />
+                                <Run Text=" — " />
                                 <Hyperlink NavigateUri="https://github.com/docwitson/Alice-Madness-Returns-Co-op"
                                            Foreground="{StaticResource AccentBrush}"
                                            RequestNavigate="OpenRepository_Click">GitHub repository</Hyperlink>
                                 <LineBreak />
+                                <Run Text="By Docwitson and contributors" />
+                                <LineBreak />
                                 <Hyperlink NavigateUri="https://github.com/docwitson/Alice-Madness-Returns-Co-op/blob/main/THIRD_PARTY_NOTICES.md"
                                            Foreground="{StaticResource AccentBrush}"
-                                           RequestNavigate="OpenRepository_Click">Third-party credits</Hyperlink>
+                                           RequestNavigate="OpenRepository_Click">Third-party</Hyperlink>
                                 <Run Text=" · GPL-2.0" />
                             </TextBlock>
                         </Grid>
@@ -137,7 +139,7 @@
                                 </StackPanel>
                                 <ComboBox x:Name="GameInstallationComboBox" Grid.Row="1"
                                           SelectionChanged="GameInstallationComboBox_SelectionChanged" />
-                                <Button Grid.Row="1" Grid.Column="1" Content="Add game…"
+                                <Button x:Name="AddGameButton" Grid.Row="1" Grid.Column="1" Content="Add game…"
                                         Margin="8,0,0,0" Click="BrowseGame_Click" />
                                 <Button x:Name="InstallButton" Grid.Row="1" Grid.Column="2"
                                         Content="Install" Style="{StaticResource PrimaryButton}"
@@ -170,8 +172,9 @@
                                                    Text="Recommended network"
                                                    Foreground="{StaticResource SuccessBrush}"
                                                    FontSize="12" VerticalAlignment="Center" />
-                                        <Button Content="Copy IP:port" HorizontalAlignment="Right"
-                                                Padding="10,5" Click="CopyAddress_Click" />
+                                        <Button Content="Copy IP address" HorizontalAlignment="Right"
+                                                Padding="10,5" Click="CopyAddress_Click"
+                                                ToolTip="Copies the IP address and UDP port" />
                                     </Grid>
                                     <Button x:Name="HostButton" Content="HOST GAME"
                                             Style="{StaticResource PrimaryButton}"
@@ -226,6 +229,9 @@
                                         <TextBlock x:Name="SessionStatusText" Text="Ready"
                                                    Margin="0,4,0,0"
                                                    Foreground="{StaticResource SuccessBrush}" />
+                                        <TextBlock Text="One launcher window controls one game. Use a second window for another local copy."
+                                                   Margin="0,3,0,0" FontSize="11"
+                                                   Foreground="{StaticResource MutedTextBrush}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal">
                                         <Button x:Name="SessionDetailsButton"

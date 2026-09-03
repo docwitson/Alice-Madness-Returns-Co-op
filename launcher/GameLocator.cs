@@ -58,7 +58,7 @@ namespace AliceCoopLauncher
                 {
                     results.Add(new GameInstallation {
                         Win32Directory = saved,
-                        Store = "Added game"
+                        Store = "Custom"
                     });
                 }
             }

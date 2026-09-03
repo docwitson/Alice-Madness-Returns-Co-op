@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace AliceCoopLauncher
 {
@@ -8,6 +9,28 @@ namespace AliceCoopLauncher
     {
         public static string ServerExecutablePath => Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory, "AliceCoopServer.exe");
+
+        public static string PackageVersion
+        {
+            get
+            {
+                var manifest = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                    "Advanced", "package-manifest.json");
+                if (!File.Exists(manifest))
+                    return "Development build";
+                try
+                {
+                    var match = Regex.Match(File.ReadAllText(manifest),
+                        "\\\"version\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"",
+                        RegexOptions.IgnoreCase);
+                    return match.Success ? match.Groups[1].Value : "Unknown version";
+                }
+                catch (IOException)
+                {
+                    return "Unknown version";
+                }
+            }
+        }
 
         public static bool IsPackageMode
         {

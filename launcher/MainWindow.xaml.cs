@@ -32,6 +32,7 @@ namespace AliceCoopLauncher
         private bool hostGameObserved;
         private bool hostPeerObserved;
         private bool hostSessionEnded;
+        private bool sessionLaunchActive;
         private bool isLoading = true;
         private bool closeForUninstall;
 
@@ -52,6 +53,7 @@ namespace AliceCoopLauncher
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            VersionText.Text = PackageInstaller.PackageVersion;
             var settingsVersion = LauncherSession.ReadPreference(
                 "SettingsVersion", string.Empty);
             var currentPreferences = settingsVersion == "2" || settingsVersion == "3";
@@ -146,8 +148,7 @@ namespace AliceCoopLauncher
             InstallButton.IsEnabled = gameFound;
             RemoveButton.Visibility = installed && PackageInstaller.CanUninstall(path)
                 ? Visibility.Visible : Visibility.Collapsed;
-            HostButton.IsEnabled = installed && !relay.IsRunning;
-            UpdateJoinActions();
+            UpdateSessionControls();
         }
 
         private System.Windows.Media.Brush FindBrush(string name) =>
@@ -181,7 +182,7 @@ namespace AliceCoopLauncher
                 var detected = GameLocator.Describe(path);
                 selected = new GameInstallation {
                     Win32Directory = path,
-                    Store = detected.Store == "Direct" ? "Added game" : detected.Store,
+                    Store = detected.Store == "Direct" ? "Custom" : detected.Store,
                     SteamExecutable = detected.SteamExecutable
                 };
                 installations.Add(selected);
@@ -238,9 +239,12 @@ namespace AliceCoopLauncher
                     "Alice Co-op", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-            if (GameLocator.RunningGameExecutables().Count != 0)
+            var selectedExecutable = Path.Combine(path,
+                GameLocator.GameExecutableName);
+            if (GameLocator.RunningGameExecutables().Any(item =>
+                File.Exists(item) && GameLocator.PathsEqual(item, selectedExecutable)))
             {
-                MessageBox.Show(this, "Close every running Alice game before removing the mod.",
+                MessageBox.Show(this, "Close the selected Alice game before removing the mod.",
                     "Alice Co-op", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -269,6 +273,8 @@ namespace AliceCoopLauncher
         {
             if (!TryPrepare(out var displayMode) || !TryReadPort(out var port))
                 return;
+            sessionLaunchActive = true;
+            UpdateSessionControls();
             try
             {
                 StopClientLogMonitor();
@@ -294,11 +300,13 @@ namespace AliceCoopLauncher
             }
             catch (Exception exception)
             {
+                sessionLaunchActive = false;
                 relay.Stop();
                 SetSessionStatus("Unable to host", true);
                 AppendStatus("Host launch failed: " + exception.Message, true);
                 MessageBox.Show(this, exception.Message, "Unable to host",
                     MessageBoxButton.OK, MessageBoxImage.Error);
+                UpdateSessionControls();
             }
         }
 
@@ -309,6 +317,8 @@ namespace AliceCoopLauncher
             var port = ReadPortOrDefault();
             if (!TryReadServerEndpoint(ref port, out var address))
                 return;
+            sessionLaunchActive = true;
+            UpdateSessionControls();
             try
             {
                 SetSessionStatus("Testing host…");
@@ -322,7 +332,9 @@ namespace AliceCoopLauncher
                     "Start the game anyway?", "Host not reached",
                     MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                 {
+                    sessionLaunchActive = false;
                     SetSessionStatus("Ready");
+                    UpdateSessionControls();
                     return;
                 }
                 launcherSession.Activate(activeWin32Directory,
@@ -335,11 +347,13 @@ namespace AliceCoopLauncher
             }
             catch (Exception exception)
             {
+                sessionLaunchActive = false;
                 StopClientLogMonitor();
                 SetSessionStatus("Unable to join", true);
                 AppendStatus("Client launch failed: " + exception.Message, true);
                 MessageBox.Show(this, exception.Message, "Unable to join",
                     MessageBoxButton.OK, MessageBoxImage.Error);
+                UpdateSessionControls();
             }
         }
 
@@ -477,7 +491,8 @@ namespace AliceCoopLauncher
             var valid = TryParseServerEndpoint(value, ReadPortOrDefault(),
                 out _, out _);
             var installed = activeWin32Directory != null;
-            JoinButton.IsEnabled = valid && installed;
+            JoinButton.IsEnabled = valid && installed &&
+                !sessionLaunchActive && !relay.IsRunning;
             TestConnectionButton.IsEnabled = valid;
         }
 
@@ -488,11 +503,13 @@ namespace AliceCoopLauncher
             AppendStatus("Launch requested through " + installation.Store + ".");
         }
 
-        private void SetSessionStatus(string text, bool warning = false)
+        private void SetSessionStatus(string text, bool warning = false,
+            bool neutral = false)
         {
             SessionStatusText.Text = text;
-            SessionStatusText.Foreground = FindBrush(
-                warning ? "WarningBrush" : "SuccessBrush");
+            SessionStatusText.Foreground = FindBrush(warning
+                ? "WarningBrush"
+                : neutral ? "MutedTextBrush" : "SuccessBrush");
         }
 
         private void ReceiveRelayLine(string line)
@@ -563,7 +580,7 @@ namespace AliceCoopLauncher
             else if (!SessionStatusText.Text.StartsWith("Unable to host",
                 StringComparison.Ordinal))
             {
-                SetSessionStatus("Hosting stopped");
+                SetSessionStatus("Hosting stopped", neutral: true);
             }
             hostGameObserved = false;
             hostPeerObserved = false;
@@ -612,13 +629,15 @@ namespace AliceCoopLauncher
             }
             else if (clientGameObserved)
             {
-                SetSessionStatus("Session ended");
+                SetSessionStatus("Session ended", neutral: true);
                 AppendStatus(monitoredClientRole
                     ? "Client game closed."
                     : "Host game closed.");
                 if (!monitoredClientRole)
                     hostSessionEnded = true;
+                sessionLaunchActive = false;
                 StopClientLogMonitor();
+                UpdateSessionControls();
             }
         }
 
@@ -748,9 +767,17 @@ namespace AliceCoopLauncher
         private void UpdateSessionControls()
         {
             var running = relay.IsRunning;
+            var setupUnlocked = !sessionLaunchActive && !running;
             StopHostingButton.Visibility = running
                 ? Visibility.Visible : Visibility.Collapsed;
-            HostButton.IsEnabled = activeWin32Directory != null && !running;
+            HostButton.IsEnabled = activeWin32Directory != null &&
+                !running && !sessionLaunchActive;
+            GameInstallationComboBox.IsEnabled = setupUnlocked;
+            AddGameButton.IsEnabled = setupUnlocked;
+            InstallButton.IsEnabled = setupUnlocked &&
+                GameLocator.IsGameDirectory(SelectedGameDirectory);
+            RemoveButton.IsEnabled = setupUnlocked;
+            UpdateJoinActions();
         }
 
         private void LocalAddressComboBox_SelectionChanged(object sender,
@@ -820,7 +847,7 @@ namespace AliceCoopLauncher
         private void StopRelay_Click(object sender, RoutedEventArgs e)
         {
             relay.Stop();
-            SetSessionStatus("Hosting stopped");
+            SetSessionStatus("Hosting stopped", neutral: true);
             AppendStatus("Hosting stopped.");
             UpdateSessionControls();
         }

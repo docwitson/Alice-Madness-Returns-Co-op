@@ -71,7 +71,7 @@ if (-not $SkipBuild) {
     $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild `
         -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
     if (-not $msbuild) { throw 'MSBuild was not found.' }
-    & $msbuild (Join-Path $repoRoot 'AliceCoop.sln') /m /t:Build `
+    & $msbuild (Join-Path $repoRoot 'AliceCoop.sln') /restore /m /t:Build `
         "/p:Configuration=$Configuration" /p:Platform=x86
     if ($LASTEXITCODE -ne 0) { throw "MSBuild failed: $LASTEXITCODE" }
 }

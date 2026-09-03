@@ -1,4 +1,4 @@
-# Installation and update guide
+# Launcher installation and update guide
 
 ## Choose a package
 
@@ -6,8 +6,9 @@
   anywhere and run `AliceCoopLauncher.exe`. The archive root contains only the
   launcher, relay server and an `Advanced` directory with the payload and
   documentation.
-- `AliceCoop-<version>-drop-in.zip` is the manual alternative. Extract its
-  contents directly into the directory containing `AliceMadnessReturns.exe`.
+- `AliceCoop-<version>-drop-in.zip` is the legacy/manual alternative for
+  advanced users and development. Follow the separate
+  [manual installation guide](MANUAL_INSTALL.md).
 
 Both packages contain identical client, relay and launcher binaries. Use the
 same Alice Co-op release on both computers.
@@ -48,7 +49,7 @@ manual tools, source notices and documentation remain in the extracted package.
 3. Use **Allow through Windows Firewall** once, or allow `AliceCoopServer.exe` for
    private networks when Windows asks.
 4. Choose **Host Game**. The launcher starts one relay and launches the game.
-5. Use **Copy IP:port** and send the resulting endpoint to the other player.
+5. Use **Copy address** and send the resulting endpoint to the other player.
 
 ### Client
 
@@ -65,33 +66,19 @@ The launcher starts a Steam installation through Steam only when the selected
 game directory matches that installation's app manifest. EA App, copied and
 development installations are started directly. Its short-lived session file
 is accepted by the mod only while the originating launcher remains open and
-only by the selected game copy. Two launcher instances may therefore run a host
-and client from two different local installations.
+only by the selected game copy. Local two-copy testing generally requires two
+launcher windows and a separate non-Steam game installation; Steam normally
+cannot launch two copies of the same app at once.
 
 Do not expose the relay directly to the public Internet. The prototype protocol
 does not provide authentication or encryption; use localhost, trusted LAN or a
 trusted VPN.
 
-## Manual drop-in installation
+## Manual/legacy alternative
 
-Extract the drop-in archive directly into `Binaries\Win32`. The resulting main
-layout is intentionally small:
-
-```text
-AliceMadnessReturns.exe
-dinput8.dll
-MadnessPatch.ini
-AliceCoop\AliceCoopLauncher.exe
-AliceCoop\AliceCoopServer.exe
-AliceCoop\AliceCoop.ini
-AliceCoop\images\...
-AliceCoop\Advanced\...
-```
-
-Run `AliceCoop\AliceCoopLauncher.exe`. Manual BAT files, documentation,
-licenses, checksums and uninstall tools are under `AliceCoop\Advanced` for
-users who need them. The combined `dinput8.dll` already includes MadnessPatch
-3.1.1; do not install a separate proxy DLL over it.
+The drag-and-drop archive and BAT/INI workflow are intentionally documented
+separately so they do not complicate the normal launcher setup. See
+[Manual drop-in installation](MANUAL_INSTALL.md).
 
 ## Updating
 

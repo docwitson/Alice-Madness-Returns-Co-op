@@ -8,7 +8,8 @@
   <strong><a href="https://www.youtube.com/watch?v=rALyp02Q-LE">▶ WATCH THE FULL PLAYTHROUGH — PART 1</a></strong>
 </p>
 
-[Русская версия](README_RU.md) · [Installation](docs/INSTALL.md) ·
+[Русская версия](README_RU.md) · [Launcher installation](docs/INSTALL.md) ·
+[Manual/drop-in installation](docs/MANUAL_INSTALL.md) ·
 [Known issues](docs/KNOWN_ISSUES.md) · [GPL-2.0](LICENSE)
 
 Alice Co-op is an experimental two-player cooperative mod for the Windows version
@@ -59,6 +60,14 @@ Alice Co-op includes a combined client DLL based on
 [MadnessPatch 3.1.1](https://github.com/Wemino/MadnessPatch/releases/tag/3.1.1).
 A separate MadnessPatch installation is not required.
 
+## Launcher
+
+![Alice Co-op launcher with installation, host and join controls](docs/media/alice-co-op-launcher.jpg)
+
+The graphical launcher is the recommended way to install and play. It finds
+Steam installations, supports additional game copies, manages the relay and
+keeps each game role isolated without requiring BAT or INI editing.
+
 ## Quick start
 
 1. Close the game on both computers.
@@ -69,7 +78,7 @@ A separate MadnessPatch installation is not required.
    if you keep more than one installed copy.
 4. On the host PC, choose a trusted LAN/VPN address, allow the relay through
    the private-network firewall when prompted, and press **Host Game**. Use
-   **Copy IP:port** and send the copied endpoint to the other player.
+   **Copy address** and send the copied endpoint to the other player.
 5. On the second PC, enter that address, press **Test connection**, then
    **Join Game**. The launcher uses the matching Steam installation when it
    can identify one; other installations are started directly.
@@ -84,8 +93,9 @@ The relay server may run on either player's computer. Allow inbound UDP traffic
 for its configured port (default `27018`). Do not expose it directly to the
 public Internet: the prototype protocol has no authentication or encryption.
 
-The direct `drop-in.zip` and manual BAT files remain available for advanced
-users. See the full [installation and update guide](docs/INSTALL.md).
+See the full [launcher installation and update guide](docs/INSTALL.md). The
+direct `drop-in.zip` and BAT/INI workflow remain available separately for
+advanced users and development in the [manual installation guide](docs/MANUAL_INSTALL.md).
 
 ## Controls
 

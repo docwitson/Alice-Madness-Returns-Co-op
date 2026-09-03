@@ -82,8 +82,9 @@ foreach ($required in $requiredBuildFiles) {
 }
 
 $documentationNames = @('README.md', 'README_RU.md', 'CONFIGURATION.md',
-    'DEVELOPMENT.md', 'INSTALL.md', 'INSTALL_RU.md', 'KNOWN_ISSUES.md',
-    'SMOKE_TEST.md', 'TROUBLESHOOTING.md')
+    'DEVELOPMENT.md', 'INSTALL.md', 'INSTALL_RU.md', 'MANUAL_INSTALL.md',
+    'MANUAL_INSTALL_RU.md', 'KNOWN_ISSUES.md', 'SMOKE_TEST.md',
+    'TROUBLESHOOTING.md')
 $manualNames = @('AliceCoop-LaunchConfig.bat', 'AliceCoop-Server.bat',
     'AliceCoop-Host.bat', 'AliceCoop-Client.bat', 'AliceCoop-Both.bat',
     'AliceCoop-Diagnostic-Both.bat', 'AliceCoop-Animation-Test.bat',

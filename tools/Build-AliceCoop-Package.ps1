@@ -144,7 +144,8 @@ foreach ($name in @(
 Copy-Item -LiteralPath (Join-Path $repoRoot 'README.md') -Destination $documentation
 Copy-Item -LiteralPath (Join-Path $repoRoot 'README_RU.md') -Destination $documentation
 foreach ($name in @('CONFIGURATION.md', 'DEVELOPMENT.md', 'INSTALL.md',
-    'INSTALL_RU.md', 'KNOWN_ISSUES.md', 'SMOKE_TEST.md', 'TROUBLESHOOTING.md')) {
+    'INSTALL_RU.md', 'MANUAL_INSTALL.md', 'MANUAL_INSTALL_RU.md',
+    'KNOWN_ISSUES.md', 'SMOKE_TEST.md', 'TROUBLESHOOTING.md')) {
     Copy-Item -LiteralPath (Join-Path $repoRoot "docs\$name") -Destination $documentation
 }
 foreach ($name in @('LICENSE', 'NOTICE.md', 'THIRD_PARTY_NOTICES.md')) {

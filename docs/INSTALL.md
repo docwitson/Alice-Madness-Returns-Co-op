@@ -1,5 +1,7 @@
 # Launcher installation and update guide
 
+[▶ Watch the launcher installation and setup guide](https://www.youtube.com/watch?v=uD7oxI4mNWY)
+
 ## Choose a package
 
 - `AliceCoop-<version>-installer.zip` is the recommended package. Extract it

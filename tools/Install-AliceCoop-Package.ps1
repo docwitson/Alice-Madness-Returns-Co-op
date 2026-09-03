@@ -48,6 +48,7 @@ if (-not (Test-Win32Directory $Win32Path)) {
 }
 
 $win32Path = [System.IO.Path]::GetFullPath($Win32Path)
+$targetGameExe = Join-Path $win32Path 'AliceMadnessReturns.exe'
 $targetDll = Join-Path $win32Path 'dinput8.dll'
 $madnessPatchIni = Join-Path $win32Path 'MadnessPatch.ini'
 $coopPath = Join-Path $win32Path 'AliceCoop'
@@ -56,8 +57,10 @@ $backupDll = Join-Path $backupPath 'dinput8.before-alicecoop.dll'
 $manifestPath = Join-Path $coopPath 'install-manifest.json'
 $packageManifestPath = Join-Path $advancedSource 'package-manifest.json'
 
-if (Get-Process AliceMadnessReturns -ErrorAction SilentlyContinue) {
-    throw 'Close every AliceMadnessReturns.exe process before installing.'
+$runningTargetGame = @(Get-Process AliceMadnessReturns -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -and $_.Path -eq $targetGameExe })
+if ($runningTargetGame.Count -ne 0) {
+    throw 'Close the selected AliceMadnessReturns.exe before installing.'
 }
 
 $requiredFiles = @(

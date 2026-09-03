@@ -40,14 +40,17 @@ if (-not $Win32Path) {
 }
 
 $win32Path = [System.IO.Path]::GetFullPath($Win32Path)
+$targetGameExe = Join-Path $win32Path 'AliceMadnessReturns.exe'
 $coopPath = Join-Path $win32Path 'AliceCoop'
 $targetDll = Join-Path $win32Path 'dinput8.dll'
 $madnessPatchIni = Join-Path $win32Path 'MadnessPatch.ini'
 $backupDll = Join-Path $coopPath 'backup\dinput8.before-alicecoop.dll'
 $manifestPath = Join-Path $coopPath 'install-manifest.json'
 
-if (Get-Process AliceMadnessReturns -ErrorAction SilentlyContinue) {
-    throw 'Close every AliceMadnessReturns.exe process before uninstalling.'
+$runningTargetGame = @(Get-Process AliceMadnessReturns -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -and $_.Path -eq $targetGameExe })
+if ($runningTargetGame.Count -ne 0) {
+    throw 'Close the selected AliceMadnessReturns.exe before uninstalling.'
 }
 $manifest = $null
 if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {

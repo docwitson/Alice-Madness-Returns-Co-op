@@ -5,7 +5,8 @@
 <p align="center">
   <strong><a href="https://www.youtube.com/watch?v=QO0yarqS1-k">▶ ПОСМОТРЕТЬ ПОЛНЫЙ РЕЛИЗНЫЙ ТРЕЙЛЕР</a></strong><br>
   <strong><a href="https://www.youtube.com/watch?v=uD7oxI4mNWY">▶ ПОСМОТРЕТЬ ИНСТРУКЦИЮ ПО ЛАУНЧЕРУ И НАСТРОЙКЕ</a></strong><br>
-  <strong><a href="https://www.youtube.com/watch?v=j5VLSzZCsK0">▶ ПОСМОТРЕТЬ ПОЛНОЕ 10-ЧАСОВОЕ ПРОХОЖДЕНИЕ</a></strong>
+  <strong><a href="https://www.youtube.com/watch?v=j5VLSzZCsK0">▶ ПОСМОТРЕТЬ ПОЛНОЕ 10-ЧАСОВОЕ ПРОХОЖДЕНИЕ</a></strong><br>
+  <strong><a href="https://www.nexusmods.com/alicemadnessreturns/mods/87">⬇ СКАЧАТЬ С NEXUS MODS</a></strong>
 </p>
 
 [English](README.md) · [Установка через лаунчер](docs/INSTALL_RU.md) ·

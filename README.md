@@ -5,7 +5,7 @@
 <p align="center">
   <strong><a href="https://www.youtube.com/watch?v=QO0yarqS1-k">▶ WATCH THE FULL RELEASE TRAILER</a></strong><br>
   <strong><a href="https://www.youtube.com/watch?v=uD7oxI4mNWY">▶ WATCH THE LAUNCHER INSTALLATION &amp; SETUP GUIDE</a></strong><br>
-  <strong><a href="https://www.youtube.com/watch?v=rALyp02Q-LE">▶ WATCH THE FULL PLAYTHROUGH — PART 1</a></strong>
+  <strong><a href="https://www.youtube.com/watch?v=j5VLSzZCsK0">▶ WATCH THE COMPLETE 10-HOUR PLAYTHROUGH</a></strong>
 </p>
 
 [Русская версия](README_RU.md) · [Launcher installation](docs/INSTALL.md) ·

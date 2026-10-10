@@ -107,10 +107,12 @@
 
 			g_remotePawn = nullptr;
 			g_remoteController = nullptr;
+			g_remoteClothController = nullptr;
 			g_remoteWorld = nullptr;
 			g_retiredRemotePawns.clear();
 			g_remoteHairProxy = nullptr;
 			g_remoteIndependentHair = nullptr;
+			g_remoteNativeHairActive = false;
 			g_remoteHairBindTemplate = nullptr;
 			g_remoteHairRotatedTemplate = nullptr;
 			g_remoteHairTuningTemplate = nullptr;
@@ -591,6 +593,12 @@
 				g_config.sharedEnemyTransforms = false;
 			}
 			g_config.disableProxyCollision = ReadIniInt(iniPath, L"VisualProxy", L"DisableCollision", 1) == 1;
+			g_config.nativeClothSimulation = EnvironmentInt(
+				L"ALICECOOP_NATIVE_CLOTH",
+				ReadIniInt(iniPath, L"VisualProxy", L"NativeClothSimulation", 0)) == 1;
+			g_config.nativeHairSimulation = EnvironmentInt(
+				L"ALICECOOP_NATIVE_HAIR",
+				ReadIniInt(iniPath, L"VisualProxy", L"NativeHairSimulation", 0)) == 1;
 			g_config.interpolationSpeed = static_cast<float>(ReadIniInt(
 				iniPath, L"VisualProxy", L"InterpolationSpeed", 18));
 			g_config.localMirrorDistance = static_cast<float>(std::clamp(

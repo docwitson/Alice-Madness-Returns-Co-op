@@ -156,12 +156,42 @@
 			if (!remote)
 				return;
 
-			if (remote->HairComponent)
+			g_remoteNativeHairActive = false;
+			if (g_config.nativeHairSimulation && remote->Controller
+				&& remote->Mesh && remote->HairComponent
+				&& remote->HairComponent->Template)
 			{
-				// The native strand renderer always resolves the local
-				// playable Alice. Resetting this second component can therefore
-				// add another head of strands to player one. Keep it dormant;
-				// SpawnRemoteHairProxy creates the ordinary skeletal fallback.
+				UHairComponent* hair = remote->HairComponent;
+				// Native hair update (Current: 00ba0210) uses the owner's Mesh
+				// for PhysicsAsset spheres and requires a Pawn Controller.
+				// Roots are authored in head space: use the game's zero-offset
+				// attachment, never rotate template nodes or recenter the scalp.
+				if (hair->Owner != remote || !hair->bAttached)
+					NativeAttachComponent(remote, hair);
+				hair->OverrideMesh = nullptr;
+				hair->Translation = FVector(0.0f, 0.0f, 0.0f);
+				hair->Rotation = FRotator(0, 0, 0);
+				hair->Scale = 1.0f;
+				hair->Scale3D = FVector(1.0f, 1.0f, 1.0f);
+				hair->bOwnerNoSee = false;
+				hair->bOnlyOwnerSee = false;
+				NativeSetComponentHidden(hair, false);
+				g_remoteNativeHairActive = NativeAttachComponentToBone(
+					remote->Mesh, hair, FName("Bip01-Head"),
+					FVector(0.0f, 0.0f, 0.0f), FRotator(0, 0, 0),
+					FVector(1.0f, 1.0f, 1.0f));
+				if (g_remoteNativeHairActive)
+				{
+					NativeForceComponentUpdate(hair, false);
+					NativeResetHair(hair);
+					Log("COSMETICSTAGE native pawn hair: head attachment, "
+						"owner skeleton, PhysicsAsset=" + ObjectName(hair->PhysicsAsset) + '.');
+				}
+			}
+			if (remote->HairComponent && !g_remoteNativeHairActive)
+			{
+				// Calibrated independent-actor fallback for native hair disabled
+				// or unavailable. Keep the pawn's duplicate strands dormant.
 				remote->HairComponent->OverrideMesh = remote->Mesh;
 				remote->HairComponent->bOwnerNoSee = false;
 				remote->HairComponent->bOnlyOwnerSee = false;
@@ -184,13 +214,38 @@
 							? "bow"
 							: (cloth == remote->RibbonComponent
 								? "ribbon" : "ear"));
+				if (g_config.nativeClothSimulation)
+				{
+					if (cloth->Owner != remote || !cloth->bAttached)
+						NativeAttachComponent(remote, cloth);
+					cloth->AttachedToSkelComponent = remote->Mesh;
+					cloth->bTransformFromAnimParent = 1;
+					cloth->Translation = FVector(0.0f, 0.0f, 0.0f);
+					cloth->Rotation = FRotator(0, 0, 0);
+					cloth->Scale = 1.0f;
+					cloth->bEnableClothSimulation = false;
+					cloth->bClothFrozen = false;
+					cloth->bPendingReset = false;
+					cloth->bJustAttached = false;
+					cloth->bOwnerNoSee = false;
+					cloth->bOnlyOwnerSee = false;
+					cloth->bPauseAnims = false;
+					cloth->bNoSkeletonUpdate = false;
+					cloth->bUpdateSkelWhenNotRendered = true;
+					cloth->bTickAnimNodesWhenNotRendered = true;
+					cloth->bAlwaysUpdateMeshObject = true;
+					cloth->bForceMeshObjectUpdate = true;
+					cloth->Bounds = remote->Mesh->Bounds;
+					NativeForceComponentUpdate(cloth, false);
+					Log(std::string("COSMETICSTAGE native cloth preserved for ") + label + " on " + ObjectName(remote) + ".");
+					return;
+				}
+
 				if (cloth->Owner != remote || !cloth->bAttached)
 					NativeAttachComponent(remote, cloth);
-				// Alice's custom cloth simulator resolves the playable pawn
-				// globally and therefore skins a second Alice against the
-				// first one's bones. A presentation proxy must use ordinary
-				// UE3 master-pose skinning instead. This deliberately trades
-				// secondary cloth physics for a stable dress on the right body.
+
+				// Rigid fallback when native cloth is disabled: ordinary UE3
+				// skinning keeps the dress on the proxy without secondary physics.
 				NativeDeleteClothSimulator(cloth);
 				cloth->bEnableClothSimulation = false;
 				cloth->bClothFrozen = true;
@@ -1252,27 +1307,52 @@
 				}
 			};
 
-			const std::array<UClothComponent*, 4> clothComponents{
-				remote->SkirtComponent,
-				remote->BowComponent,
-				remote->RibbonComponent,
-				remote->EarComponent
-			};
-			for (UClothComponent* cloth : clothComponents)
+			if (g_config.nativeClothSimulation)
 			{
-				if (!cloth || !cloth->SkeletalMesh
-					|| cloth->AttachedToSkelComponent
-						!= remote->Mesh)
+				const std::array<UClothComponent*, 4> clothComponents{
+					remote->SkirtComponent,
+					remote->BowComponent,
+					remote->RibbonComponent,
+					remote->EarComponent
+				};
+				for (UClothComponent* cloth : clothComponents)
 				{
-					continue;
+					if (!cloth || !cloth->SkeletalMesh)
+						continue;
+					cloth->AttachedToSkelComponent = remote->Mesh;
+					cloth->bTransformFromAnimParent = 1;
+					cloth->bClothFrozen = false;
+					cloth->bEnableClothSimulation = false;
+					cloth->bAlwaysUpdateMeshObject = true;
+					cloth->bForceMeshObjectUpdate = true;
+					cloth->bRecentlyRendered = true;
+					cloth->Bounds = remote->Mesh->Bounds;
 				}
-				maintainRigidCosmetic(
-					cloth, cloth == remote->SkirtComponent
-					? "skirt"
-					: (cloth == remote->BowComponent
-						? "bow"
-						: (cloth == remote->RibbonComponent
-							? "ribbon" : "ear")));
+			}
+			else
+			{
+				const std::array<UClothComponent*, 4> clothComponents{
+					remote->SkirtComponent,
+					remote->BowComponent,
+					remote->RibbonComponent,
+					remote->EarComponent
+				};
+				for (UClothComponent* cloth : clothComponents)
+				{
+					if (!cloth || !cloth->SkeletalMesh
+						|| cloth->AttachedToSkelComponent
+							!= remote->Mesh)
+					{
+						continue;
+					}
+					maintainRigidCosmetic(
+						cloth, cloth == remote->SkirtComponent
+						? "skirt"
+						: (cloth == remote->BowComponent
+							? "bow"
+							: (cloth == remote->RibbonComponent
+								? "ribbon" : "ear")));
+				}
 			}
 			if (g_remoteHairProxy
 				&& g_remoteHairProxy->SkeletalMeshComponent)
@@ -1361,7 +1441,8 @@
 				};
 				hide(remote->Mesh, true);
 				hide(remote->UpperBodyComponent, true);
-				hide(remote->HairComponent, true);
+				if (!g_remoteNativeHairActive)
+					hide(remote->HairComponent, true);
 				hide(remote->SkirtComponent, true);
 				hide(remote->BowComponent, true);
 				hide(remote->RibbonComponent, true);

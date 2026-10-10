@@ -55,6 +55,8 @@
 			bool backgroundWindowDamageGuard = false;
 			bool hairTuningEnabled = false;
 			bool disableProxyCollision = true;
+			bool nativeClothSimulation = false;
+			bool nativeHairSimulation = false;
 			bool forceWindowed = false;
 			bool manageWindowGeometry = false;
 			bool borderlessWindow = false;
@@ -236,9 +238,11 @@
 
 		AAlicePawn* g_remotePawn = nullptr;
 		AController* g_remoteController = nullptr;
+		AController* g_remoteClothController = nullptr;
 		AWorldInfo* g_remoteWorld = nullptr;
 		ASkeletalMeshActor* g_remoteHairProxy = nullptr;
 		UHairComponent* g_remoteIndependentHair = nullptr;
+		bool g_remoteNativeHairActive = false;
 		float g_remoteHairProxyBaseDrawScale = 1.0f;
 		float g_remoteHairSkeletalBaseScale = 1.0f;
 		float g_remoteIndependentHairBaseScale = 1.0f;

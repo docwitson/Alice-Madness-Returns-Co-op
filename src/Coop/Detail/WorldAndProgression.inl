@@ -86,6 +86,8 @@
 				{
 					g_remotePawn = nullptr;
 					g_remoteController = nullptr;
+					g_remoteClothController = nullptr;
+					g_remoteNativeHairActive = false;
 					g_remoteWorld = nullptr;
 				}
 				TraceWorldResetInvariants();

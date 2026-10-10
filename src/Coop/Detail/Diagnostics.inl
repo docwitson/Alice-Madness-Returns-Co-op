@@ -21,12 +21,13 @@
 		{
 			if (!g_config.invariantTrace)
 				return;
-			if (g_remotePawn || g_remoteController || g_remoteWorld)
+			if (g_remotePawn || g_remoteController || g_remoteClothController || g_remoteWorld)
 			{
 				ReportInvariantViolation("WorldReset", "RemotePawnCleared",
 					"remotePawn=" + std::to_string(g_remotePawn != nullptr)
 					+ ",remoteController="
 					+ std::to_string(g_remoteController != nullptr)
+					+ ",clothController=" + std::to_string(g_remoteClothController != nullptr)
 					+ ",remoteWorld=" + std::to_string(g_remoteWorld != nullptr));
 			}
 			if (!g_remotePepperVisuals.empty() || !g_remoteClockBombVisuals.empty())
@@ -61,12 +62,13 @@
 		{
 			if (!g_config.invariantTrace)
 				return;
-			if (g_remotePawn || g_remoteController || g_remoteWorld)
+			if (g_remotePawn || g_remoteController || g_remoteClothController || g_remoteWorld)
 			{
 				ReportInvariantViolation("PeerTeardown", "RemotePawnCleared",
 					"remotePawn=" + std::to_string(g_remotePawn != nullptr)
 					+ ",remoteController="
 					+ std::to_string(g_remoteController != nullptr)
+					+ ",clothController=" + std::to_string(g_remoteClothController != nullptr)
 					+ ",remoteWorld=" + std::to_string(g_remoteWorld != nullptr));
 			}
 			if (g_remotePresentation.valid || g_remotePresentationWeapon
@@ -793,6 +795,23 @@
 				<< static_cast<int>(pawn->ArcheTypeID)
 				<< ", pawn=" << ObjectName(pawn)
 				<< ", mesh=" << ObjectName(pawn->Mesh ? pawn->Mesh->SkeletalMesh : nullptr);
+			if (pawn->Mesh)
+			{
+				stream << ", meshLoc=(" << pawn->Mesh->Translation.X << ','
+					<< pawn->Mesh->Translation.Y << ',' << pawn->Mesh->Translation.Z << ')'
+					<< ", meshRot=(" << pawn->Mesh->Rotation.Pitch << ','
+					<< pawn->Mesh->Rotation.Yaw << ',' << pawn->Mesh->Rotation.Roll << ')'
+					<< ", attachments=" << pawn->Mesh->Attachments.size();
+				for (int32_t attIdx = 0; attIdx < pawn->Mesh->Attachments.size(); ++attIdx)
+				{
+					const auto& att = pawn->Mesh->Attachments.at(attIdx);
+					stream << " [att" << attIdx << ':'
+						<< ObjectName(att.Component)
+						<< '@' << (att.BoneName.IsValid() ? att.BoneName.ToString() : "<none>")
+						<< " rel=(" << att.RelativeLocation.X << ',' << att.RelativeLocation.Y << ',' << att.RelativeLocation.Z << ')'
+						<< " rot=(" << att.RelativeRotation.Pitch << ',' << att.RelativeRotation.Yaw << ',' << att.RelativeRotation.Roll << ")]";
+				}
+			}
 			Log(stream.str());
 
 			if (pawn->HairComponent)
@@ -804,6 +823,7 @@
 				stream << "Cosmetics[" << label << "].hair: component="
 					<< ObjectName(hair)
 					<< ", owner=" << ObjectName(hair->Owner)
+					<< ", controller=" << ObjectName(pawn->Controller)
 					<< ", attached=" << hair->bAttached
 					<< ", scene=" << (hair->Scene.Dummy ? "yes" : "no")
 					<< ", sceneInfo="
@@ -820,6 +840,9 @@
 					<< (hair->Template
 						? hair->Template->Strands.size() : 0)
 					<< ", material=" << ObjectName(hair->Material)
+					<< ", physicsAsset=" << ObjectName(hair->PhysicsAsset)
+					<< ", pendingReset=" << hair->bPendingReset
+					<< ", justAttached=" << hair->bJustAttached
 					<< ", overrideMesh=" << ObjectName(hair->OverrideMesh)
 					<< ", simulator="
 					<< (hair->Simulator.Dummy ? "yes" : "no")
@@ -845,7 +868,7 @@
 				Log(std::string("Cosmetics[") + label + "].hair: component=<null>");
 			}
 
-			auto logCloth = [label](const char* componentLabel, const UClothComponent* cloth)
+			auto logCloth = [label, pawn](const char* componentLabel, const UClothComponent* cloth)
 			{
 				if (!cloth)
 				{
@@ -869,12 +892,27 @@
 					<< ", parentBones=" << cloth->ParentBoneMap.size()
 					<< ", transformFromParent="
 					<< cloth->bTransformFromAnimParent
+					<< ", clothPhysAsset=" << ObjectName(cloth->ClothPhysicsAsset)
 					<< ", simulator=" << (cloth->Simulator.Dummy ? "yes" : "no")
+					<< ", clothSim=" << (cloth->bEnableClothSimulation ? "1" : "0")
+					<< ", clothFrozen=" << (cloth->bClothFrozen ? "1" : "0")
 					<< ", fixed=" << (cloth->FixedBone.IsValid()
 						? cloth->FixedBone.ToString()
 						: std::string("<invalid>"))
+					<< ", fixedPos=(" << cloth->FixedBonePosition.X << ','
+					<< cloth->FixedBonePosition.Y << ',' << cloth->FixedBonePosition.Z << ')'
+					<< ", fixedTargetCloth=" << (cloth->FixedTargetClothName.IsValid() ? cloth->FixedTargetClothName.ToString() : "<none>")
+					<< ", fixedTargetBone=" << (cloth->FixedTargetBone.IsValid() ? cloth->FixedTargetBone.ToString() : "<none>")
+					<< ", clothName=" << (cloth->ClothName.IsValid() ? cloth->ClothName.ToString() : "<none>")
+					<< ", rings=" << cloth->BranchRingLinks.size()
 					<< ", fixedIndex=" << cloth->FixedNodeIndex
 					<< ", boneNodes=" << cloth->boneNodeCount
+					<< ", pendingReset=" << cloth->bPendingReset
+					<< ", justAttached=" << cloth->bJustAttached
+					<< ", controller=" << ObjectName(pawn->Controller)
+					<< ", noSkeletonUpdate=" << cloth->bNoSkeletonUpdate
+					<< ", pauseAnims=" << cloth->bPauseAnims
+					<< ", meshObjectUpdate=" << cloth->bForceMeshObjectUpdate
 					<< ", bounds=(" << cloth->Bounds.Origin.X << ','
 					<< cloth->Bounds.Origin.Y << ','
 					<< cloth->Bounds.Origin.Z << ";r="
@@ -1053,9 +1091,12 @@
 			for (int32_t index = 0;
 				index < boneCount; ++index)
 			{
-				const FMatrix worldMatrix = MultiplyMatrices(
-					component->SpaceBases.at(index),
-					component->LocalToWorld);
+				// Alice stores SpaceBases as 32-byte FBoneAtoms, despite the
+				// generated SDK's TArray<FMatrix>. Let the native accessor
+				// decode the pose and apply the component transform.
+				FMatrix worldMatrix{};
+				if (!NativeGetBoneMatrix(component, index, worldMatrix))
+					continue;
 				const float distance = FVector::Dist(
 					MatrixOrigin(worldMatrix), targetOrigin);
 				if (distance < nearestDistance)

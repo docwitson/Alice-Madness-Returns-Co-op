@@ -1668,10 +1668,20 @@
 				|| (state.flags & StateBodyHidden) != 0);
 			setHidden(remote->UpperBodyComponent, actorHidden
 				|| (state.flags & StateUpperBodyHidden) != 0);
-			// The pawn-owned strand component remains dormant. The proxy's
-			// skeletal scalp is only an invisible head-space anchor; its
-			// independent HairComponent supplies the visible strands.
-			setHidden(remote->HairComponent, true);
+			if (g_remoteNativeHairActive && remote->HairComponent)
+			{
+				UHairComponent* hair = remote->HairComponent;
+				const bool hidden = actorHidden || (state.flags & StateHairHidden) != 0;
+				const bool wasHidden = hair->HiddenGame;
+				hair->bIgnoreOwnerHidden = false;
+				if (hidden != wasHidden)
+					NativeSetComponentHidden(hair, hidden);
+				hair->HiddenGame = hidden;
+				if (wasHidden && !hidden)
+					NativeResetHair(hair);
+			}
+			else
+				setHidden(remote->HairComponent, true);
 			if (g_remoteHairProxy
 				&& g_remoteHairProxy->SkeletalMeshComponent)
 			{
@@ -1777,6 +1787,9 @@
 				return;
 
 			const PlayerStatePayload& state = presentation.state;
+			if (g_remoteNativeHairActive && remote->HairComponent
+				&& (presentation.location - remote->Location).SizeSquared() >= 1500.0f * 1500.0f)
+				NativeResetHair(remote->HairComponent);
 			remote->SetLocationNoCheck(presentation.location);
 			remote->SetRotation(presentation.rotation);
 			remote->Location = presentation.location;
@@ -1884,7 +1897,12 @@
 				for (UClothComponent* cloth : clothComponents)
 				{
 					if (cloth && cloth->bAttached)
-						NativeDetachActorComponent(remote, cloth);
+					{
+						if (g_config.nativeClothSimulation)
+							NativeSetComponentHidden(cloth, true);
+						else
+							NativeDetachActorComponent(remote, cloth);
+					}
 				}
 				if (remote->UpperBodyComponent
 					&& remote->UpperBodyComponent->bAttached)
@@ -1910,6 +1928,13 @@
 				{
 					if (!cloth || !cloth->SkeletalMesh)
 						continue;
+					if (g_config.nativeClothSimulation)
+					{
+						cloth->AttachedToSkelComponent = remote->Mesh;
+						cloth->bTransformFromAnimParent = 1;
+						NativeSetComponentHidden(cloth, false);
+						continue;
+					}
 					if (!cloth->bAttached)
 						NativeAttachComponent(remote, cloth);
 					if (remote->Mesh
@@ -2452,7 +2477,7 @@
 				// follow the original owner-based path. If the explicit path
 				// has never submitted a render after two seconds, retry once
 				// with the exact binding used by the playable Alice.
-				if (!g_remoteHairProxy
+				if (!g_remoteNativeHairActive && !g_remoteHairProxy
 					&& !g_remoteHairOwnerFallbackApplied
 					&& remote->HairComponent
 					&& remote->HairComponent->LastRenderTime < 0.0f)

@@ -942,6 +942,14 @@
 			};
 			enable(remote->Mesh);
 			enable(remote->UpperBodyComponent);
+			if (remote->SkirtComponent)
+				enable(remote->SkirtComponent);
+			if (remote->BowComponent)
+				enable(remote->BowComponent);
+			if (remote->RibbonComponent)
+				enable(remote->RibbonComponent);
+			if (remote->EarComponent)
+				enable(remote->EarComponent);
 			if (remote->Weapon)
 				enable(remote->Weapon->Mesh);
 			else if (remote->DummyWeapon)

@@ -4,6 +4,26 @@ All notable user-facing changes are documented here. Alice Co-op follows
 [Semantic Versioning](https://semver.org/) where practical; compatibility also
 depends on the protocol version shown in each release.
 
+## Unreleased
+
+### Fixed
+
+- Proxy pepper and teapot projectile flight, impact particles and decals,
+  including teapot splashes on walls.
+- Hobby-horse ground shockwaves and melee trail effects, with native spawn
+  positions and complete trail lifecycles.
+- Dodge butterflies and fading while preserving the proxy dress and cloth
+  simulation across visibility changes.
+- Clock-bomb mesh placement, animation and rabbit reveal during the countdown.
+- Proxy ranged upper-body aiming through the native combat stance and aim tree.
+- Melee and dodge root displacement, animation phase correction and native
+  transitions, including held attack poses and instant blend-in timing.
+
+### Changed
+
+- Network protocol is now 40. Both players must use matching client DLL and
+  relay server builds; earlier protocol versions are incompatible.
+
 ## 0.1.0-alpha.2 — 2026-09-03
 
 ### Added

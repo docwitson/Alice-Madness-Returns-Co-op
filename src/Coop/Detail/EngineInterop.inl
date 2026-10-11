@@ -788,6 +788,62 @@
 			return InvokeNativeFunction(component, function, parameters);
 		}
 
+
+		bool NativeSetTranslation(UPrimitiveComponent* object, const FVector& value)
+		{
+			static UFunction* function = nullptr;
+			if (!function)
+				function = UFunction::FindFunction(
+					"Function Engine.PrimitiveComponent.SetTranslation");
+			UPrimitiveComponent_execSetTranslation_Params parameters{};
+			parameters.NewTranslation = value;
+			return InvokeNativeFunction(object, function, parameters);
+		}
+
+		bool NativeSetRotation(UPrimitiveComponent* object, const FRotator& value)
+		{
+			static UFunction* function = nullptr;
+			if (!function)
+				function = UFunction::FindFunction(
+					"Function Engine.PrimitiveComponent.SetRotation");
+			UPrimitiveComponent_execSetRotation_Params parameters{};
+			parameters.NewRotation = value;
+			return InvokeNativeFunction(object, function, parameters);
+		}
+
+		bool NativeSetScale(UPrimitiveComponent* object, float value)
+		{
+			static UFunction* function = nullptr;
+			if (!function)
+				function = UFunction::FindFunction(
+					"Function Engine.PrimitiveComponent.SetScale");
+			UPrimitiveComponent_execSetScale_Params parameters{};
+			parameters.NewScale = value;
+			return InvokeNativeFunction(object, function, parameters);
+		}
+
+		bool NativeSetScale3D(UPrimitiveComponent* object, const FVector& value)
+		{
+			static UFunction* function = nullptr;
+			if (!function)
+				function = UFunction::FindFunction(
+					"Function Engine.PrimitiveComponent.SetScale3D");
+			UPrimitiveComponent_execSetScale3D_Params parameters{};
+			parameters.NewScale3D = value;
+			return InvokeNativeFunction(object, function, parameters);
+		}
+
+		bool NativeActivateSystem(UParticleSystemComponent* object, bool value)
+		{
+			static UFunction* function = nullptr;
+			if (!function)
+				function = UFunction::FindFunction(
+					"Function Engine.ParticleSystemComponent.ActivateSystem");
+			UParticleSystemComponent_execActivateSystem_Params parameters{};
+			parameters.bFlagAsJustAttached = value;
+			return InvokeNativeFunction(object, function, parameters);
+		}
+
 		bool NativeSetActorHidden(AActor* actor, bool hidden)
 		{
 			static UFunction* function = nullptr;
@@ -898,3 +954,30 @@
 			return InvokeNativeFunction(weapon, function, parameters);
 		}
 
+
+		bool InvokeNativeVisualNotify(UAnimNotify* notify, UAnimNodeSequence* node,
+			int phase, float time, float delta, float duration)
+		{
+			if (!notify || !node || !node->SkelComponent) return false;
+			__try
+			{
+				void** vtable = *reinterpret_cast<void***>(notify);
+				if (phase == 0)
+				{
+					using Fn = void(__thiscall*)(UAnimNotify*, UAnimNodeSequence*);
+					reinterpret_cast<Fn>(vtable[76])(notify, node);
+				}
+				else if (phase == 1)
+				{
+					using Fn = void(__thiscall*)(UAnimNotify*, UAnimNodeSequence*, float, float, float);
+					reinterpret_cast<Fn>(vtable[77])(notify, node, time, delta, duration);
+				}
+				else
+				{
+					using Fn = void(__thiscall*)(UAnimNotify*, UAnimNodeSequence*, float);
+					reinterpret_cast<Fn>(vtable[78])(notify, node, time);
+				}
+				return true;
+			}
+			__except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+		}

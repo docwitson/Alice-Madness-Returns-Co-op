@@ -25,6 +25,8 @@
 			const char* reason);
 		void TickRemoteNativeGlideTrailGuard(AAlicePawn* remote);
 		void TickLocalClockBombReplication();
+		void TickLocalWeaponProjectileReplication();
+		void FinishRemoteVisualNotifyTrails();
 		void TickRemoteProjectileVisuals(AWorldInfo* world);
 		void ApplyInboundProjectileEvents(AWorldInfo* world);
 		void ApplyInboundSharedWorldEvents(

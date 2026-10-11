@@ -22,7 +22,10 @@
 				ResetSharedEnemyPose(false);
 				ClearRemoteProjectileVisuals(g_currentWorld != nullptr);
 				g_localClockBomb = {};
-				g_recentLocalPepperProjectiles.clear();
+				g_localWeaponProjectiles.clear();
+				g_pendingWeaponProjectiles.clear();
+				g_projectileParticleTemplates.clear();
+				g_completedRemoteProjectiles.clear();
 				{
 					std::lock_guard lock(g_stateMutex);
 					g_inboundProjectileEvents.clear();
@@ -365,6 +368,7 @@
 			state.velocity[0] = pawn->Velocity.X;
 			state.velocity[1] = pawn->Velocity.Y;
 			state.velocity[2] = pawn->Velocity.Z;
+			PackAimOffset(pawn->AimOffsetPct.X, pawn->AimOffsetPct.Y, state.aimOffset);
 			state.drawScale = pawn->DrawScale;
 			state.drawScale3D[0] = pawn->DrawScale3D.X;
 			state.drawScale3D[1] = pawn->DrawScale3D.Y;
@@ -427,6 +431,12 @@
 					weapon->WeaponTypeEnum);
 			}
 			state.flags = pawn->bHidden ? 0 : StateVisible;
+			state.flags = PackPawnStance(state.flags, static_cast<std::uint8_t>(pawn->PawnStance));
+			// Native HideAlicePawn sets bShouldBeHide as well as Actor.bHidden.
+			// This is distinct from a material fade and must not suppress dodge FX.
+			if (pawn->bShouldBeHide || (pawn->Mesh && pawn->Mesh->bForceTranslucency
+				&& pawn->Mesh->ForceTranslucencyAlpha <= 0.01f))
+				state.flags |= StateDodgeInvisible;
 			if (controller && controller->MyAlicePawn == pawn)
 				state.flags |= StateProgressionValid;
 			if (pawn->Mesh && pawn->Mesh->HiddenGame)

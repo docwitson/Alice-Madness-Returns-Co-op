@@ -3,6 +3,7 @@
 #include "Features.hpp"
 
 #include <cmath>
+#include "NativePresentationHooks.inl"
 
 safetyhook::InlineHook ProcessEvent;
 
@@ -260,6 +261,7 @@ void ResolveProcessEventFunctions()
 	g_pawnFadeOutWeapon = UFunction::FindFunction("Function AliceGame.AlicePawn.FadeOutWeapon");
 	g_pawnClearDelayAttach = UFunction::FindFunction("Function AliceGame.AlicePawn.ClearDelayAttachWeapon");
 	AliceCoop::ProcessEventBridge::Initialize();
+	InstallNativeScriptDispatcher();
 
 	if (FixPinballCannonPrompt)
 	{

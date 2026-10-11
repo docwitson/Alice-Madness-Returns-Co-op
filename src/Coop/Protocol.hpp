@@ -7,10 +7,11 @@
 namespace AliceCoopProtocol
 {
 	constexpr std::uint32_t Magic = 0x504F4341; // "ACOP" in little-endian byte order.
-	constexpr std::uint16_t Version = 29;
+	constexpr std::uint16_t Version = 40;
 	constexpr std::uint16_t DefaultPort = 27018;
 	constexpr std::size_t MaxDatagramSize = 1024;
 	constexpr std::size_t MaxAnimationSequences = 12;
+	constexpr std::size_t ClockBombMaterialSlots = 3;
 	constexpr std::size_t MaxAnimationBlends = 20;
 	constexpr std::size_t MaxSharedEnemies = 10;
 	constexpr std::size_t SaveSyncFileCount = 2;
@@ -80,6 +81,12 @@ namespace AliceCoopProtocol
 		ClockBombUpdate = 3,
 		ClockBombExplode = 4,
 		ClockBombRemove = 5,
+		TeapotSpawn = 6,
+		WeaponProjectileUpdate = 7,
+		WeaponProjectileImpact = 8,
+		WeaponProjectileRemove = 9,
+		NativeWorldEffect = 10,
+		NativeWorldDecal = 11,
 	};
 
 	enum class SharedWorldEventKind : std::uint8_t
@@ -144,7 +151,12 @@ namespace AliceCoopProtocol
 		StateWeaponHidden = 1u << 15,
 		StateForceCutscene = 1u << 16,
 		StateProgressionValid = 1u << 17,
+		StateDodgeInvisible = 1u << 18,
 	};
+
+	// Native EBasePawnStance is 0..7; use three previously unused state bits.
+	constexpr std::uint32_t PawnStanceShift = 19;
+	constexpr std::uint32_t PawnStanceMask = 7u << PawnStanceShift;
 
 	enum HostCommandFlags : std::uint32_t
 	{
@@ -187,12 +199,23 @@ namespace AliceCoopProtocol
 		AnimationSequenceRelevant = 1u << 1,
 		AnimationSequenceCustom = 1u << 2,
 		AnimationSequenceAction = 1u << 3,
+		AnimationSequenceSlotActive = 1u << 4,
+		// Bits 5..7 encode native config slot + 1; zero means no config slot.
+		AnimationSequenceSlotMask = 7u << 5,
 	};
+
+	// A completed native slot can retain a weighted terminal pose.
+	constexpr std::uint16_t AnimationPoseStopped = 1u << 14;
 
 	enum AnimationBlendFlags : std::uint8_t
 	{
 		AnimationBlendRelevant = 1u << 0,
 		AnimationBlendCustom = 1u << 1,
+		// Full-body slot: nodeIndex is remaining native blend time (2 ms).
+		// Its pending blend-out is valid even when the transmitted value is zero.
+		AnimationBlendNativeSlotTiming = 1u << 2,
+		// Native pending-out < 0 holds the clip until an explicit source transition.
+		AnimationBlendNativeHold = 1u << 3,
 	};
 
 #pragma pack(push, 1)
@@ -229,7 +252,8 @@ namespace AliceCoopProtocol
 		char sequenceName[48]{};
 		float position = 0.0f;
 		float rate = 1.0f;
-		std::uint16_t nodeIndex = 0;
+		// Six 2-bit native axis options plus zero-root flags; replaces diagnostic node index.
+		std::uint16_t rootBoneOptions = 0;
 		AnimationComponent component = AnimationComponent::Body;
 		std::uint8_t flags = 0;
 		float nodeWeight = 0.0f;
@@ -252,7 +276,16 @@ namespace AliceCoopProtocol
 		std::uint64_t clientTimeMs = 0;
 		std::uint8_t sequenceCount = 0;
 		std::uint8_t blendCount = 0;
-		std::uint8_t reserved[2]{};
+		// Native slot blend durations in 2 ms units.
+		std::uint8_t fullBodyBlendTicks = 0;
+		std::uint8_t upperBlendTicks = 0;
+		std::uint8_t fullBodyBlendOutTicks = 0;
+		std::uint8_t upperBlendOutTicks = 0;
+		std::uint8_t halfBodyBlendTicks = 0;
+		std::uint8_t halfBodyBlendOutTicks = 0;
+		std::uint8_t authoredBlendMask = 0;
+		std::uint16_t upperLowerWeight = 0; // Native blend target, not an intermediate sample.
+		std::uint8_t upperLowerBlendTicks = 0;
 		AnimationSequencePayload sequences[MaxAnimationSequences]{};
 		AnimationBlendPayload blends[MaxAnimationBlends]{};
 	};
@@ -271,6 +304,14 @@ namespace AliceCoopProtocol
 		std::int32_t rotation[3]{};
 		float velocity[3]{};
 		float extra = 0.0f;
+		// Stable asset path hash; UObject pointers differ between processes.
+		std::uint32_t particleTemplateHash = 0;
+		// Decal projection values; clock-bomb events use mesh translation/scale.
+		float effectParameters[4]{};
+		// Scalar start parameter for decals; native sequence name for clock bombs.
+		char effectParameterName[48]{};
+		// Actual native clock-bomb material state, including reveal and critical stage.
+		std::uint32_t clockBombMaterialHashes[ClockBombMaterialSlots]{};
 	};
 
 	struct SharedWorldEventPayload
@@ -326,6 +367,8 @@ namespace AliceCoopProtocol
 		// actors and upgrade levels alone are not enough for a clean profile:
 		// Aiming and the range-weapon UI are gated by these persistent flags.
 		std::uint32_t abilityMask = 0;
+		// Two signed 12-bit native AimOffsetPct axes.
+		std::uint8_t aimOffset[3]{};
 	};
 
 	struct SharedEnemyPosePayload
@@ -363,7 +406,7 @@ namespace AliceCoopProtocol
 		std::uint32_t commandSerial = 0;
 		std::uint32_t commandFlags = 0;
 		std::uint8_t enemyCount = 0;
-		std::uint8_t reserved[3]{};
+		std::uint8_t reserved[1]{};
 		SharedEnemyPosePayload enemies[MaxSharedEnemies]{};
 	};
 
@@ -460,13 +503,13 @@ namespace AliceCoopProtocol
 	static_assert(sizeof(WelcomePayload) == 76);
 	static_assert(sizeof(AnimationSequencePayload) == 64);
 	static_assert(sizeof(AnimationBlendPayload) == 10);
-	static_assert(sizeof(AnimationGraphPayload) == 992);
-	static_assert(sizeof(ProjectileEventPayload) == 68);
+	static_assert(sizeof(AnimationGraphPayload) == 1000);
+	static_assert(sizeof(ProjectileEventPayload) == 148);
 	static_assert(sizeof(SharedWorldEventPayload) == 136);
-	static_assert(sizeof(PlayerStatePayload) == 204);
-	static_assert(sizeof(ClientCommandPayload) == 792);
+	static_assert(sizeof(PlayerStatePayload) == 207);
+	static_assert(sizeof(ClientCommandPayload) == 795);
 	static_assert(sizeof(SharedEnemyPosePayload) == 56);
-	static_assert(sizeof(HostSnapshotPayload) == 996);
+	static_assert(sizeof(HostSnapshotPayload) == 1000);
 	static_assert(sizeof(Header) + sizeof(HostSnapshotPayload)
 		<= MaxDatagramSize);
 	static_assert(sizeof(PeerLeftPayload) == 8);

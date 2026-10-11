@@ -1,4 +1,3 @@
-		constexpr bool PepperProjectileReplicationEnabled = false;
 
 		enum class HairRotationCandidate : std::uint8_t
 		{
@@ -328,26 +327,25 @@
 		{
 			std::uint32_t projectileId = 0;
 			UParticleSystemComponent* particle = nullptr;
-			ADynamicSMActor_Spawnable* marker = nullptr;
+			UParticleSystem* particleTemplate = nullptr;
 			FVector location = FVector(0.0f, 0.0f, 0.0f);
 			FVector velocity = FVector(0.0f, 0.0f, 0.0f);
 			FRotator rotation = FRotator(0, 0, 0);
 			float scale = 1.0f;
-			std::uint8_t hypothesis = 1;
+			std::uint32_t lastEventSerial = 0;
 			Clock::time_point lastTick{};
 			Clock::time_point expiresAt{};
 		};
 		struct RemoteClockBombVisual
 		{
 			std::uint32_t projectileId = 0;
+			std::uint32_t materialHashes[ClockBombMaterialSlots]{};
 			ASkeletalMeshActorSpawnable* actor = nullptr;
 			FVector targetLocation = FVector(0.0f, 0.0f, 0.0f);
 			FVector velocity = FVector(0.0f, 0.0f, 0.0f);
 			FRotator targetRotation = FRotator(0, 0, 0);
 			std::uint8_t cloneState = 0;
-			std::uint8_t lastForcedCloneState = 255;
 			std::uint8_t hypothesis = 1;
-			std::uint16_t animationNodeCount = 0;
 			Clock::time_point lastTick{};
 			Clock::time_point lastUpdate{};
 			Clock::time_point spawnedAt{};
@@ -357,20 +355,38 @@
 			g_remoteClockBombVisuals;
 		std::atomic_uint32_t g_localProjectileSerial = 1;
 		std::atomic_uint32_t g_localProjectileId = 1;
-		std::unordered_map<
-			APepperGrinderPrimaryProjectile*, Clock::time_point>
-			g_recentLocalPepperProjectiles;
-		UParticleSystem* g_pepperFlightTemplate = nullptr;
-		UStaticMesh* g_pepperMarkerMesh = nullptr;
+		struct LocalWeaponProjectileTrack
+		{
+			std::uint32_t projectileId = 0;
+			int32_t objectIndex = -1;
+			ProjectileEventPayload spawn{};
+			Clock::time_point nextUpdate{};
+			Clock::time_point expiresAt{};
+		};
+		std::unordered_map<AAliceGameProjectile*, LocalWeaponProjectileTrack>
+			g_localWeaponProjectiles;
+		std::unordered_map<AAliceGameProjectile*, int32_t> g_pendingWeaponProjectiles;
+		std::unordered_map<std::uint32_t, UParticleSystem*>
+			g_projectileParticleTemplates;
+		std::unordered_map<std::uint32_t, Clock::time_point>
+			g_completedRemoteProjectiles;
 		UParticleSystem* g_clockBombExplosionTemplate = nullptr;
 		USkeletalMeshComponent* g_clockBombMeshTemplate = nullptr;
 		int g_pepperProjectileHypothesis = 2;
 		int g_clockBombHypothesis = 3;
-		constexpr float ClockBombZOffset = -138.0f;
+		constexpr float ClockBombZOffset = 0.0f;
+		bool g_remoteMaterialsIsolated = false;
 		bool g_devForceProxyHidden = false;
 		Clock::time_point g_devDodgeHideUntil{};
 		Clock::time_point g_devMuzzleUntil{};
 		Clock::time_point g_devGlideUntil{};
+		thread_local unsigned g_remoteParticleReplayDepth = 0;
+		struct RemoteParticleReplayScope
+		{
+			RemoteParticleReplayScope() { ++g_remoteParticleReplayDepth; }
+			~RemoteParticleReplayScope() { --g_remoteParticleReplayDepth; }
+		};
+		AAliceDodgeParticleTrace* g_remoteNativeDodgeEmitter = nullptr;
 		UParticleSystem* g_remoteDodgeParticleTemplate = nullptr;
 		Clock::time_point g_remoteDodgeParticleUntil{};
 		Clock::time_point g_nextRemoteDodgeParticle{};
@@ -389,8 +405,6 @@
 		LONG g_sharedDevCommandRevision = 0;
 		bool g_applyingSharedDevCommand = false;
 		float g_remoteWeaponBaseDrawScale = 1.0f;
-		std::unordered_map<std::uint64_t, Clock::time_point>
-			g_recentRemoteVisualNotifies;
 		struct VisualNotifyCursor
 		{
 			UAnimNodeSequence* node = nullptr;
@@ -435,7 +449,23 @@
 			std::uint32_t sample = 0;
 			bool retired = false;
 		};
-		VisualNotifyCursor g_remoteFullBodyNotifyCursor;
+		struct ActiveVisualTrail
+		{
+			UAnimNotify_Trails* notify = nullptr;
+			float startTime = 0.0f;
+			float endTime = 0.0f;
+			float previousTime = 0.0f;
+		};
+		struct VisualNotifyChannel
+		{
+			VisualNotifyCursor cursor{};
+			std::uint32_t actionSerial = 0;
+			std::vector<ActiveVisualTrail> trails;
+		};
+		std::array<VisualNotifyChannel, 4> g_remoteVisualNotifyChannels;
+		UAnimNodeSequence* g_remoteAppliedUpperBodyNode = nullptr;
+		UAnimNodeSequence* g_remoteAppliedHalfBodyNode = nullptr;
+		UAnimNodeSequence* g_remoteAppliedWeaponNode = nullptr;
 		std::vector<TrackedPresentationParticle>
 			g_remoteWeaponTransientParticles;
 		std::vector<RetiredPresentationParticle>
@@ -507,14 +537,13 @@
 		};
 		PresentationAnimChannel g_remoteFullBodyChannel;
 		PresentationAnimChannel g_remoteUpperAdditiveChannel;
+		PresentationAnimChannel g_remoteHalfBodyChannel;
 		std::unordered_set<std::string> g_loggedAnimationStageFailures;
 		std::unordered_set<std::string> g_loggedAnimationStageSuccesses;
 		std::unordered_set<std::string> g_loggedConfigAnimationStages;
 		std::unordered_map<std::string, int> g_animationStagePoseSamples;
 		std::unordered_set<std::string>
 			g_loggedWeaponHierarchySignatures;
-		std::unordered_set<const UAnimSequence*>
-			g_loggedNotifyInventories;
 		bool g_loggedLocalMirrorBinding = false;
 		bool g_loggedLocalMirrorIncompatibility = false;
 		std::uint32_t g_lastRemoteActionSerial = 0;

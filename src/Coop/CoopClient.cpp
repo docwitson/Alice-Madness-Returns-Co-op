@@ -568,6 +568,7 @@ namespace AliceCoop
 		ApplyInboundProjectileEvents(world);
 		TickRemoteProjectileVisuals(world);
 		TickLocalClockBombReplication();
+		TickLocalWeaponProjectileReplication();
 		if (g_config.localMirror)
 		{
 			g_activeRemoteAnimationGraph.reset();

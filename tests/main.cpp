@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <limits>
 #include <string>
@@ -51,6 +52,93 @@ namespace
 			"declared payload longer than datagram");
 		Check(!IsValidHeader(packet.header, sizeof(packet) + 1),
 			"declared payload shorter than datagram");
+
+		ProjectileEventPayload bomb{};
+		bomb.kind = ProjectileEventKind::ClockBombUpdate;
+		bomb.clockBombMaterialHashes[0] = 0x10203040;
+		bomb.clockBombMaterialHashes[1] = 0x50607080;
+		bomb.clockBombMaterialHashes[2] = 0x90a0b0c0;
+		const auto bombPacket = MakePacket(PacketType::ProjectileEvent, 1, 2, 4, bomb);
+		std::array<std::uint8_t, sizeof(bombPacket)> wire{};
+		std::memcpy(wire.data(), &bombPacket, wire.size());
+		Packet<ProjectileEventPayload> received{};
+		std::memcpy(&received, wire.data(), wire.size());
+		Check(IsValidHeader(received.header, wire.size()) && wire.size() <= MaxDatagramSize,
+			"clock-bomb materials fit relay datagram");
+		Check(received.payload.clockBombMaterialHashes[0] == 0x10203040
+			&& received.payload.clockBombMaterialHashes[1] == 0x50607080
+			&& received.payload.clockBombMaterialHashes[2] == 0x90a0b0c0,
+			"all three clock-bomb material identities survive wire copy");
+		Check(!IsValidHeader(received.header, wire.size() - sizeof(bomb.clockBombMaterialHashes)),
+			"truncated material state rejected");
+	}
+
+	void TestNativePawnStance()
+	{
+		using namespace AliceCoopCore;
+		using namespace AliceCoopProtocol;
+		const std::uint32_t flags = StateVisible | StateAuthoritative | StateBodyHidden | StateDodgeInvisible;
+		for (std::uint8_t stance = 0; stance < 8; ++stance)
+		{
+			const auto packed = PackPawnStance(flags, stance);
+			Check(UnpackPawnStance(packed) == stance, "all authored pawn stances survive state relay");
+			Check((packed & ~PawnStanceMask) == flags, "stance preserves visibility authority and dodge flags");
+			Check(UnpackPawnStance(PackPawnStance(packed, 0)) == 0, "combat exit clears previous stance");
+		}
+		Check(UnpackPawnStance(PackPawnStance(flags, 255)) == 0, "invalid stance uses standing branch");
+	}
+
+	void TestAimOffset()
+	{
+		using namespace AliceCoopCore;
+		std::uint8_t packed[3]{};
+		for (int i = -2000; i <= 2000; ++i)
+		{
+			const float x = i / 2000.0f, y = -x * 0.37f;
+			PackAimOffset(x, y, packed);
+			Check(std::fabs(UnpackAimOffset(packed, 0) - x) <= 0.00025f
+				&& std::fabs(UnpackAimOffset(packed, 1) - y) <= 0.00025f,
+				"independent signed aiming axes retain sub-degree precision");
+		}
+		PackAimOffset(2.0f, -2.0f, packed);
+		Check(UnpackAimOffset(packed, 0) == 1.0f && UnpackAimOffset(packed, 1) == -1.0f,
+			"aiming extremes saturate without wrapping");
+		PackAimOffset(std::numeric_limits<float>::quiet_NaN(),
+			std::numeric_limits<float>::infinity(), packed);
+		Check(UnpackAimOffset(packed, 0) == 0.0f && UnpackAimOffset(packed, 1) == 0.0f,
+			"invalid aiming input returns neutral pose");
+		AliceCoopProtocol::HostSnapshotPayload snapshot{};
+		PackAimOffset(-0.75f, 0.25f, snapshot.hostState.aimOffset);
+		PackAimOffset(0.6f, -0.4f, snapshot.clientState.aimOffset);
+		const auto packet = AliceCoopProtocol::MakePacket(
+			AliceCoopProtocol::PacketType::HostSnapshot, 1, 2, 3, snapshot);
+		Check(sizeof(packet) == AliceCoopProtocol::MaxDatagramSize
+			&& AliceCoopProtocol::IsValidHeader(packet.header, sizeof(packet)),
+			"both aiming states fit complete maximum enemy snapshot");
+		Check(std::fabs(UnpackAimOffset(packet.payload.hostState.aimOffset, 0) + 0.75f) < 0.00025f
+			&& std::fabs(UnpackAimOffset(packet.payload.clientState.aimOffset, 1) + 0.4f) < 0.00025f,
+			"host and client aiming states remain independent in relay snapshot");
+	}
+
+	void TestAnimationRootOptions()
+	{
+		using namespace AliceCoopCore;
+		const std::uint8_t dodge[3]{2, 2, 2}, noRotation[3]{0, 0, 0};
+		const auto packed = PackAnimationRootOptions(dodge, noRotation, false, false);
+		Check(packed == 0x2a, "native dodge extraction survives wire encoding");
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			Check(AnimationRootAxisOption(packed, axis, false) == 2, "dodge extraction on each axis");
+			Check(AnimationRootAxisOption(packed, axis, true) == 0, "dodge rotation remains authored default");
+		}
+		const std::uint8_t movement[3]{1, 0, 1}, rotation[3]{1, 2, 0};
+		const auto mixed = PackAnimationRootOptions(movement, rotation, true, false);
+		Check(mixed == 0x1251, "independent axis and zero-root flags");
+		Check(AnimationRootAxisOption(mixed, 1, false) == 0, "retain authored vertical root axis");
+		Check(AnimationRootAxisOption(mixed, 1, true) == 2, "retain extracted rotation axis");
+		Check(AnimationRootAxisOption(0xffff, 0, false) == 0, "invalid wire root option uses default");
+		Check(sizeof(AliceCoopProtocol::Packet<AliceCoopProtocol::AnimationGraphPayload>)
+			== AliceCoopProtocol::MaxDatagramSize, "root metadata keeps graph within datagram budget");
 	}
 
 	void TestSequenceComparison()
@@ -67,6 +155,124 @@ namespace
 		Check(!IsNewerSequence(0, 0x80000000u), "exact half-range reverse");
 		Check(!IsNewerSequence(0x80000001u, 0), "negative half-range neighbor");
 		Check(IsNewerSequence(0, 0x80000001u), "reverse negative half-range neighbor");
+	}
+
+	void TestVisualNotifyAdvancement()
+	{
+		using namespace AliceCoopCore;
+		Check(ClassifyVisualNotifyAdvance(true, false, false, 0.8f, 0.0f, 1.0f)
+			== VisualNotifyAdvance::Restart, "new animation emits initial notifies");
+		Check(ClassifyVisualNotifyAdvance(false, true, false, 0.3f, 0.0f, 1.0f)
+			== VisualNotifyAdvance::Restart, "rapid repeated attack emits effects again");
+		Check(ClassifyVisualNotifyAdvance(false, false, false, 0.3f, 0.1f, 1.0f)
+			== VisualNotifyAdvance::Correction, "network rewind does not replay effects");
+		Check(ClassifyVisualNotifyAdvance(false, false, true, 0.95f, 0.02f, 1.0f)
+			== VisualNotifyAdvance::LoopWrap, "loop wrap includes previous cycle tail");
+		Check(ClassifyVisualNotifyAdvance(false, false, true, 0.5f, 0.2f, 1.0f)
+			== VisualNotifyAdvance::Correction, "mid-loop correction is not a wrap");
+		Check(ClassifyVisualNotifyAdvance(false, false, false, 0.2f, 0.21f, 1.0f)
+			== VisualNotifyAdvance::Continue, "ordinary animation progress");
+	}
+
+	void TestNativeTerminalPoseAndRelease()
+	{
+		using namespace AliceCoopCore;
+		using namespace AliceCoopProtocol;
+		AnimationGraphPayload graph{};
+		graph.sequenceCount = 2;
+		graph.blendCount = 1;
+		const std::uint8_t extraction[3]{2, 2, 1}, rotation[3]{0, 0, 0};
+		graph.sequences[0].rootBoneOptions = PackAnimationRootOptions(extraction, rotation, false, false) | AnimationPoseStopped;
+		graph.sequences[0].position = 0.966667f;
+		graph.sequences[0].rate = 0.0f;
+		graph.sequences[0].flags = 1u << 5; // outgoing full-body child, never SlotActive
+		graph.sequences[1].flags = (1u << 5) | AnimationSequenceSlotActive;
+		graph.sequences[1].rate = 1.25f;
+		graph.blends[0].flags = (1u << 5) | AnimationBlendNativeSlotTiming;
+		graph.blends[0].activeChildIndex = 0;
+		graph.blends[0].nodeIndex = 25; // 50 ms remaining native release
+		graph.fullBodyBlendOutTicks = 0; // valid native hold, distinct from missing timing
+		const auto packet = MakePacket(PacketType::AnimationGraph, 1, 2, 3, graph);
+		std::array<std::uint8_t, sizeof(packet)> wire{};
+		std::memcpy(wire.data(), &packet, wire.size());
+		Packet<AnimationGraphPayload> received{};
+		std::memcpy(&received, wire.data(), wire.size());
+		Check(IsValidHeader(received.header, wire.size()) && wire.size() == MaxDatagramSize,
+			"terminal pose and native release retain full graph packet budget");
+		const auto& pose = received.payload.sequences[0];
+		Check((pose.rootBoneOptions & AnimationPoseStopped) && pose.rate == 0.0f
+			&& pose.position == graph.sequences[0].position && !(pose.flags & AnimationSequenceSlotActive),
+			"stopped outgoing pose survives relay independently of incoming action");
+		Check(AnimationRootAxisOption(pose.rootBoneOptions, 0, false) == 2
+			&& AnimationRootAxisOption(pose.rootBoneOptions, 2, false) == 1,
+			"terminal pose flag preserves authored root extraction");
+		Check(NativeAnimationSlot(received.payload.blends[0].flags) == 0
+			&& (received.payload.blends[0].flags & AnimationBlendNativeSlotTiming)
+			&& received.payload.fullBodyBlendOutTicks == 0,
+			"native zero auto-release is distinguishable from absent slot timing");
+		for (float targetWeight : {0.0f, 0.25f, 0.5f, 0.9f})
+		{
+			const float remaining = received.payload.blends[0].nodeIndex * 0.002f;
+			const float requested = NativeBlendTransitionTime(remaining, targetWeight);
+			Check(std::fabs(requested * (1.0f - targetWeight) - remaining) < 0.00001f,
+				"native SetActiveChild preserves actual remaining release across target weights");
+		}
+		Check(NativeBlendTransitionTime(0.0f, 0.5f) == 0.0f, "completed native release adds no fallback transition");
+		Check(NativeBlendTransitionTime(0.1f, 1.0f) == 0.0f, "already reached base pose does not reopen fade");
+		Check(NativeBlendTransitionTime(-1.0f, 0.0f) == 0.0f, "stale release clamps to completion");
+	}
+
+	void TestNativeAttackHoldTiming()
+	{
+		using namespace AliceCoopCore;
+		using namespace AliceCoopProtocol;
+		// Recorded protocol39 attack A had pendingOut=-1 on TX but +0.06 on RX.
+		// Exercise capture -> serialized graph -> native config duration for that input.
+		for (float pending : {-1.0f, 0.0f, 0.06f, 0.3f, 0.5f})
+		{
+			AnimationGraphPayload graph{};
+			graph.blendCount = 1;
+			graph.blends[0].flags = (1u << 5) | NativeFullBodyTimingFlags(0.0f, pending);
+			graph.blends[0].activeChildIndex = 2;
+			graph.fullBodyBlendTicks = 0; // native instant attack entry
+			graph.fullBodyBlendOutTicks = static_cast<std::uint8_t>(std::lround((std::max)(0.0f, pending) * 500.0f));
+			const auto packet = MakePacket(PacketType::AnimationGraph, 1, 2, 3, graph);
+			Packet<AnimationGraphPayload> received{};
+			std::memcpy(&received, &packet, sizeof(packet));
+			const auto flags = received.payload.blends[0].flags;
+			Check(IsValidHeader(received.header, sizeof(packet)) && sizeof(packet) == MaxDatagramSize,
+				"native hold flag fits existing animation datagram");
+			Check(NativeAnimationSlot(flags) == 0 && (flags & AnimationBlendNativeSlotTiming)
+				&& received.payload.fullBodyBlendTicks == 0,
+				"held and released clips both retain valid zero native entry timing");
+			Check(std::fabs(NativePendingBlendOut(flags, received.payload.fullBodyBlendOutTicks) - pending) < 0.001f,
+				"attack hold sentinel survives without becoming an automatic blend-out");
+		}
+		Check(NativeFullBodyTimingFlags(0.0f, -1.0f) & AnimationBlendNativeHold,
+			"negative native pending-out is valid timing, not absent metadata");
+		Check(!NativeFullBodyTimingFlags(0.0f, std::numeric_limits<float>::quiet_NaN()),
+			"invalid native pending-out does not advertise valid timing");
+	}
+
+	void TestAnimationPhaseCorrection()
+	{
+		using namespace AliceCoopCore;
+		Check(NativeAnimationSlot(AliceCoopProtocol::AnimationSequenceCustom) == -1,
+			"unclassified custom clips do not alias a native slot");
+		Check(NativeAnimationSlot(static_cast<std::uint8_t>((4u << 5)
+			| AliceCoopProtocol::AnimationSequenceSlotActive | AliceCoopProtocol::AnimationSequenceLooping)) == 3,
+			"native additive slot survives active and looping flags");
+		Check(sizeof(AliceCoopProtocol::Header) + sizeof(AliceCoopProtocol::AnimationGraphPayload)
+			<= AliceCoopProtocol::MaxDatagramSize, "native slot metadata fits one datagram");
+		auto forward = CorrectAnimationPhase(0.4f, 0.44f, 1.0f, false, 1.0f);
+		Check(!forward.snap && forward.rate > 1.0f && forward.rate <= 1.1f, "small phase lag changes rate continuously");
+		auto wrap = CorrectAnimationPhase(0.99f, 0.01f, 1.0f, true, 1.0f);
+		Check(!wrap.snap && wrap.rate > 1.0f, "loop boundary uses nearest phase");
+		Check(CorrectAnimationPhase(0.1f, 0.7f, 1.0f, false, 1.0f).snap, "large phase error seeks once");
+		Check(NormalizeAnimationRate(4.0f, 2.0f, 0.5f) == 4.0f, "native mesh and asset multipliers are normalized");
+		Check(NormalizeAnimationRate(0.0f, 1.0f, 1.0f) == 0.0f, "source pause remains paused");
+		volatile float pausedMeshScale = 0.0f;
+		Check(NormalizeAnimationRate(1.0f, pausedMeshScale, 1.0f) == 0.0f, "paused native mesh does not divide by zero");
 	}
 
 	void TestHashes()
@@ -116,6 +322,13 @@ int main()
 {
 	TestProtocolHeaders();
 	TestSequenceComparison();
+	TestAnimationRootOptions();
+	TestAimOffset();
+	TestNativePawnStance();
+	TestVisualNotifyAdvancement();
+	TestNativeAttackHoldTiming();
+	TestAnimationPhaseCorrection();
+	TestNativeTerminalPoseAndRelease();
 	TestHashes();
 	TestSaveChunks();
 	if (g_failures != 0)

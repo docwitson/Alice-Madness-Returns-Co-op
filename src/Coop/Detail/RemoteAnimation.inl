@@ -1,3 +1,16 @@
+		float NativePlaybackRate(UAnimNodeSequence* node, float effectiveRate)
+		{
+			return NormalizeAnimationRate(effectiveRate,
+				node && node->SkelComponent ? node->SkelComponent->GlobalAnimRateScale : 1.0f,
+				node && node->AnimSeq ? node->AnimSeq->RateScale : 1.0f);
+		}
+
+		float RemoteAnimationSampleAge()
+		{
+			return g_activeRemoteAnimationGraph ? std::clamp(std::chrono::duration<float>(
+				Clock::now() - g_activeRemoteAnimationGraph->receivedAt).count(), 0.0f, 0.10f) : 0.0f;
+		}
+
 		bool HasInstancedSpecialMove(AAlicePawn* remote, std::uint8_t moveIndex)
 		{
 			return remote
@@ -110,171 +123,6 @@
 				| nodeIndex;
 		}
 
-		void ApplyBlendChildWeights(UAnimNodeBlendBase* blend,
-			int32_t activeChild, float nodeWeight)
-		{
-			if (!blend || activeChild < 0
-				|| activeChild >= blend->Children.size())
-			{
-				return;
-			}
-			for (int32_t index = 0; index < blend->Children.size(); ++index)
-			{
-				const float weight = index == activeChild ? 1.0f : 0.0f;
-				FAnimBlendChild& child = blend->Children.at(index);
-				child.Weight = weight;
-				child.TotalWeight = weight * nodeWeight;
-				child.BlendWeight = weight;
-			}
-		}
-
-		bool ApplyAnimationBlend(AAlicePawn* remote,
-			const AnimationBlendPayload& state)
-		{
-			USkeletalMeshComponent* component =
-				ResolveRemoteAnimationComponent(remote, state.component);
-			if (!component
-				|| state.nodeIndex >= component->AnimTickArray.size())
-			{
-				return false;
-			}
-			UAnimNode* node = component->AnimTickArray.at(state.nodeIndex);
-			if (!node)
-				return false;
-
-			const int32_t child = state.activeChildIndex;
-			const float nodeWeight = std::isfinite(state.nodeWeight)
-				? std::clamp(state.nodeWeight, 0.0f, 1.0f)
-				: 0.0f;
-			node->NodeTotalWeight = nodeWeight;
-			node->TotalWeightAccumulator = nodeWeight;
-			node->bRelevant = (state.flags & AnimationBlendRelevant) != 0
-				|| nodeWeight > 0.001f;
-			if (node->IsA(UAliceGameAnimNode_BlendList::StaticClass()))
-			{
-				auto* blend =
-					reinterpret_cast<UAliceGameAnimNode_BlendList*>(node);
-				if (child < 0 || child >= blend->Children.size())
-					return false;
-				if (blend->ActiveChildIndex != child)
-					blend->SetActiveChild(child, 0.0f);
-				blend->ActiveChildIndex = child;
-				blend->BlendTimeToGo = 0.0f;
-				blend->bIsPlayingCustomAnim =
-					(state.flags & AnimationBlendCustom) != 0;
-				for (int32_t index = 0;
-					index < blend->TargetWeight.size(); ++index)
-				{
-					blend->TargetWeight.at(index) =
-						index == child ? 1.0f : 0.0f;
-				}
-				ApplyBlendChildWeights(blend, child, nodeWeight);
-				return true;
-			}
-			else if (node->IsA(UAnimNodeBlendList::StaticClass()))
-			{
-				auto* blend = reinterpret_cast<UAnimNodeBlendList*>(node);
-				if (child < 0 || child >= blend->Children.size())
-					return false;
-				if (blend->ActiveChildIndex != child)
-					blend->SetActiveChild(child, 0.0f);
-				blend->ActiveChildIndex = child;
-				blend->BlendTimeToGo = 0.0f;
-				for (int32_t index = 0;
-					index < blend->TargetWeight.size(); ++index)
-				{
-					blend->TargetWeight.at(index) =
-						index == child ? 1.0f : 0.0f;
-				}
-				ApplyBlendChildWeights(blend, child, nodeWeight);
-				return true;
-			}
-			return false;
-		}
-
-		bool ApplyAnimationSequence(AAlicePawn* remote,
-			const AnimationSequencePayload& state,
-			bool synchronizePosition)
-		{
-			USkeletalMeshComponent* component =
-				ResolveRemoteAnimationComponent(remote, state.component);
-			if (!component
-				|| state.nodeIndex >= component->AnimTickArray.size())
-			{
-				return false;
-			}
-			UAnimNode* node = component->AnimTickArray.at(state.nodeIndex);
-			if (!node || !node->IsA(UAnimNodeSequence::StaticClass())
-				|| !state.sequenceName[0])
-			{
-				return false;
-			}
-
-			auto* sequence = reinterpret_cast<UAnimNodeSequence*>(node);
-			const bool nameMatches = sequence->AnimSeqName.IsValid()
-				&& _stricmp(sequence->AnimSeqName.ToString().c_str(),
-					state.sequenceName) == 0;
-			FName sequenceName;
-			if (!ResolveExistingAnimationName(component,
-				state.sequenceName, sequenceName))
-				return false;
-
-			const float rate = std::isfinite(state.rate)
-				&& std::fabs(state.rate) > 0.001f
-				? state.rate
-				: 1.0f;
-			const float position = std::isfinite(state.position)
-				&& state.position >= 0.0f
-				? state.position
-				: 0.0f;
-			const bool looping =
-				(state.flags & AnimationSequenceLooping) != 0;
-			const float nodeWeight = std::isfinite(state.nodeWeight)
-				? std::clamp(state.nodeWeight, 0.0f, 1.0f)
-				: 0.0f;
-
-			// Presentation nodes must never send animation notifies back into
-			// gameplay or into the locally controlled pawn.
-			sequence->bNoNotifies = true;
-			sequence->bCauseActorAnimEnd = false;
-			sequence->bCauseActorAnimPlay = false;
-			sequence->NodeTotalWeight = nodeWeight;
-			sequence->TotalWeightAccumulator = nodeWeight;
-			sequence->bRelevant =
-				(state.flags & AnimationSequenceRelevant) != 0
-				|| nodeWeight > 0.001f;
-			if (!nameMatches)
-				NativeSetAnim(sequence, sequenceName);
-			if (!nameMatches || !sequence->bPlaying)
-				NativePlayAnim(sequence, looping, rate, position);
-			sequence->Rate = rate;
-			sequence->bLooping = looping;
-			sequence->bPlaying = true;
-			if (synchronizePosition)
-			{
-				NativeSetPosition(sequence, position);
-				sequence->CurrentTime = position;
-				sequence->PreviousTime = position;
-			}
-			return true;
-		}
-
-		void StopRemoteAnimationSequence(AAlicePawn* remote,
-			std::uint32_t key)
-		{
-			const auto component = static_cast<AnimationComponent>(
-				(key >> 16) & 0xffu);
-			const auto nodeIndex =
-				static_cast<std::uint16_t>(key & 0xffffu);
-			USkeletalMeshComponent* skeletal =
-				ResolveRemoteAnimationComponent(remote, component);
-			if (!skeletal || nodeIndex >= skeletal->AnimTickArray.size())
-				return;
-			UAnimNode* node = skeletal->AnimTickArray.at(nodeIndex);
-			if (node && node->IsA(UAnimNodeSequence::StaticClass()))
-				reinterpret_cast<UAnimNodeSequence*>(node)->StopAnim();
-		}
-
 		bool IsSafeFullBodySequence(
 			const AnimationSequencePayload& state)
 		{
@@ -288,7 +136,8 @@
 			// poses and weapon-only sequences need their own base pose, bone
 			// mask, attachment and AnimSet; feeding them to the full-body slot
 			// produces ref poses or severely stretched limbs.
-			return _strnicmp(state.sequenceName, "Alice", 5) == 0;
+			return NativeAnimationSlot(state.flags) <= 0
+				&& _strnicmp(state.sequenceName, "Alice", 5) == 0;
 		}
 
 		bool RejectGroundedAirSequence(
@@ -349,27 +198,16 @@
 				|| ContainsCaseInsensitive(name, "fly");
 		}
 
-		bool IsSafeUpperAdditiveSequence(
-			const AnimationSequencePayload& state)
+		bool IsSafeUpperAdditiveSequence(const AnimationSequencePayload& state)
 		{
-			if (state.component != AnimationComponent::Body
-				|| !state.sequenceName[0])
-			{
-				return false;
-			}
-			// The authored combat-upper slot uses explicitly named ADD clips for
-			// most weapons, but the pepper grinder and teapot cannon put their
-			// ordinary AliceW_WP3/WP4 fire poses in that same slot. The comparison
-			// trace proves these arrive with the matching custom-slot child; dropping
-			// them left the proxy in locomotion while only its weapon animated.
-			// Keep the admission narrow: generic poses in this slot caused the old
-			// ref-pose and stretched-limb failures.
-			return _strnicmp(state.sequenceName,
-				"ADD_AliceW_WP", 13) == 0
-				|| _strnicmp(state.sequenceName,
-					"AliceW_WP3_", 11) == 0
-				|| _strnicmp(state.sequenceName,
-					"AliceW_WP4_", 11) == 0;
+			return state.component == AnimationComponent::Body && NativeAnimationSlot(state.flags) == 3
+				&& state.sequenceName[0];
+		}
+
+		bool IsSafeHalfBodySequence(const AnimationSequencePayload& state)
+		{
+			return state.component == AnimationComponent::Body && NativeAnimationSlot(state.flags) == 1
+				&& _strnicmp(state.sequenceName, "Alice", 5) == 0;
 		}
 
 		int32_t FindAnimationNodeIndex(
@@ -446,84 +284,29 @@
 		}
 
 		const AnimationSequencePayload* FindSafeSequenceForSlot(
-			const AnimationGraphPayload& graph,
-			const USkeletalMeshComponent* component,
-			const UAliceGameAnimNode_BlendBySlot* slot,
-			int32_t childIndex)
+			const AnimationGraphPayload& graph, const USkeletalMeshComponent*,
+			const UAliceGameAnimNode_BlendBySlot*, int32_t)
 		{
-			if (!component || !slot || childIndex <= 0
-				|| childIndex >= slot->Children.size())
+			for (std::size_t index = 0; index < (std::min<std::size_t>)(graph.sequenceCount, MaxAnimationSequences); ++index)
 			{
-				return nullptr;
+				const auto& state = graph.sequences[index];
+				if (NativeAnimationSlot(state.flags) == 0 && (state.flags & AnimationSequenceSlotActive)
+					&& IsSafeFullBodySequence(state) && !RejectGroundedAirSequence(state)) return &state;
 			}
-
-			const int32_t childNodeIndex = FindAnimationNodeIndex(
-				component, slot->Children.at(childIndex).Anim);
-			const std::size_t sequenceCount = std::min<std::size_t>(
-				graph.sequenceCount, MaxAnimationSequences);
-			const AnimationSequencePayload* fallback = nullptr;
-			for (std::size_t index = 0; index < sequenceCount; ++index)
-			{
-				const AnimationSequencePayload& state =
-					graph.sequences[index];
-				if (!IsSafeFullBodySequence(state))
-					continue;
-				if (RejectGroundedAirSequence(state))
-					continue;
-				if (childNodeIndex >= 0
-					&& state.nodeIndex == childNodeIndex)
-				{
-					return &state;
-				}
-				if ((state.flags & AnimationSequenceCustom) != 0
-					&& (!fallback
-						|| state.nodeWeight > fallback->nodeWeight))
-				{
-					fallback = &state;
-				}
-			}
-			return fallback;
+			return nullptr;
 		}
 
-		const AnimationSequencePayload* FindUpperAdditiveSequenceForSlot(
-			const AnimationGraphPayload& graph,
-			const USkeletalMeshComponent* component,
-			const UAliceGameAnimNode_BlendBySlot* slot,
-			int32_t childIndex)
+		const AnimationSequencePayload* FindUpperSequenceForSlot(
+			const AnimationGraphPayload& graph, EAnimBlendNodeIndex configIndex)
 		{
-			if (!component || !slot || childIndex <= 0
-				|| childIndex >= slot->Children.size())
+			for (std::size_t index = 0; index < (std::min<std::size_t>)(graph.sequenceCount, MaxAnimationSequences); ++index)
 			{
-				return nullptr;
+				const auto& state = graph.sequences[index];
+				if (state.component == AnimationComponent::Body
+					&& NativeAnimationSlot(state.flags) == static_cast<int>(configIndex)
+					&& (state.flags & AnimationSequenceSlotActive)) return &state;
 			}
-			const int32_t childNodeIndex = FindAnimationNodeIndex(
-				component, slot->Children.at(childIndex).Anim);
-			const std::size_t sequenceCount = std::min<std::size_t>(
-				graph.sequenceCount, MaxAnimationSequences);
-			const AnimationSequencePayload* fallback = nullptr;
-			for (std::size_t index = 0; index < sequenceCount; ++index)
-			{
-				const AnimationSequencePayload& state =
-					graph.sequences[index];
-				if (!IsSafeUpperAdditiveSequence(state))
-					continue;
-				if (childNodeIndex >= 0
-					&& state.nodeIndex == childNodeIndex)
-				{
-					return &state;
-				}
-				// The cloned pawn can allocate its three dynamic upper-slot
-				// sequence nodes at different AnimTickArray indices than the owner.
-				// The source slot/child is still authoritative, so fall back to its
-				// strongest safe custom clip instead of discarding WP3/WP4 entirely.
-				if ((state.flags & AnimationSequenceCustom) != 0
-					&& (!fallback
-						|| state.nodeWeight > fallback->nodeWeight))
-				{
-					fallback = &state;
-				}
-			}
-			return fallback;
+			return nullptr;
 		}
 
 		const AnimationSequencePayload* FindStandalonePresentationSequence(
@@ -635,6 +418,18 @@
 			return base;
 		}
 
+		void ApplyPresentationRootOptions(UAnimNodeSequence* sequence, std::uint16_t options)
+		{
+			if (!sequence) return;
+			for (int axis = 0; axis < 3; ++axis)
+			{
+				sequence->RootBoneOption[axis] = static_cast<ERootBoneAxis>(AnimationRootAxisOption(options, axis, false));
+				sequence->RootRotationOption[axis] = static_cast<ERootRotationOption>(AnimationRootAxisOption(options, axis, true));
+			}
+			sequence->bZeroRootTranslation = (options & 0x1000) != 0;
+			sequence->bZeroRootRotation = (options & 0x2000) != 0;
+		}
+
 		bool StartPresentationConfigAnimation(AAliceGamePawn* remote,
 			PresentationAnimChannel& channel, int32_t blendNodeIndex,
 			const AnimationSequencePayload& state, bool standalone)
@@ -661,10 +456,32 @@
 
 			const bool looping =
 				(state.flags & AnimationSequenceLooping) != 0;
-			const float rate = std::isfinite(state.rate)
-				&& std::fabs(state.rate) > 0.001f
-				? state.rate : 1.0f;
-			const float blendTime = PresentationBlendTime(state);
+			const float rate = std::isfinite(state.rate) ? state.rate : 1.0f;
+			float blendTime = PresentationBlendTime(state);
+			float blendOutTime = blendTime;
+			if (g_activeRemoteAnimationGraph)
+			{
+				const auto& graph = g_activeRemoteAnimationGraph->graph;
+				float wireIn = 0.0f, wireOut = 0.0f;
+				if (blendNodeIndex == 0) { wireIn = graph.fullBodyBlendTicks * 0.002f; wireOut = graph.fullBodyBlendOutTicks * 0.002f; }
+				if (blendNodeIndex == 1) { wireIn = graph.halfBodyBlendTicks * 0.002f; wireOut = graph.halfBodyBlendOutTicks * 0.002f; }
+				if (blendNodeIndex == 3) { wireIn = graph.upperBlendTicks * 0.002f; wireOut = graph.upperBlendOutTicks * 0.002f; }
+				const bool authored = (graph.authoredBlendMask & (1u << blendNodeIndex)) != 0;
+				bool nativeBlendOut = false;
+				if (blendNodeIndex == 0)
+					for (std::size_t i = 0; i < (std::min<std::size_t>)(graph.blendCount, MaxAnimationBlends); ++i)
+						if (graph.blends[i].component == AnimationComponent::Body
+							&& NativeAnimationSlot(graph.blends[i].flags) == 0
+							&& (graph.blends[i].flags & AnimationBlendNativeSlotTiming))
+							{
+								nativeBlendOut = true;
+								wireOut = NativePendingBlendOut(graph.blends[i].flags, graph.fullBodyBlendOutTicks);
+								break;
+							}
+				// A native zero blend-in is valid; it must not pick the melee fallback.
+				if (nativeBlendOut || authored || wireIn >= 0.04f) blendTime = wireIn;
+				if (nativeBlendOut || authored || wireOut >= 0.04f) blendOutTime = wireOut;
+			}
 			const bool captureDoubleJumpParticle =
 				ContainsCaseInsensitive(state.sequenceName, "jumpd_")
 				&& (ContainsCaseInsensitive(state.sequenceName, "_rise")
@@ -676,15 +493,22 @@
 			channel.config.AnimType =
 				static_cast<int32_t>(EAnimConfigType::EACT_Arbitrary);
 			channel.config.BlendInTime = blendTime;
-			channel.config.BlendOutTime = blendTime;
-			channel.config.PlayRate = rate;
+			channel.config.BlendOutTime = blendOutTime;
+			const AnimationAssetLookup asset = FindAnimationAsset(remote->Mesh, state.sequenceName);
+			channel.config.PlayRate = NormalizeAnimationRate(rate, remote->Mesh->GlobalAnimRateScale,
+				asset.sequence ? asset.sequence->RateScale : 1.0f);
 			channel.config.bLoop = looping;
 			channel.config.bCauseActorAnimEnd = false;
 			channel.config.bTriggerFakeRootMotion = false;
 			channel.config.bNotExtendAnimTimeForFakeRootMotion = true;
 			channel.config.AnimPlayType = static_cast<std::uint8_t>(
 				EConfigAnimPlayType::ECAPT_OneByOne);
-			channel.config.FakeRootMotionMode = 0;
+			channel.config.FakeRootMotionMode = static_cast<std::uint8_t>(ERootMotionMode::RMM_Ignore);
+			for (int axis = 0; axis < 3; ++axis)
+			{
+				channel.config.RootBoneTransitionOption[axis] = AnimationRootAxisOption(state.rootBoneOptions, axis, false);
+				channel.config.RootBoneRotationOption[axis] = AnimationRootAxisOption(state.rootBoneOptions, axis, true);
+			}
 
 			const bool invoked = NativePlayConfigAnim(remote,
 				blendNodeIndex,
@@ -731,6 +555,7 @@
 		{
 			FullBody,
 			UpperAdditive,
+			UpperAbsolute,
 		};
 
 		bool ApplySafeSlotSequence(AAlicePawn* remote,
@@ -741,7 +566,8 @@
 		{
 			const bool safe = kind == PresentationSequenceKind::FullBody
 				? IsSafeFullBodySequence(state)
-				: IsSafeUpperAdditiveSequence(state);
+				: (kind == PresentationSequenceKind::UpperAdditive
+					? IsSafeUpperAdditiveSequence(state) : IsSafeHalfBodySequence(state));
 			if (!sequence || !safe)
 				return false;
 
@@ -762,7 +588,7 @@
 				std::ostringstream stream;
 				stream << stage << " reject reason=" << reason
 					<< ", requested=" << state.sequenceName
-					<< ", sourceNode=" << state.nodeIndex
+					<< ", rootOptions=" << state.rootBoneOptions
 					<< ", targetChild=" << targetChild
 					<< ", slotActive="
 					<< (slot ? slot->ActiveChildIndex : -1)
@@ -798,9 +624,7 @@
 					state.sequenceName) == 0;
 			const bool looping =
 				(state.flags & AnimationSequenceLooping) != 0;
-			const float rate = std::isfinite(state.rate)
-				&& std::fabs(state.rate) > 0.001f
-				? state.rate : 1.0f;
+			const float rate = std::isfinite(state.rate) ? state.rate : 1.0f;
 			const float sourcePosition = std::isfinite(state.position)
 				&& state.position >= 0.0f
 				? state.position : 0.0f;
@@ -809,6 +633,7 @@
 			sequence->bCauseActorAnimEnd = false;
 			sequence->bCauseActorAnimPlay = false;
 			sequence->bForceRefposeWhenNotPlaying = false;
+			ApplyPresentationRootOptions(sequence, state.rootBoneOptions);
 			if (!nameMatches)
 				NativeSetAnim(sequence, sequenceName);
 			if (!sequence->AnimSeq)
@@ -816,63 +641,38 @@
 				logFailure("animseq-null-after-setanim");
 				return false;
 			}
-			const float sequenceLength = sequence->AnimSeq->SequenceLength;
-			float position = sourcePosition;
-			float presentationRate = rate;
-			if (!looping && sequenceLength > 0.001f)
+			if (kind == PresentationSequenceKind::UpperAdditive && !sequence->AnimSeq->bIsAdditive)
 			{
-				// UE3 resets a completed non-looping dynamic child to time zero.
-				// The owner's slot may keep reporting that child while it blends out,
-				// including a position a little beyond SequenceLength. Never feed that
-				// overrun to the presentation slot.
-				position = (std::min)(position, sequenceLength - 0.001f);
-				// Leave enough headroom for one network sample. Otherwise a fast
-				// x2/x3 attack reaches the native end between packets and UE3 resets
-				// it to frame zero before the next combo child is announced.
-				const float endGuard = (std::max)(0.030f,
-					std::fabs(rate) * 0.040f);
-				if (sequenceLength - position <= endGuard)
-					presentationRate = 0.0f;
+				logFailure("absolute-asset-in-additive-slot");
+				return false;
 			}
-			if (!nameMatches)
+			if (kind == PresentationSequenceKind::UpperAbsolute && sequence->AnimSeq->bIsAdditive)
+			{
+				logFailure("additive-asset-in-absolute-slot");
+				return false;
+			}
+			const float sequenceLength = sequence->AnimSeq->SequenceLength;
+			float position = sourcePosition + RemoteAnimationSampleAge() * rate;
+			if (looping && sequenceLength > 0.001f)
+				position = std::fmod(position, sequenceLength);
+			const bool endpoint = !looping && sequenceLength > 0.001f
+				&& position >= sequenceLength - 0.001f;
+			if (!looping && sequenceLength > 0.001f)
+				position = std::clamp(position, 0.0f, sequenceLength - 0.001f);
+			const bool sourceStopped = (state.rootBoneOptions & AnimationPoseStopped) != 0;
+			const auto correction = CorrectAnimationPhase(sequence->CurrentTime, position,
+				sequenceLength, looping, endpoint ? 0.0f : rate);
+			const float presentationRate = NativePlaybackRate(sequence, correction.rate);
+			if (!sourceStopped && (!nameMatches || (!sequence->bPlaying && synchronizePosition)))
 				NativePlayAnim(sequence, looping, presentationRate, position);
-			else if (!sequence->bPlaying && synchronizePosition)
-				NativePlayAnim(sequence, looping, presentationRate, position);
-
 			sequence->Rate = presentationRate;
 			sequence->bLooping = looping;
-			sequence->bPlaying = true;
-			if (forcePosition
-				|| (!looping && presentationRate == 0.0f))
+			sequence->bPlaying = !sourceStopped;
+			if (sourceStopped || forcePosition || !nameMatches || endpoint || (synchronizePosition && correction.snap))
 			{
-				// This function also runs after Alice's native animation tick.
-				// Re-assert a guarded non-looping endpoint there: UE3 otherwise
-				// resets a completed dynamic slot to frame zero for one frame,
-				// producing a visible end-of-attack teleport/jitter.
 				NativeSetPosition(sequence, position);
 				sequence->CurrentTime = position;
 				sequence->PreviousTime = position;
-			}
-			else if (synchronizePosition && nameMatches)
-			{
-				float difference = position - sequence->CurrentTime;
-				const float length = sequenceLength;
-				if (looping && length > 0.001f)
-				{
-					while (difference > length * 0.5f)
-						difference -= length;
-					while (difference < -length * 0.5f)
-						difference += length;
-				}
-				// Let the engine advance every render frame. Network samples
-				// only correct meaningful drift instead of pinning both time
-				// fields to a 20 Hz packet.
-				if (std::fabs(difference) > 0.075f)
-				{
-					NativeSetPosition(sequence, position);
-					sequence->CurrentTime = position;
-					sequence->PreviousTime = position;
-				}
 			}
 
 			if (kind == PresentationSequenceKind::FullBody)
@@ -881,6 +681,8 @@
 				g_remoteAppliedFullBodySlot = slot;
 				g_remoteAppliedFullBodyName = state.sequenceName;
 			}
+			if (kind == PresentationSequenceKind::UpperAdditive) g_remoteAppliedUpperBodyNode = sequence;
+			if (kind == PresentationSequenceKind::UpperAbsolute) g_remoteAppliedHalfBodyNode = sequence;
 			const char* stage =
 				kind == PresentationSequenceKind::FullBody
 				? "ANIMSTAGE" : "UPPERSTAGE";
@@ -892,7 +694,7 @@
 				std::ostringstream stream;
 				stream << stage << " accept requested="
 					<< state.sequenceName
-					<< ", sourceNode=" << state.nodeIndex
+					<< ", rootOptions=" << state.rootBoneOptions
 					<< ", targetChild=" << targetChild
 					<< ", targetNode=" << ObjectName(sequence)
 					<< ", nodeSkel=" << ObjectName(sequence->SkelComponent)
@@ -908,14 +710,34 @@
 			return true;
 		}
 
+		void ApplyRemotePawnStance(AAlicePawn* remote, const PlayerStatePayload& state)
+		{
+			const auto stance = static_cast<EBasePawnStance>(UnpackPawnStance(state.flags));
+			if (remote->PawnStance == stance) return;
+			remote->PrevPawnStance = remote->PawnStance;
+			remote->PawnStance = stance;
+			// BlendByStance's native TickAnim reads PawnStance and applies its
+			// authored BlendTimes. Calling SetPawnStance would run gameplay script.
+			if (g_loggedConfigAnimationStages.insert("pawn-stance:" + std::to_string(static_cast<int>(stance))).second)
+				Log("ANIMSTAGE native source PawnStance=" + std::to_string(static_cast<int>(stance)) + '.');
+		}
+
 		void EnableRemoteAnimationTick(AAlicePawn* remote)
 		{
 			if (!remote)
 				return;
-			auto enable = [](USkeletalMeshComponent* component)
+			auto enable = [remote](USkeletalMeshComponent* component)
 			{
 				if (!component || !component->Animations)
 					return;
+				// Extract the same root pose as the owner, but network coordinates
+				// already contain its movement. Native Ignore suppresses actor motion.
+				component->RootMotionMode = ERootMotionMode::RMM_Ignore;
+				component->PreviousRMM = ERootMotionMode::RMM_Ignore;
+				component->PendingRMM = ERootMotionMode::RMM_Ignore;
+				component->OldPendingRMM = ERootMotionMode::RMM_Ignore;
+				component->FakeRootMotionMode = ERootMotionMode::RMM_Ignore;
+				component->RootMotionRotationMode = ERootMotionRotationMode::RMRM_Ignore;
 				component->bPauseAnims = false;
 				component->bNoSkeletonUpdate = false;
 				component->bUpdateSkelWhenNotRendered = true;
@@ -927,6 +749,17 @@
 				{
 					UAnimNode* node =
 						component->AnimTickArray.at(index);
+					if (node && node->SkelComponent == component
+						&& node->IsA(UAliceAnimNode_AimOffset::StaticClass()))
+					{
+						auto* aim = reinterpret_cast<UAliceAnimNode_AimOffset*>(node);
+						if (aim->AlicePawnOwner != remote)
+						{
+							aim->AlicePawnOwner = remote;
+							if (g_loggedConfigAnimationStages.insert("native-aim-owner").second)
+								Log("UPPERSTAGE native AimOffset owner bound to visual proxy.");
+						}
+					}
 					if (!node
 						|| !node->IsA(
 							UAnimNodeSequence::StaticClass()))
@@ -1018,14 +851,29 @@
 			}
 		}
 
-		bool ApplyRemoteUpperAdditiveGraph(AAlicePawn* remote,
-			const AnimationGraphPayload& graph, bool synchronizePosition)
+		void ApplyNativeUpperLowerBlend(AAlicePawn* remote, const AnimationGraphPayload& graph)
+		{
+			const int index = static_cast<int>(EAnimBlendNodeIndex::EABLIdx_PerBone_BlendUpperLower_Main);
+			if (!(graph.authoredBlendMask & 0x80) || index >= remote->AnimBlendNodes.size()) return;
+			auto* node = remote->AnimBlendNodes.at(index);
+			if (!node || !node->IsA(UAliceGameAnimNode_BlendPerBone::StaticClass())) return;
+			auto* blend = reinterpret_cast<UAliceGameAnimNode_BlendPerBone*>(node);
+			const float weight = graph.upperLowerWeight / 65535.0f;
+			if (std::fabs(blend->Child2WeightTarget - weight) <= 0.001f) return;
+			UAliceGameAnimNode_BlendTwo_execSetBlendTarget_Params params{};
+			params.BlendTarget = weight;
+			params.BlendTime = (std::max)(0.0f, graph.upperLowerBlendTicks * 0.002f - RemoteAnimationSampleAge());
+			InvokeNativeFunction(blend, UFunction::FindFunction("Function AliceGame.AliceGameAnimNode_BlendTwo.SetBlendTarget"), params);
+		}
+
+		bool ApplyRemoteUpperGraph(AAlicePawn* remote,
+			const AnimationGraphPayload& graph, bool synchronizePosition,
+			EAnimBlendNodeIndex nativeSlotIndex, PresentationAnimChannel& channel)
 		{
 			int32_t slotNodeIndex = -1;
 			UAliceGameAnimNode_BlendBySlot* slot =
 				ResolveRemoteConfigSlot(remote,
-					EAnimBlendNodeIndex::
-						EABLIdx_Slot_Combat_Upper_Additive,
+					nativeSlotIndex,
 					&slotNodeIndex);
 			if (!slot)
 			{
@@ -1044,7 +892,7 @@
 			{
 				const AnimationBlendPayload& state = graph.blends[index];
 				if (state.component == AnimationComponent::Body
-					&& state.nodeIndex == slotNodeIndex)
+					&& NativeAnimationSlot(state.flags) == static_cast<int>(nativeSlotIndex))
 				{
 					sourceSlot = &state;
 					break;
@@ -1061,8 +909,7 @@
 			{
 				sourceChild = sourceSlot->activeChildIndex;
 				sourceSequence =
-					FindUpperAdditiveSequenceForSlot(graph,
-						remote->Mesh, slot, sourceChild);
+					FindUpperSequenceForSlot(graph, nativeSlotIndex);
 			}
 
 			bool applied = false;
@@ -1070,25 +917,26 @@
 			if (sourceSequence)
 			{
 				if (synchronizePosition)
-				g_remoteUpperAdditiveChannel.lastSourceSeen =
+				channel.lastSourceSeen =
 					Clock::now();
-				const int32_t configIndex = static_cast<int32_t>(
-					EAnimBlendNodeIndex::
-						EABLIdx_Slot_Combat_Upper_Additive);
+				const int32_t configIndex = static_cast<int32_t>(nativeSlotIndex);
 				const bool selectionChanged =
-					!g_remoteUpperAdditiveChannel.active
-					|| g_remoteUpperAdditiveChannel.blendNodeIndex
+					!channel.active
+					|| channel.blendNodeIndex
 						!= configIndex
 					|| _stricmp(
-						g_remoteUpperAdditiveChannel.sequenceName.c_str(),
+						channel.sequenceName.c_str(),
 						sourceSequence->sequenceName) != 0
-					|| g_remoteUpperAdditiveChannel.targetChild <= 0;
+					|| channel.targetChild <= 0
+					|| channel.sourceChild != sourceChild
+					|| (synchronizePosition && !(sourceSequence->flags & AnimationSequenceLooping)
+						&& sourceSequence->position + 0.05f < channel.lastSourcePosition);
 				int32_t targetChild =
-					g_remoteUpperAdditiveChannel.targetChild;
+					channel.targetChild;
 				if (selectionChanged)
 				{
 					configStarted = StartPresentationConfigAnimation(
-						remote, g_remoteUpperAdditiveChannel,
+						remote, channel,
 						configIndex, *sourceSequence, false);
 					targetChild = configStarted
 						? slot->ActiveChildIndex : sourceChild;
@@ -1106,40 +954,44 @@
 				{
 					auto* targetSequence =
 						reinterpret_cast<UAnimNodeSequence*>(childNode);
-					if (slot->ActiveChildIndex != targetChild)
+					if (selectionChanged && slot->ActiveChildIndex != targetChild)
 					{
 						// SetActiveChild can reset the dynamic sequence clock. Select
 						// the child first, then restore the authoritative source time.
 						NativeSetActiveChild(slot, targetChild,
 							configStarted
-								? g_remoteUpperAdditiveChannel.config.BlendInTime
+								? channel.config.BlendInTime
 								: PresentationBlendTime(
 									sourceSequence->sequenceName));
 					}
 					applied = ApplySafeSlotSequence(remote, slot,
 						targetChild, targetSequence, *sourceSequence,
 						synchronizePosition, configStarted,
-						PresentationSequenceKind::UpperAdditive);
+						nativeSlotIndex == EAnimBlendNodeIndex::EABLIdx_Slot_Combat_Upper_Additive
+							? PresentationSequenceKind::UpperAdditive : PresentationSequenceKind::UpperAbsolute);
 					if (applied)
 					{
-						slot->bIsPlayingCustomAnim = true;
-						slot->bPlayActiveChild = true;
-						g_remoteUpperAdditiveChannel.active = true;
-						g_remoteUpperAdditiveChannel.blendNodeIndex =
+						if (slot->ActiveChildIndex == targetChild)
+						{
+							slot->bIsPlayingCustomAnim = true;
+							slot->bPlayActiveChild = true;
+						}
+						channel.active = true;
+						channel.blendNodeIndex =
 							configIndex;
-						g_remoteUpperAdditiveChannel.targetChild =
+						channel.targetChild =
 							targetChild;
-						g_remoteUpperAdditiveChannel.sourceChild =
+						channel.sourceChild =
 							sourceChild;
-						g_remoteUpperAdditiveChannel.sequenceName =
+						channel.sequenceName =
 							sourceSequence->sequenceName;
-						g_remoteUpperAdditiveChannel.lastSourcePosition =
+						channel.lastSourcePosition =
 							sourceSequence->position;
-						g_remoteUpperAdditiveChannel.lastSourceRate =
+						channel.lastSourceRate =
 							sourceSequence->rate;
 						if (synchronizePosition)
 						{
-							g_remoteUpperAdditiveChannel.lastSourceSeen =
+							channel.lastSourceSeen =
 								Clock::now();
 						}
 						if (configStarted)
@@ -1168,14 +1020,16 @@
 			}
 
 			if (!applied && !sourceSequence
-				&& g_remoteUpperAdditiveChannel.active
-				&& g_remoteUpperAdditiveChannel.targetChild > 0
-				&& g_remoteUpperAdditiveChannel.targetChild
+				&& (!sourceSlot || sourceSlot->activeChildIndex > 0)
+				&& slot->ActiveChildIndex == channel.targetChild
+				&& channel.active
+				&& channel.targetChild > 0
+				&& channel.targetChild
 					< slot->Children.size()
-				&& g_remoteUpperAdditiveChannel.lastSourceSeen
+				&& channel.lastSourceSeen
 					!= Clock::time_point{}
 				&& Clock::now()
-					- g_remoteUpperAdditiveChannel.lastSourceSeen
+					- channel.lastSourceSeen
 					< std::chrono::milliseconds(140))
 			{
 				slot->bIsPlayingCustomAnim = true;
@@ -1185,7 +1039,7 @@
 			if (!applied)
 			{
 				StopPresentationConfigAnimation(
-					remote, g_remoteUpperAdditiveChannel, 0.08f);
+					remote, channel, channel.config.BlendOutTime);
 				slot->bIsPlayingCustomAnim = false;
 				slot->bPlayActiveChild = false;
 				if (slot->ActiveChildIndex != 0)
@@ -1379,6 +1233,7 @@
 			if (!remote || !g_remotePresentationWeapon
 				|| remote->Weapon != g_remotePresentationWeapon)
 			{
+				g_remoteAppliedWeaponNode = nullptr;
 				return false;
 			}
 			AWeaponForAlice* weapon = g_remotePresentationWeapon;
@@ -1423,6 +1278,7 @@
 				{
 					NativeStopWeaponSlotAnim(weapon, 0.06f);
 					g_remoteAppliedWeaponAnimation.clear();
+					g_remoteAppliedWeaponNode = nullptr;
 				}
 				SetRemoteMuzzleFlash(weapon, false);
 				return false;
@@ -1456,9 +1312,7 @@
 
 			const bool looping =
 				(source->flags & AnimationSequenceLooping) != 0;
-			const float rate = std::isfinite(source->rate)
-				&& std::fabs(source->rate) > 0.001f
-				? source->rate : 1.0f;
+			const float rate = std::isfinite(source->rate) ? source->rate : 1.0f;
 			if (changed
 				&& !NativePlayWeaponSlotAnim(weapon, sequenceName,
 					rate, looping, 0.04f, 0.06f))
@@ -1498,19 +1352,18 @@
 						continue;
 					}
 					matchedNode = true;
-					sequence->Rate = rate;
+					ApplyPresentationRootOptions(sequence, source->rootBoneOptions);
+					g_remoteAppliedWeaponNode = sequence;
+					sequence->Rate = NativePlaybackRate(sequence, rate);
 					sequence->bLooping = looping;
-					const float position =
-						std::isfinite(source->position)
-							&& source->position >= 0.0f
-						? source->position : 0.0f;
-					if (synchronizePosition
-						&& std::fabs(
-							position - sequence->CurrentTime)
-							> 0.075f)
-					{
-						NativeSetPosition(sequence, position);
-					}
+					float position = std::isfinite(source->position)
+						? (std::max)(0.0f, source->position + RemoteAnimationSampleAge() * rate) : 0.0f;
+					const float length = sequence->AnimSeq ? sequence->AnimSeq->SequenceLength : 0.0f;
+					if (looping && length > 0.001f) position = std::fmod(position, length);
+					if (!looping && length > 0.001f) position = (std::min)(position, length - 0.001f);
+					const auto correction = CorrectAnimationPhase(sequence->CurrentTime, position, length, looping, rate);
+					sequence->Rate = NativePlaybackRate(sequence, correction.rate);
+					if (changed || (synchronizePosition && correction.snap)) NativeSetPosition(sequence, position);
 				}
 				NativeForceSkelUpdate(weapon->Mesh);
 			}
@@ -1535,29 +1388,86 @@
 			return true;
 		}
 
+		void ApplyRemoteFullBodyFadePoses(UAliceGameAnimNode_BlendBySlot* slot, const AnimationGraphPayload& graph, bool synchronizePosition)
+		{
+			// Update only children already owned and weighted by the native slot.
+			// Starting another config here would re-enter its blend; weights/targets
+			// and the native automatic blend-out remain entirely engine-owned.
+			for (int child = 1; child < slot->Children.size(); ++child)
+			{
+				const auto& blendChild = slot->Children.at(child);
+				if (child == slot->ActiveChildIndex || blendChild.Weight <= 0.001f || !blendChild.Anim
+					|| !blendChild.Anim->IsA(UAnimNodeSequence::StaticClass())) continue;
+				auto* sequence = reinterpret_cast<UAnimNodeSequence*>(blendChild.Anim);
+				if (!sequence->AnimSeq || !sequence->AnimSeqName.IsValid()) continue;
+				const auto name = sequence->AnimSeqName.ToString();
+				const AnimationSequencePayload* source = nullptr;
+				float closest = (std::numeric_limits<float>::max)();
+				for (std::size_t i = 0; i < (std::min<std::size_t>)(graph.sequenceCount, MaxAnimationSequences); ++i)
+				{
+					const auto& candidate = graph.sequences[i];
+					if (!IsSafeFullBodySequence(candidate) || NativeAnimationSlot(candidate.flags) != 0
+						|| (candidate.flags & AnimationSequenceSlotActive)
+						|| _stricmp(candidate.sequenceName, name.c_str()) != 0
+						|| !std::isfinite(candidate.position) || !std::isfinite(candidate.rate)) continue;
+					const float distance = std::fabs(candidate.position - sequence->CurrentTime);
+					if (distance < closest) { source = &candidate; closest = distance; }
+				}
+				if (!source) continue;
+				const bool stopped = (source->rootBoneOptions & AnimationPoseStopped) != 0;
+				const bool looping = (source->flags & AnimationSequenceLooping) != 0;
+				const float length = sequence->AnimSeq->SequenceLength;
+				float position = (std::max)(0.0f, source->position + RemoteAnimationSampleAge() * source->rate);
+				if (length > 0.001f)
+					position = looping ? std::fmod(position, length) : std::clamp(position, 0.0f, length - 0.001f);
+				const auto correction = CorrectAnimationPhase(sequence->CurrentTime, position, length, looping, source->rate);
+				ApplyPresentationRootOptions(sequence, source->rootBoneOptions);
+				sequence->bForceRefposeWhenNotPlaying = false;
+				sequence->bNoNotifies = true;
+				sequence->bCauseActorAnimEnd = false;
+				sequence->bCauseActorAnimPlay = false;
+				sequence->bLooping = looping;
+				sequence->Rate = stopped ? 0.0f : NativePlaybackRate(sequence, correction.rate);
+				sequence->bPlaying = !stopped;
+				if (stopped || (synchronizePosition && correction.snap))
+				{
+					NativeSetPosition(sequence, position);
+					sequence->CurrentTime = position;
+					sequence->PreviousTime = position;
+				}
+			}
+		}
+
 		bool ApplyRemoteAnimationGraph(AAlicePawn* remote,
 			const AnimationGraphPayload& graph, bool synchronizePosition)
 		{
 			g_remoteAppliedFullBodyNode = nullptr;
+			g_remoteAppliedUpperBodyNode = nullptr;
+			g_remoteAppliedHalfBodyNode = nullptr;
 			g_remoteAppliedFullBodySlot = nullptr;
 			g_remoteAppliedFullBodyName.clear();
 			if (!remote || !remote->Mesh)
 				return false;
 
+			if (g_remotePresentation.valid) ApplyRemotePawnStance(remote, g_remotePresentation.state);
 			EnableRemoteAnimationTick(remote);
 			int32_t slotNodeIndex = -1;
 			UAliceGameAnimNode_BlendBySlot* slot =
 				ResolveRemoteFullBodySlot(remote, &slotNodeIndex);
 			if (!slot)
 				return false;
+			if (synchronizePosition) TraceNativeFullBodyTransition(remote, graph, false);
 
 			const std::size_t blendCount = std::min<std::size_t>(
 				graph.blendCount, MaxAnimationBlends);
 			const std::size_t sequenceCount = std::min<std::size_t>(
 				graph.sequenceCount, MaxAnimationSequences);
 			ApplyRemoteWeaponTypeBlends(remote, graph);
-			ApplyRemoteUpperAdditiveGraph(remote, graph,
-				synchronizePosition);
+			ApplyRemoteUpperGraph(remote, graph, synchronizePosition,
+				EAnimBlendNodeIndex::EABLIdx_Slot_HalfBody_Upper_Main, g_remoteHalfBodyChannel);
+			ApplyRemoteUpperGraph(remote, graph, synchronizePosition,
+				EAnimBlendNodeIndex::EABLIdx_Slot_Combat_Upper_Additive, g_remoteUpperAdditiveChannel);
+			ApplyNativeUpperLowerBlend(remote, graph);
 			ApplyRemoteWeaponGraph(remote, graph,
 				synchronizePosition);
 			const AnimationBlendPayload* sourceSlot = nullptr;
@@ -1565,7 +1475,7 @@
 			{
 				const AnimationBlendPayload& state = graph.blends[index];
 				if (state.component == AnimationComponent::Body
-					&& state.nodeIndex == slotNodeIndex)
+					&& NativeAnimationSlot(state.flags) == 0)
 				{
 					sourceSlot = &state;
 					break;
@@ -1575,7 +1485,7 @@
 			int32_t sourceChild = 0;
 			const AnimationSequencePayload* sourceSequence = nullptr;
 			const bool sourceCustomSlot = sourceSlot
-				&& (sourceSlot->flags & AnimationBlendCustom) != 0
+				&& (sourceSlot->flags & (AnimationBlendCustom | AnimationBlendNativeSlotTiming)) != 0
 				&& sourceSlot->activeChildIndex > 0
 				&& sourceSlot->activeChildIndex < slot->Children.size();
 			if (sourceCustomSlot)
@@ -1626,7 +1536,10 @@
 					|| _stricmp(
 						g_remoteFullBodyChannel.sequenceName.c_str(),
 						sourceSequence->sequenceName) != 0
-					|| g_remoteFullBodyChannel.targetChild <= 0;
+					|| g_remoteFullBodyChannel.targetChild <= 0
+					|| (!standaloneSelection && g_remoteFullBodyChannel.sourceChild != sourceChild)
+					|| (synchronizePosition && !(sourceSequence->flags & AnimationSequenceLooping)
+						&& sourceSequence->position + 0.05f < g_remoteFullBodyChannel.lastSourcePosition);
 				if (selectionChanged)
 				{
 					configStarted = StartPresentationConfigAnimation(
@@ -1663,25 +1576,43 @@
 				{
 					auto* targetSequence =
 						reinterpret_cast<UAnimNodeSequence*>(childNode);
-					if (slot->ActiveChildIndex != targetChild)
+					// A fresh source selection can still own this child after the
+					// proxy's autonomous tick has released it. Restore that selection
+					// without starting another config. Repeated application of an old
+					// graph must not reopen the native release on every pawn tick.
+					const bool reselectChild = slot->ActiveChildIndex != targetChild
+						&& (selectionChanged || synchronizePosition);
+					if (reselectChild)
 					{
-						// NativeSetActiveChild may zero a completed dynamic child.
-						// Switch first so ApplySafeSlotSequence is the final writer of
-						// its playback position for this frame.
-						NativeSetActiveChild(slot, targetChild,
-							configStarted
-								? g_remoteFullBodyChannel.config.BlendInTime
-								: PresentationBlendTime(
-									sourceSequence->sequenceName));
+						float blendTime = configStarted ? g_remoteFullBodyChannel.config.BlendInTime
+							: PresentationBlendTime(sourceSequence->sequenceName);
+						if (!selectionChanged && sourceSlot && (sourceSlot->flags & AnimationBlendNativeSlotTiming))
+						{
+							const float remaining = (std::max)(0.0f, sourceSlot->nodeIndex * 0.002f - RemoteAnimationSampleAge());
+							blendTime = NativeBlendTransitionTime(remaining, slot->Children.at(targetChild).Weight);
+						}
+						Log("ANIMBLEND reconcile frame=" + std::to_string(graph.frameNumber)
+							+ ", sequence=" + sourceSequence->sequenceName
+							+ ", nativeChild=" + std::to_string(slot->ActiveChildIndex)
+							+ ", sourceChild=" + std::to_string(sourceChild)
+							+ ", targetChild=" + std::to_string(targetChild)
+							+ ", time=" + std::to_string(sourceSequence->position) + '.');
+						NativeSetActiveChild(slot, targetChild, blendTime);
 					}
 					applied = ApplySafeSlotSequence(remote, slot,
 						targetChild, targetSequence, *sourceSequence,
-						synchronizePosition, configStarted,
+						synchronizePosition, configStarted || reselectChild,
 						PresentationSequenceKind::FullBody);
 					if (applied)
 					{
-						slot->bIsPlayingCustomAnim = true;
-						slot->bPlayActiveChild = true;
+						if (slot->ActiveChildIndex == targetChild)
+						{
+							slot->bIsPlayingCustomAnim = standaloneSelection
+								|| (sourceSlot && (sourceSlot->flags & AnimationBlendCustom));
+							slot->bPlayActiveChild = (sourceSequence->rootBoneOptions & AnimationPoseStopped) == 0;
+							if (sourceSlot && (sourceSlot->flags & AnimationBlendNativeSlotTiming))
+								slot->CurrentPendingBlendOutTime = NativePendingBlendOut(sourceSlot->flags, graph.fullBodyBlendOutTicks);
+						}
 						g_remoteFullBodyChannel.active = true;
 						g_remoteFullBodyChannel.standalone =
 							standaloneSelection;
@@ -1706,6 +1637,11 @@
 						}
 						if (configStarted)
 						{
+							Log("ANIMBLEND native frame=" + std::to_string(graph.frameNumber)
+								+ ", sequence=" + std::string(sourceSequence->sequenceName)
+								+ ", in=" + std::to_string(g_remoteFullBodyChannel.config.BlendInTime)
+								+ ", out=" + std::to_string(g_remoteFullBodyChannel.config.BlendOutTime)
+								+ ", stopped=" + ((sourceSequence->rootBoneOptions & AnimationPoseStopped) ? "yes." : "no."));
 							const std::string key =
 								std::string("fullbody:")
 								+ sourceSequence->sequenceName;
@@ -1734,6 +1670,8 @@
 			// last native clip across that one-packet gap instead of blending
 			// to locomotion and immediately back again.
 			if (!applied && !sourceSequence
+				&& (!sourceSlot || sourceSlot->activeChildIndex > 0)
+				&& slot->ActiveChildIndex == g_remoteFullBodyChannel.targetChild
 				&& g_remoteFullBodyChannel.active
 				&& g_remoteFullBodyChannel.targetChild > 0
 				&& g_remoteFullBodyChannel.targetChild
@@ -1761,7 +1699,9 @@
 					// the one-packet gap before the next combo segment arrives.
 					// The owner holds/blends out its last sampled pose here.
 					float heldPosition = (std::max)(0.0f,
-						g_remoteFullBodyChannel.lastSourcePosition);
+						g_remoteFullBodyChannel.lastSourcePosition
+						+ std::clamp(std::chrono::duration<float>(Clock::now() - g_remoteFullBodyChannel.lastSourceSeen).count(),
+							0.0f, 0.11f) * g_remoteFullBodyChannel.lastSourceRate);
 					if (heldSequence->AnimSeq
 						&& heldSequence->AnimSeq->SequenceLength > 0.001f)
 					{
@@ -1784,13 +1724,28 @@
 			}
 			if (!applied)
 			{
-				StopPresentationConfigAnimation(
-					remote, g_remoteFullBodyChannel, 0.10f);
+				float releaseTime = g_remoteFullBodyChannel.config.BlendOutTime;
+				const bool nativeRelease = sourceSlot && sourceSlot->activeChildIndex == 0
+					&& (sourceSlot->flags & AnimationBlendNativeSlotTiming);
+				if (nativeRelease)
+				{
+					const float remaining = (std::max)(0.0f, sourceSlot->nodeIndex * 0.002f - RemoteAnimationSampleAge());
+					releaseTime = NativeBlendTransitionTime(remaining, slot->Children.size() > 0
+						? slot->Children.at(0).Weight : 0.0f);
+				}
+				if (g_remoteFullBodyChannel.active)
+					Log("ANIMBLEND release sequence=" + g_remoteFullBodyChannel.sequenceName
+						+ ", nativeTiming=" + (nativeRelease ? "yes" : "no")
+						+ ", requested=" + std::to_string(releaseTime) + '.');
+				StopPresentationConfigAnimation(remote, g_remoteFullBodyChannel, releaseTime);
 				slot->bIsPlayingCustomAnim = false;
 				slot->bPlayActiveChild = false;
 				if (slot->ActiveChildIndex != 0)
-					NativeSetActiveChild(slot, 0, 0.10f);
+					NativeSetActiveChild(slot, 0, nativeRelease ? releaseTime : 0.10f);
 			}
+
+			ApplyRemoteFullBodyFadePoses(slot, graph, synchronizePosition);
+
 
 			if (synchronizePosition)
 			{
@@ -1808,7 +1763,7 @@
 					}
 					signature << 'S'
 						<< static_cast<int>(sequence.component) << ':'
-						<< sequence.nodeIndex << '='
+						<< sequence.rootBoneOptions << '='
 						<< sequence.sequenceName << '|';
 				}
 				for (std::size_t index = 0; index < blendCount; ++index)

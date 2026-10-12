@@ -8,6 +8,8 @@ depends on the protocol version shown in each release.
 
 ### Added
 
+- Windows VERSIONINFO for the native DLL and relay server, including product,
+  description, authorship and alpha.3 version metadata.
 - MadnessPatch 3.3.3, including high-FPS hair/cloth interpolation, language
   selection, borderless mode and optional loose-file mod loading. Asset dumping
   and loose-file loading are disabled by default.

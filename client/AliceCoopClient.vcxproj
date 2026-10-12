@@ -238,6 +238,10 @@
     <ClInclude Include="..\src\dllmain.hpp" />
     <ClInclude Include="..\src\helper.hpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="AliceCoopClient.rc" />
+    <None Include="..\src\Coop\VersionInfo.rcinc" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
 </Project>

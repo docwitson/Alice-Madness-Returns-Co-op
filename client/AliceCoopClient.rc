@@ -1,0 +1,6 @@
+#define ALICECOOP_FILE_TYPE VFT_DLL
+#define ALICECOOP_FILE_DESCRIPTION "Alice Co-op Game Mod (MadnessPatch 3.3.3)"
+#define ALICECOOP_INTERNAL_NAME "AliceCoopClient"
+#define ALICECOOP_ORIGINAL_FILENAME "dinput8.dll"
+#define ALICECOOP_COPYRIGHT "MadnessPatch: Wemino and contributors. Alice Co-op: Docwitson and contributors."
+#include "../src/Coop/VersionInfo.rcinc"

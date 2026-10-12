@@ -77,5 +77,9 @@
   <ItemGroup>
     <ClInclude Include="..\src\Coop\Protocol.hpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="AliceCoopServer.rc" />
+    <None Include="..\src\Coop\VersionInfo.rcinc" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

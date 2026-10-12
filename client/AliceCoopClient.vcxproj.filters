@@ -398,4 +398,12 @@
       <UniqueIdentifier>{c8b1e7d9-efc8-4071-e4a5-90d1f3c28eb7}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="AliceCoopClient.rc">
+      <Filter>src</Filter>
+    </ResourceCompile>
+    <None Include="..\src\Coop\VersionInfo.rcinc">
+      <Filter>src\Coop</Filter>
+    </None>
+  </ItemGroup>
 </Project>

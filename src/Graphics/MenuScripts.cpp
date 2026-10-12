@@ -1,5 +1,6 @@
 #include "Common.hpp"
 #include "Features.hpp"
+#include "Coop/CoopClient.hpp"
 
 safetyhook::InlineHook GFx_LoadRootMovie;
 static safetyhook::MidHook MenuScriptMid{};
@@ -51,6 +52,20 @@ void ReapplyMenuLetterbox()
 	ApplyLetterbox(buf);
 }
 
+void ReapplyMemoryPosition()
+{
+	uint8_t* buf = g_memoryBuf;
+	if (!g_memoryBuf)
+		return;
+
+	if (!MemoryHelper::IsWritable(buf, 0x511A))
+		return;
+	if (MemoryHelper::ReadMemory<uint32_t>((uintptr_t)buf) != 0x18159B88)
+		return;
+
+	ApplyMemoryPosition(buf);
+}
+
 struct BytePatch
 {
 	uint32_t header;
@@ -69,16 +84,27 @@ static const BytePatch kBytePatches[] =
 	{ 0xA2076888, 0x7AD, 0x10 },
 	{ 0xA2076888, 0x858, 0x10 },
 	{ 0xA409AC88, 0xD2D, 0x14 },
+
+	// Apply the difficulty change directly instead of raising the unlocalized confirm popup
+	{ 0x5B03C188, 0xC76, 0x6C },
 };
 
-static void ApplyMenuBytePatches(uint8_t* buf, uint32_t sig)
+static const BytePatch kCursorBytePatches[] =
 {
-	if (!EnableControllerIcons) return;
-	if (!ControllerHelper::IsConnected()) return;
+	{ 0x50030788, 0x880, 0xC1 },
+	{ 0x50030788, 0x8B5, 0xC1 },
+	{ 0xA6069A88, 0x302B, 0xC1 },
+	{ 0xA3066288, 0x2E5B, 0xC1 },
+	{ 0x4C024C88, 0xA97, 0xC1 },
+	{ 0x18159B88, 0x694D, 0x8A },
+};
 
-	for (const BytePatch& patch : kBytePatches)
+static void ApplyPatchTable(uint8_t* buf, uint32_t size, uint32_t sig, const BytePatch* table, size_t count)
+{
+	for (size_t i = 0; i < count; i++)
 	{
-		if (sig != patch.header) continue;
+		const BytePatch& patch = table[i];
+		if (sig != patch.header || patch.offset >= size) continue;
 
 		uintptr_t address = (uintptr_t)(buf + patch.offset);
 		if (MemoryHelper::ReadMemory<uint8_t>(address) == patch.from)
@@ -88,10 +114,163 @@ static void ApplyMenuBytePatches(uint8_t* buf, uint32_t sig)
 	}
 }
 
+static void ApplyMenuBytePatches(uint8_t* buf, uint32_t size, uint32_t sig)
+{
+	if (!EnableControllerIcons) return;
+	if (!ControllerHelper::IsConnected()) return;
+
+	ApplyPatchTable(buf, size, sig, kBytePatches, std::size(kBytePatches));
+
+	if (RestoreMenuMouseCursor)
+	{
+		ApplyPatchTable(buf, size, sig, kCursorBytePatches, std::size(kCursorBytePatches));
+	}
+}
+
+
+#include "CoopScaleformPatch.inl"
+
+// Older extraContentMc gives the Chapter 6 Theatricals entries the Chapter 3 title keys
+namespace TheatricalsTitles
+{
+	constexpr uint32_t BlobSize = 0x218AA; // GFX file length of the affected build
+	constexpr uint32_t SpriteHdr = 0x929D; // DefineSprite (id 91) tag header
+	constexpr uint32_t SpriteLen = 0x74AB;
+	constexpr uint32_t ActionHdr = 0x92A7; // DoAction tag header
+	constexpr uint32_t ActionLen = 0x749D;
+	constexpr uint32_t ActionBody = 0x92AD; // ActionConstantPool starts here
+	constexpr uint32_t PoolSig = 0xA0383A88; // 0x88, payload 0x383A, 672 strings
+	constexpr uint32_t PoolEnd = 0xCAEA; // one past the last pooled string
+
+	// Appended after the last pooled string, so no existing index shifts
+	static const char NewStrings[] =
+		"FlashUI_ExtraContent_TheatricalsCH6_3\0"
+		"FlashUI_ExtraContent_TheatricalsCH6_2\0"
+		"FlashUI_ExtraContent_TheatricalsCH6_1";
+
+	constexpr uint32_t Growth = sizeof(NewStrings);
+
+	struct TitleRef
+	{
+		uint32_t stringOffset;
+		uint32_t operandOffset;
+		uint16_t index;
+		const char* expected;
+	};
+
+	static const TitleRef Titles[3] =
+	{
+		{ 0xC3AF, 0x10144, 581, "FlashUI_ExtraContent_TheatricalsCH3_3" }, // plays C6_6111
+		{ 0xC3DD, 0x10161, 583, "FlashUI_ExtraContent_TheatricalsCH3_2" }, // plays C6_617
+		{ 0xC40A, 0x1017E, 585, "FlashUI_ExtraContent_TheatricalsCH3_1" }, // plays C6_614
+	};
+
+	// Strict on purpose: a build that already has the fix differs from the first check onwards
+	static bool NeedsFix(const uint8_t* blob, uint32_t size)
+	{
+		if (size != BlobSize) return false;
+		if (*(const uint32_t*)(blob + 0x04) != BlobSize) return false;
+		if (*(const uint16_t*)(blob + SpriteHdr) != ((39 << 6) | 0x3F)) return false;
+		if (*(const uint32_t*)(blob + SpriteHdr + 2) != SpriteLen) return false;
+		if (*(const uint16_t*)(blob + ActionHdr) != ((12 << 6) | 0x3F)) return false;
+		if (*(const uint32_t*)(blob + ActionHdr + 2) != ActionLen) return false;
+		if (*(const uint32_t*)(blob + ActionBody) != PoolSig) return false;
+
+		for (const TitleRef& title : Titles)
+		{
+			if (*(const uint16_t*)(blob + title.operandOffset) != title.index) return false;
+			if (std::memcmp(blob + title.stringOffset, title.expected, std::strlen(title.expected) + 1) != 0) return false;
+		}
+
+		return true;
+	}
+
+	// Re-read the rebuilt movie; on failure the caller drops it and the original is loaded untouched
+	static bool Verify(const std::vector<uint8_t>& fixed)
+	{
+		const uint8_t* out = fixed.data();
+		uint32_t size = (uint32_t)fixed.size();
+
+		if (size != BlobSize + Growth) return false;
+		if (*(const uint32_t*)(out + 0x04) != size) return false;
+		if (*(const uint32_t*)(out + SpriteHdr + 2) != SpriteLen + Growth) return false;
+		if (*(const uint32_t*)(out + ActionHdr + 2) != ActionLen + Growth) return false;
+
+		const uint8_t* body = out + ActionBody;
+		uint32_t bodyLen = ActionLen + Growth;
+
+		if (*(const uint16_t*)(body + 3) != 675) return false;
+		if (3u + *(const uint16_t*)(body + 1) > bodyLen) return false;
+
+		// Where a pool length that disagrees with the code block shows up
+		if (body[bodyLen - 1] != 0x00) return false;
+
+		// Walk the tag stream to the End tag, past the 8 byte header, the frame RECT, and the rate/count
+		uint32_t at = 8 + (5u + (out[8] >> 3) * 4u + 7u) / 8u + 4;
+		while (at + 2 <= size)
+		{
+			uint16_t header = *(const uint16_t*)(out + at);
+			uint32_t code = header >> 6;
+			uint32_t length = header & 0x3F;
+			uint32_t headerSize = 2;
+			if (length == 0x3F)
+			{
+				length = *(const uint32_t*)(out + at + 2); headerSize = 6;
+			}
+			if (code == 0) return at + headerSize + length == size;
+			at += headerSize + length;
+		}
+
+		return false;
+	}
+
+	// Built once and kept: GFx copies the script out during the load and never writes back
+	static const std::vector<uint8_t>& Build(const uint8_t* blob, uint32_t size)
+	{
+		static std::vector<uint8_t> fixed;
+		static bool built = false;
+
+		if (built) return fixed;
+		built = true;
+
+		fixed.reserve(size + Growth);
+		fixed.assign(blob, blob + PoolEnd);
+		fixed.insert(fixed.end(), NewStrings, NewStrings + Growth);
+		fixed.insert(fixed.end(), blob + PoolEnd, blob + size);
+
+		uint8_t* out = fixed.data();
+
+		*(uint32_t*)(out + 0x04) += Growth; // GFX file length
+		*(uint32_t*)(out + SpriteHdr + 2) += Growth; // DefineSprite (id 91)
+		*(uint32_t*)(out + ActionHdr + 2) += Growth; // DoAction
+		*(uint16_t*)(out + ActionBody + 1) += Growth; // ActionConstantPool payload
+		*(uint16_t*)(out + ActionBody + 3) += 3; // ActionConstantPool string count
+
+		// Operands sit after the insertion, and every jump is relative, so shifting the code block is harmless
+		uint16_t next = *(const uint16_t*)(blob + ActionBody + 3);
+		for (const TitleRef& title : Titles)
+		{
+			*(uint16_t*)(out + title.operandOffset + Growth) = next++;
+		}
+
+		if (!Verify(fixed))
+		{
+			fixed.clear();
+		}
+
+		return fixed;
+	}
+}
+
 static int __fastcall GFx_LoadRootMovie_Hook(uint32_t thisp, uint32_t, uint32_t a2, uint32_t a3)
 {
 	uint32_t tr = *(uint32_t*)(a2 + 0x314);
 	if (!tr) tr = a2 + 0x28;
+
+	uint8_t** swappedData = nullptr;
+	uint32_t* swappedSize = nullptr;
+	uint8_t* originalData = nullptr;
+	uint32_t originalSize = 0;
 
 	uint32_t src = *(uint32_t*)(tr + 0x10);
 	if (src)
@@ -130,17 +309,66 @@ static int __fastcall GFx_LoadRootMovie_Hook(uint32_t thisp, uint32_t, uint32_t 
 					blob[0x80EA] = 0x09; // never show profile
 				}
 			}
+
+            if (AliceCoop::IsEnabled())
+            {
+                // GFx action buffers may retain slices of the parsed stream. Keep
+                // each distinct compiled variant alive across menu reloads.
+                static std::vector<std::unique_ptr<std::vector<uint8_t>>> coopMovies;
+                auto patched = CoopScaleformPatch::Build(blob, size);
+                if (!patched.empty())
+                {
+                    std::vector<uint8_t>* coopMovie = nullptr;
+                    for (const auto& existing : coopMovies)
+                        if (*existing == patched) { coopMovie = existing.get(); break; }
+                    if (!coopMovie)
+                    {
+                        coopMovies.push_back(std::make_unique<std::vector<uint8_t>>(std::move(patched)));
+                        coopMovie = coopMovies.back().get();
+                    }
+                    swappedData = reinterpret_cast<uint8_t**>(src + 0x08);
+                    swappedSize = reinterpret_cast<uint32_t*>(src + 0x0C);
+                    originalData = blob; originalSize = size;
+                    *swappedData = coopMovie->data(); *swappedSize = static_cast<uint32_t>(coopMovie->size());
+                }
+            }
+
+			if (FixTheatricalsTitles && TheatricalsTitles::NeedsFix(blob, size))
+			{
+				const std::vector<uint8_t>& fixed = TheatricalsTitles::Build(blob, size);
+				if (!fixed.empty())
+				{
+					swappedData = (uint8_t**)(src + 0x08);
+					swappedSize = (uint32_t*)(src + 0x0C);
+					originalData = blob;
+					originalSize = size;
+
+					*swappedData = const_cast<uint8_t*>(fixed.data());
+					*swappedSize = (uint32_t)fixed.size();
+				}
+			}
 		}
 	}
 
-	return GFx_LoadRootMovie.unsafe_thiscall<int>(thisp, a2, a3);
+	int result = GFx_LoadRootMovie.unsafe_thiscall<int>(thisp, a2, a3);
+
+	// Hand the engine its own allocation back
+	if (swappedData)
+	{
+		*swappedData = originalData;
+		*swappedSize = originalSize;
+	}
+
+	return result;
 }
+
 
 static void OnMenuScript(safetyhook::Context& ctx)
 {
 	uint8_t* buf = *(uint8_t**)(ctx.esi + 8);
 	if (!buf) return;
 
+	uint32_t size = *(uint32_t*)(ctx.esi + 0xC);
 	uint32_t sig = MemoryHelper::ReadMemory<uint32_t>((uintptr_t)buf);
 
 	if (FixAspectRatio && sig == 0x0D009688)
@@ -153,7 +381,8 @@ static void OnMenuScript(safetyhook::Context& ctx)
 		g_memoryBuf = buf;
 		ApplyMemoryPosition(buf);
 	}
-	else if (!HideAlice1WhenMissing && sig == 0xA409AC88)
+	else if (!HideAlice1WhenMissing && sig == 0xA409AC88
+        && !CoopScaleformPatch::IsPatchedAction(buf, size))
 	{
 		// Remove the Alice 1 menu entry.
 		if (MemoryHelper::ReadMemory<uint8_t>((uintptr_t)(buf + 0xC39)) == 0x5)
@@ -162,7 +391,8 @@ static void OnMenuScript(safetyhook::Context& ctx)
 		}
 	}
 
-	ApplyMenuBytePatches(buf, sig);
+	if (!CoopScaleformPatch::IsPatchedAction(buf, size))
+		ApplyMenuBytePatches(buf, size, sig);
 }
 
 void ApplyMenuScripts()

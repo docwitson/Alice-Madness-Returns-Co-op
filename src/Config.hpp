@@ -23,32 +23,40 @@ inline bool FixFadeToBlackEnabled = false;
 inline bool FixWeaponSwitchFadeInEnabled = false;
 inline bool CutsceneFPSCapEnabled = false;
 inline bool FixUpgradeCursorLeak = false;
+inline bool FixTheatricalsTitles = false;
 inline bool FixPinballCannonPrompt = false;
 inline bool AtomicSaves = false;
 inline bool UpgradeToXAudio29 = false;
 inline int MaxPoolThreads = 0;
 
 // General
+inline bool AchievementSupport = false;
 inline bool UnlockCompleteEditionDLC = false;
+inline bool ShowProfileCreation = false;
+inline int ForceLanguage = 0;
 inline bool WarnAlice1InstallFolder = false;
 inline bool HideAlice1WhenMissing = false;
+inline bool EnableConsole = false;
+inline bool EnableCrashHandler = false;
 inline bool SkipEAIntro = false;
 inline bool SkipSHIntro = false;
 inline bool SkipUEIntro = false;
-inline bool EnableCrashHandler = false;
-inline bool ShowProfileCreation = false;
-inline bool AchievementSupport = false;
-inline bool EnableConsole = false;
+
+// Modding
+inline bool DumpArchiveAssets = false;
+inline bool LoadModFiles = false;
 
 // Display
 inline bool FontScaling = false;
 inline float FontScalingFactor = 0;
 inline bool AutoResolution = false;
 inline bool UseWindowed = false;
+inline bool BorderlessFullscreenEnabled = false;
 
 // Input
 inline bool UseSDLControllerInput = false;
 inline bool EnableControllerIcons = false;
+inline bool RestoreMenuMouseCursor = false;
 inline int UsePS3ControllerIcons = 0;
 inline bool DisableMouseAcceleration = false;
 inline bool DisableControllerAcceleration = false;
@@ -91,6 +99,7 @@ inline void ReadConfig()
 	FixWeaponSwitchFadeInEnabled = IniHelper::ReadInteger("Fixes", "FixWeaponSwitchFadeIn", 1) == 1;
 	CutsceneFPSCapEnabled = IniHelper::ReadInteger("Fixes", "CutsceneFPSCap", 1) == 1;
 	FixUpgradeCursorLeak = IniHelper::ReadInteger("Fixes", "FixUpgradeCursorLeak", 1) == 1;
+	FixTheatricalsTitles = IniHelper::ReadInteger("Fixes", "FixTheatricalsTitles", 1) == 1;
 	FixPinballCannonPrompt = IniHelper::ReadInteger("Fixes", "FixPinballCannonPrompt", 1) == 1;
 	AtomicSaves = IniHelper::ReadInteger("Fixes", "AtomicSaves", 1) == 1;
 	UpgradeToXAudio29 = IniHelper::ReadInteger("Fixes", "UpgradeToXAudio29", 1) == 1;
@@ -100,6 +109,7 @@ inline void ReadConfig()
 	AchievementSupport = IniHelper::ReadInteger("General", "AchievementSupport", 1) == 1;
 	UnlockCompleteEditionDLC = IniHelper::ReadInteger("General", "UnlockCompleteEditionDLC", 1) == 1;
 	ShowProfileCreation = IniHelper::ReadInteger("General", "ShowProfileCreation", 1) == 1;
+	ForceLanguage = IniHelper::ReadInteger("General", "ForceLanguage", -1);
 	WarnAlice1InstallFolder = IniHelper::ReadInteger("General", "WarnAlice1InstallFolder", 1) == 1;
 	HideAlice1WhenMissing = IniHelper::ReadInteger("General", "HideAlice1WhenMissing", 1) == 1;
 	EnableConsole = IniHelper::ReadInteger("General", "EnableConsole", 1) == 1;
@@ -108,15 +118,21 @@ inline void ReadConfig()
 	SkipSHIntro = IniHelper::ReadInteger("General", "SkipSHIntro", 1) == 1;
 	SkipUEIntro = IniHelper::ReadInteger("General", "SkipUEIntro", 1) == 1;
 
+	// Modding
+	DumpArchiveAssets = IniHelper::ReadInteger("Modding", "DumpArchiveAssets", 0) == 1;
+	LoadModFiles = IniHelper::ReadInteger("Modding", "LoadModFiles", 0) == 1;
+
 	// Display
 	FontScaling = IniHelper::ReadInteger("Display", "FontScaling", 1) == 1;
 	FontScalingFactor = IniHelper::ReadFloat("Display", "FontScalingFactor", 1.0f);
 	AutoResolution = IniHelper::ReadInteger("Display", "AutoResolution", 1) == 1;
 	UseWindowed = IniHelper::ReadInteger("Display", "UseWindowed", 0) == 1;
+	BorderlessFullscreenEnabled = IniHelper::ReadInteger("Display", "BorderlessFullscreen", 0) == 1;
 
 	// Input
 	UseSDLControllerInput = IniHelper::ReadInteger("Input", "UseSDLControllerInput", 1) == 1;
 	EnableControllerIcons = IniHelper::ReadInteger("Input", "EnableControllerIcons", 1) == 1;
+	RestoreMenuMouseCursor = IniHelper::ReadInteger("Input", "RestoreMenuMouseCursor", 1) == 1;
 	UsePS3ControllerIcons = IniHelper::ReadInteger("Input", "UsePS3ControllerIcons", 0);
 	DisableMouseAcceleration = IniHelper::ReadInteger("Input", "DisableMouseAcceleration", 1) == 1;
 	DisableControllerAcceleration = IniHelper::ReadInteger("Input", "DisableControllerAcceleration", 1) == 1;

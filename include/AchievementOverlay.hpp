@@ -1,6 +1,5 @@
 #pragma once
 
-#include <d3d9.h>
 #include <Windows.h>
 #include <wincodec.h>
 #include <Xinput.h>
@@ -9,160 +8,66 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cerrno>
-#include <cfloat>
-#include <atomic>
-#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
 #include "Common.hpp"
 #include "Features.hpp"
 
-#include "imgui/imgui.h"
-#include "imgui/imgui_impl_dx9.h"
-#include "imgui/imgui_impl_win32.h"
-
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
 namespace AchievementOverlay
 {
     // Config
     inline constexpr bool kBlockGameInputWhileVisible = true;
-    inline constexpr unsigned long long kCursorIdleHideMs = 3000;
+    inline constexpr int kIconTextureSize = 128;
 
     // State
-    inline IDirect3DDevice9* g_pDevice = nullptr;
-    inline IDirect3DDevice9* g_pInitializedDevice = nullptr;
     inline HWND g_hWnd = nullptr;
     inline WNDPROC g_oWndProc = nullptr;
-    inline uintptr_t g_devicePtrAddr = 0;
-
-    inline bool g_hooksInstalled = false;
-    inline bool g_imguiInitialized = false;
-    inline bool g_inReset = false;
-    inline bool g_deviceLost = false;
+    inline bool g_wndProcInstalled = false;
     inline bool g_visible = false;
-    inline bool g_coopDevMode = false;
-    inline std::string g_coopDevStatus;
-    inline std::string g_coopDevDetails;
-    inline std::mutex g_coopDevMutex;
-    inline std::atomic<int> g_coopDevCommand{ 0 };
-
-    enum class CoopDevCommand : int
-    {
-        None = 0,
-        TestDodge = 1,
-        TestMeleeTrail = 2,
-        TestMuzzle = 3,
-        TestShrink = 4,
-        TestGlide = 5,
-        ToggleProxyHidden = 6,
-        PreviousVfxAnchor = 7,
-        NextVfxAnchor = 8,
-        TestWeaponEffect = 9,
-        PepperHypothesis1 = 10,
-        PepperHypothesis2 = 11,
-        PepperHypothesis3 = 12,
-        BombHypothesis1 = 13,
-        BombHypothesis2 = 14,
-        BombHypothesis3 = 15,
-        ClearProjectileTests = 16,
-    };
 
     inline float g_uiScale = 1.0f;
-    inline float g_pendingScale = 0.0f;
-    inline int g_layoutWidth = 0;
-    inline int g_layoutHeight = 0;
-
-    inline int g_lastDispW = 0;
-    inline int g_lastDispH = 0;
-
-    inline float g_savedScrollY = 0.0f;
-    inline bool g_restoreScroll = false;
-    inline int g_restoreScrollFrames = 0;
+    inline float g_scrollY = 0.0f;
+    inline float g_pendingWheelScroll = 0.0f;
+    inline unsigned long long g_lastDrawTick = 0;
+    inline int g_lastCanvasW = 0;
+    inline int g_lastCanvasH = 0;
 
     inline XINPUT_STATE g_padState{};
     inline bool g_padConnected = false;
-
-    inline unsigned long long g_lastMouseInputTick = 0;
 
     struct ToastItem
     {
         int achvId;
         unsigned long long start;
-        unsigned int uid;
-        float height;
         float animY;
         bool placed;
     };
     inline std::vector<ToastItem> g_toasts;
-    inline unsigned int g_toastNextId = 1;
     inline std::mutex g_toastMutex;
 
     // Achievement data
     struct Texture
     {
-        IDirect3DTexture9* tex = nullptr;
+        class UTexture2D* tex = nullptr;
         int w = 0;
         int h = 0;
     };
 
     struct AchievementText
     {
-        std::string name;
-        std::string desc;
+        std::wstring name;
+        std::wstring desc;
     };
 
     inline std::vector<Texture> g_achievements;
-    inline Texture g_cutsceneWatchTexture;
-    inline bool g_cutsceneWatchTextureLoadAttempted = false;
-    inline Texture g_coopWaitTexture;
-    inline bool g_coopWaitTextureLoadAttempted = false;
-    inline Texture g_soloMinigameTexture;
-    inline bool g_soloMinigameTextureLoadAttempted = false;
-    inline std::atomic<bool> g_peerWatchingCutscene{ false };
-    inline std::atomic<bool> g_coopWaitingForPeer{ false };
-    inline std::atomic<bool> g_coopForceCutsceneRequested{ false };
-    inline std::atomic<unsigned long long>
-        g_soloMinigameWarningUntil{ 0 };
-    inline std::atomic<unsigned long long>
-        g_coopJoinTeleportHintUntil{ 0 };
-    inline std::atomic<bool> g_peerCutsceneScreenPositionValid{ false };
-    inline std::atomic<float> g_peerCutsceneScreenX{ 0.0f };
-    inline std::atomic<float> g_peerCutsceneScreenY{ 0.0f };
-    inline std::atomic<bool> g_coopMenuVisible{ false };
-    inline std::atomic<bool> g_coopMenuHostRole{ false };
-    inline std::atomic<bool> g_coopMenuRelayConnected{ false };
-    inline std::atomic<bool> g_coopMenuPeerConnected{ false };
-    inline std::atomic<bool> g_coopMenuCanJoinHost{ false };
-    inline std::atomic<bool> g_coopMenuHovered{ false };
-    inline std::atomic<bool> g_coopJoinHostRequested{ false };
-    inline std::atomic<bool> g_coopPauseVisible{ false };
-    inline std::atomic<bool> g_coopPauseHostRole{ false };
-    inline std::atomic<bool> g_coopPausePeerConnected{ false };
-    inline std::atomic<bool> g_coopPauseHovered{ false };
-    inline std::atomic<bool> g_coopMovementTrailsEnabled{ false };
-    inline std::atomic<bool> g_coopMovementTrailsToggleRequested{ false };
-    inline std::atomic<bool> g_coopSaveSyncAvailable{ false };
-    inline std::atomic<bool> g_coopSaveSyncInProgress{ false };
-    inline std::atomic<int> g_coopSaveSyncProgress{ 0 };
-    inline std::atomic<bool> g_coopSaveSyncRequested{ false };
-    inline std::atomic<bool> g_coopSaveSyncWarningVisible{ false };
-    inline std::atomic<bool> g_coopSaveSyncConfirmKeyDown{ false };
-	inline std::atomic<bool> g_coopSaveSyncShortcutDown{ false };
-	inline std::mutex g_coopSaveSyncMutex;
-	inline std::string g_coopSaveSyncStatus;
-	inline std::string g_coopSaveSyncProfileName;
-    inline bool g_coopContextShortcutDown = false;
-    inline std::mutex g_coopMenuMutex;
-    inline std::string g_coopMenuPeerMap;
-    inline std::string g_coopMenuStatus;
     inline std::vector<bool> g_unlocked;
     inline std::vector<int> g_current;
     inline std::vector<AchievementText> g_text;
 
     inline bool g_achievementsLoaded = false;
     inline bool g_textLoaded = false;
+    inline bool g_iconsUnavailable = false;
     inline std::string g_language = "en";
 
     inline std::filesystem::path g_achievementFolder;
@@ -178,19 +83,12 @@ namespace AchievementOverlay
 
     inline bool g_showSecrets = false;
 
-    // Secret achievements hidden until unlocked
-    inline const std::vector<int> kSecretIndices = { 1, 2, 3, 4, 5, 6, 7, 13, 14, 15, 16, 17, 18, 19, 31, 33, 35 };
+    // Secret achievements hidden until unlocked:
+    inline constexpr uint64_t kSecretMask = (0x7Full << 1) | (0x7Full << 13) | (1ull << 31) | (1ull << 33) | (1ull << 35);
 
     inline bool IsSecret(int index)
     {
-        for (int s : kSecretIndices)
-        {
-            if (s == index)
-            {
-                return true;
-            }
-        }
-        return false;
+        return index >= 0 && index < 64 && ((kSecretMask >> index) & 1ull) != 0;
     }
 
     // Target count per achievement, anything not listed is a plain on/off unlock (max 1)
@@ -218,7 +116,11 @@ namespace AchievementOverlay
         return AchievementMaxFrom(g_maxOverride, index);
     }
 
-    inline bool IsVisible() { return g_visible; }
+    // Bink cutscenes and loading movies bypass PostRender, the list must not block input while it cannot be drawn
+    inline constexpr unsigned long long kRenderStaleMs = 500;
+    inline bool IsRendering() { return g_lastDrawTick != 0 && GetTickCount64() - g_lastDrawTick < kRenderStaleMs; }
+
+    inline bool IsVisible() { return g_visible && IsRendering(); }
 
     inline void SetAchievementUnlocked(int index, bool unlocked)
     {
@@ -259,7 +161,6 @@ namespace AchievementOverlay
         it.start = GetTickCount64();
 
         std::lock_guard<std::mutex> lock(g_toastMutex);
-        it.uid = g_toastNextId++;
         g_toasts.push_back(it);
     }
 
@@ -497,126 +398,66 @@ namespace AchievementOverlay
     }
 
     // Helpers
-    inline IDirect3DDevice9* GetDevice()
+    inline std::wstring Utf8ToWide(const std::string& s)
     {
-        if (g_devicePtrAddr == 0)
-            return nullptr;
+        if (s.empty()) return {};
 
-        return *reinterpret_cast<IDirect3DDevice9**>(g_devicePtrAddr);
+        int n = MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), nullptr, 0);
+        if (n <= 0) return {};
+
+        std::wstring out((size_t)n, L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, s.data(), (int)s.size(), out.data(), n);
+        return out;
     }
 
-    inline bool QueryBackBufferSize(
-        IDirect3DDevice9* dev, float& width, float& height)
+    inline float Clamp(float v, float lo, float hi)
     {
-        IDirect3DSurface9* backBuffer = nullptr;
-        if (!dev || FAILED(dev->GetBackBuffer(
-                0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))
-            || !backBuffer)
-        {
-            return false;
-        }
-
-        D3DSURFACE_DESC description{};
-        const bool valid = SUCCEEDED(backBuffer->GetDesc(&description))
-            && description.Width > 0 && description.Height > 0;
-        backBuffer->Release();
-        if (!valid)
-            return false;
-
-        width = static_cast<float>(description.Width);
-        height = static_cast<float>(description.Height);
-        return true;
+        return v < lo ? lo : (v > hi ? hi : v);
     }
 
-    inline bool QueryOverlayLayoutSize(
-        IDirect3DDevice9* dev, float& width, float& height)
+    // Canvas tiles take linear colors and the output is gamma corrected, so 8-bit sRGB values have to be linearized
+    inline float SrgbToLinear(uint8_t v)
     {
-        float backBufferWidth = 0.0f;
-        float backBufferHeight = 0.0f;
-        const bool haveBackBuffer = QueryBackBufferSize(
-            dev, backBufferWidth, backBufferHeight);
-
-        RECT clientRect{};
-        const bool haveClient = g_hWnd && GetClientRect(g_hWnd, &clientRect)
-            && clientRect.right > clientRect.left
-            && clientRect.bottom > clientRect.top;
-        const float clientWidth = haveClient
-            ? static_cast<float>(clientRect.right - clientRect.left) : 0.0f;
-        const float clientHeight = haveClient
-            ? static_cast<float>(clientRect.bottom - clientRect.top) : 0.0f;
-
-        if (!haveBackBuffer && !haveClient)
-            return false;
-
-        if (haveBackBuffer && haveClient)
-        {
-            // Window geometry and the D3D9 backbuffer can briefly disagree
-            // while UE3 applies a resolution change. Keep layout inside both
-            // coordinate spaces so bottom/right anchored panels stay visible.
-            width = (std::min)(backBufferWidth, clientWidth);
-            height = (std::min)(backBufferHeight, clientHeight);
-        }
-        else if (haveBackBuffer)
-        {
-            width = backBufferWidth;
-            height = backBufferHeight;
-        }
-        else
-        {
-            width = clientWidth;
-            height = clientHeight;
-        }
-        return width > 0.0f && height > 0.0f;
+        float c = v / 255.0f;
+        return c <= 0.04045f ? c / 12.92f : powf((c + 0.055f) / 1.055f, 2.4f);
     }
 
-    inline float ComputeUiScaleFromHeight(float renderHeight)
+    inline FLinearColor Srgb(uint8_t r, uint8_t g, uint8_t b, float a = 1.0f)
     {
-        return renderHeight > 1080.0f
-            ? renderHeight / 1080.0f : 1.0f;
+        return FLinearColor(SrgbToLinear(r), SrgbToLinear(g), SrgbToLinear(b), a);
     }
 
-    // Refresh this before deciding whether the ImGui context needs rebuilding.
-    // Previously it was only updated from Render(), one frame after a resize.
-    inline void RefreshRenderMetrics(IDirect3DDevice9* dev)
+    // Palette (sRGB), converted once at load
+    inline const FLinearColor kWindowBg = Srgb(15, 15, 15, 0.94f);
+    inline const FLinearColor kTitleBg = Srgb(41, 74, 122, 1.0f);
+    inline const FLinearColor kFrameBg = Srgb(41, 74, 122, 0.54f);
+    inline const FLinearColor kBarFill = Srgb(66, 150, 250, 1.0f);
+    inline const FLinearColor kScrollBg = Srgb(5, 5, 5, 0.53f);
+    inline const FLinearColor kScrollGrab = Srgb(79, 79, 79, 1.0f);
+    inline const FLinearColor kHiddenBox = Srgb(90, 90, 90, 1.0f);
+    inline const FLinearColor kHiddenBoxInner = Srgb(35, 35, 35, 1.0f);
+    inline const FLinearColor kLockedTint(0.35f, 0.35f, 0.35f, 1.0f);
+    inline const FColor kBorderColor(110, 110, 128, 200);
+    inline const FColor kSeparatorColor(110, 110, 128, 128);
+    inline const FColor kTextColor(255, 255, 255, 255);
+    inline const FColor kTextDimColor(200, 200, 200, 255);
+    inline const FColor kTextHintColor(160, 160, 160, 255);
+    inline const FColor kGoldColor(255, 214, 102, 255);
+    inline const FColor kNameLockedColor(217, 217, 217, 255);
+
+    inline FLinearColor WithAlpha(FLinearColor c, float a)
     {
-        float renderWidth = 0.0f;
-        float renderHeight = 0.0f;
-        if (!QueryOverlayLayoutSize(dev, renderWidth, renderHeight))
-            return;
-
-        g_pendingScale = ComputeUiScaleFromHeight(renderHeight);
-        const int width = static_cast<int>(renderWidth);
-        const int height = static_cast<int>(renderHeight);
-        if (width == g_layoutWidth && height == g_layoutHeight)
-            return;
-
-        g_layoutWidth = width;
-        g_layoutHeight = height;
-        // Force movable ImGui windows and animated notifications to acquire
-        // positions in the new coordinate space immediately.
-        g_lastDispW = 0;
-        g_lastDispH = 0;
-        std::lock_guard<std::mutex> lock(g_toastMutex);
-        for (ToastItem& toast : g_toasts)
-            toast.placed = false;
+        c.A = a;
+        return c;
     }
 
-    // Initial scale guess from the current backbuffer.
-    inline float ComputeUiScale(IDirect3DDevice9* dev)
-    {
-        float renderWidth = 0.0f;
-        float renderHeight = 0.0f;
-        return QueryOverlayLayoutSize(dev, renderWidth, renderHeight)
-            ? ComputeUiScaleFromHeight(renderHeight) : 1.0f;
-    }
-
-    // Texture & text loading
-    inline bool LoadTextureFromFile(IDirect3DDevice9* dev, const char* path, Texture& out, int targetSize = 0)
+    // Icon loading: PNG -> BGRA pixels (WIC) -> engine Texture2D
+    inline bool DecodePngToBgra(const char* path, int targetSize, std::vector<uint8_t>& outPixels, int& outW, int& outH)
     {
         static bool s_comInit = false;
         if (!s_comInit)
         {
-            HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+            HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
             if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) return false;
             s_comInit = true;
         }
@@ -627,8 +468,8 @@ namespace AchievementOverlay
             return false;
         }
 
-        IWICImagingFactory* factory = nullptr;
-        if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))))
+        static IWICImagingFactory* factory = nullptr;
+        if (!factory && FAILED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory))))
         {
             return false;
         }
@@ -638,139 +479,217 @@ namespace AchievementOverlay
         IWICBitmapFrameDecode* frame = nullptr;
         IWICBitmapScaler* scaler = nullptr;
         IWICFormatConverter* conv = nullptr;
-        IDirect3DTexture9* tex = nullptr;
 
         if (SUCCEEDED(factory->CreateDecoderFromFilename(wpath, nullptr, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &decoder)) && SUCCEEDED(decoder->GetFrame(0, &frame)) && SUCCEEDED(factory->CreateFormatConverter(&conv)))
         {
-            // Scale first, then convert to BGRA
             IWICBitmapSource* src = frame;
             if (targetSize > 0 && SUCCEEDED(factory->CreateBitmapScaler(&scaler)) && SUCCEEDED(scaler->Initialize(frame, targetSize, targetSize, WICBitmapInterpolationModeFant)))
             {
                 src = scaler;
             }
 
+            // PF_A8R8G8B8 is stored B,G,R,A in memory, which is exactly WIC's 32bppBGRA
             if (SUCCEEDED(conv->Initialize(src, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom)))
             {
                 UINT w = 0, h = 0;
                 conv->GetSize(&w, &h);
-                if (w > 0 && h > 0 && SUCCEEDED(dev->CreateTexture(w, h, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &tex, nullptr)))
+                if (w > 0 && h > 0)
                 {
-                    D3DLOCKED_RECT rect{};
-                    if (SUCCEEDED(tex->LockRect(0, &rect, nullptr, 0)))
+                    outPixels.resize((size_t)w * h * 4);
+                    if (SUCCEEDED(conv->CopyPixels(nullptr, w * 4, (UINT)outPixels.size(), outPixels.data())))
                     {
-                        // CopyPixels honors the destination stride, so it fills the locked rect even when Pitch != w*4.
-                        HRESULT cp = conv->CopyPixels(nullptr, (UINT)rect.Pitch, (UINT)rect.Pitch * h, (BYTE*)rect.pBits);
-                        tex->UnlockRect(0);
-                        if (SUCCEEDED(cp))
-                        {
-                            out.tex = tex;
-                            out.w = (int)w;
-                            out.h = (int)h;
-                            ok = true;
-                        }
+                        outW = (int)w;
+                        outH = (int)h;
+                        ok = true;
                     }
                 }
             }
         }
 
-        if (!ok && tex) tex->Release();
         if (conv) conv->Release();
         if (scaler) scaler->Release();
         if (frame) frame->Release();
         if (decoder) decoder->Release();
-        factory->Release();
         return ok;
     }
 
-    inline void ReleaseAchievements()
+    namespace Native
     {
-        for (auto& a : g_achievements)
+        inline UFunction* Resolve(UFunction*& cache, bool& searched, const char* fullName)
         {
-            if (a.tex)
+            if (!searched)
             {
-                a.tex->Release();
+                cache = UFunction::FindFunction(fullName);
+                searched = true;
             }
+            return cache;
         }
 
-        g_achievements.clear();
-        g_achievementsLoaded = false;
-    }
-
-    inline void ReleaseCutsceneWatchTexture()
-    {
-        if (g_cutsceneWatchTexture.tex)
-            g_cutsceneWatchTexture.tex->Release();
-        g_cutsceneWatchTexture = {};
-        g_cutsceneWatchTextureLoadAttempted = false;
-        if (g_coopWaitTexture.tex)
-            g_coopWaitTexture.tex->Release();
-        g_coopWaitTexture = {};
-        g_coopWaitTextureLoadAttempted = false;
-        if (g_soloMinigameTexture.tex)
-            g_soloMinigameTexture.tex->Release();
-        g_soloMinigameTexture = {};
-        g_soloMinigameTextureLoadAttempted = false;
-    }
-
-    inline void LoadCutsceneWatchTexture(IDirect3DDevice9* dev)
-    {
-        if (g_cutsceneWatchTexture.tex
-            || g_cutsceneWatchTextureLoadAttempted || !dev)
+        inline void SetPos(UCanvas* c, float x, float y)
         {
-            return;
+            static UFunction* fn = nullptr;
+            static bool searched = false;
+            if (!c || !Resolve(fn, searched, "Function Engine.Canvas.SetPos")) return;
+
+            UCanvas_execSetPos_Params p{};
+            p.PosX = x;
+            p.PosY = y;
+            p.PosZ = 1.0f;
+            c->ProcessEvent(fn, &p, nullptr);
         }
 
-        g_cutsceneWatchTextureLoadAttempted = true;
-        const std::string path = SystemHelper::GetModulePath()
-            + "\\AliceCoop\\images\\cutsceneWatch2.png";
-        const int target = static_cast<int>(
-            58.0f * g_uiScale + 0.5f);
-        LoadTextureFromFile(
-            dev, path.c_str(), g_cutsceneWatchTexture, target);
-    }
-
-    inline void LoadCoopWaitTexture(IDirect3DDevice9* dev)
-    {
-        if (g_coopWaitTexture.tex
-            || g_coopWaitTextureLoadAttempted || !dev)
+        inline void DrawTile(UCanvas* c, UTexture* tex, float xl, float yl, float u, float v, float ul, float vl, const FLinearColor& color)
         {
-            return;
+            static UFunction* fn = nullptr;
+            static bool searched = false;
+            if (!c || !tex || !Resolve(fn, searched, "Function Engine.Canvas.DrawTile")) return;
+
+            UCanvas_execDrawTile_Params p{};
+            p.Tex = tex;
+            p.XL = xl;
+            p.YL = yl;
+            p.U = u;
+            p.V = v;
+            p.UL = ul;
+            p.VL = vl;
+            p.LColor = color;
+            p.ClipTile = 0;
+            c->ProcessEvent(fn, &p, nullptr);
         }
 
-        g_coopWaitTextureLoadAttempted = true;
-        const std::string path = SystemHelper::GetModulePath()
-            + "\\AliceCoop\\images\\aliceWhait.png";
-        const int target = static_cast<int>(
-            86.0f * g_uiScale + 0.5f);
-        LoadTextureFromFile(
-            dev, path.c_str(), g_coopWaitTexture, target);
-    }
-
-    inline void LoadSoloMinigameTexture(IDirect3DDevice9* dev)
-    {
-        if (g_soloMinigameTexture.tex
-            || g_soloMinigameTextureLoadAttempted || !dev)
+        inline void Draw2DLine(UCanvas* c, float x1, float y1, float x2, float y2, const FColor& color)
         {
-            return;
+            static UFunction* fn = nullptr;
+            static bool searched = false;
+            if (!c || !Resolve(fn, searched, "Function Engine.Canvas.Draw2DLine")) return;
+
+            UCanvas_execDraw2DLine_Params p{};
+            p.X1 = x1;
+            p.Y1 = y1;
+            p.X2 = x2;
+            p.Y2 = y2;
+            p.LineColor = color;
+            c->ProcessEvent(fn, &p, nullptr);
         }
 
-        g_soloMinigameTextureLoadAttempted = true;
-        const std::string path = SystemHelper::GetModulePath()
-            + "\\AliceCoop\\images\\aliceSoloLevel.png";
-        const int target = static_cast<int>(
-            82.0f * g_uiScale + 0.5f);
-        LoadTextureFromFile(
-            dev, path.c_str(), g_soloMinigameTexture, target);
+        inline void DrawText(UCanvas* c, const wchar_t* text, float xScale, float yScale, bool shadow)
+        {
+            static UFunction* fn = nullptr;
+            static bool searched = false;
+            if (!c || !text || !Resolve(fn, searched, "Function Engine.Canvas.DrawText")) return;
+
+            UCanvas_execDrawTextWin_Params p{};
+            p.Text = FString(text);
+            p.CR = 0;
+            p.XScale = xScale;
+            p.YScale = yScale;
+            p.RenderInfo.bEnableShadow = shadow ? 1 : 0;
+            c->ProcessEvent(fn, &p, nullptr);
+        }
+
+        inline void TextSize(UCanvas* c, const wchar_t* text, float& xl, float& yl)
+        {
+            static UFunction* fn = nullptr;
+            static bool searched = false;
+            xl = 0.0f;
+            yl = 0.0f;
+            if (!c || !text || !Resolve(fn, searched, "Function Engine.Canvas.TextSize")) return;
+
+            UCanvas_execTextSize_Params p{};
+            p.String = FString(text);
+            c->ProcessEvent(fn, &p, nullptr);
+            xl = p.XL;
+            yl = p.YL;
+        }
+
+        inline UTexture2D* Texture2DCreate(int w, int h)
+        {
+            static UFunction* fn = nullptr;
+            static bool searched = false;
+            static UObject* cdo = nullptr;
+            static bool cdoSearched = false;
+            if (!Resolve(fn, searched, "Function Engine.Texture2D.Create")) return nullptr;
+
+            if (!cdoSearched)
+            {
+                cdoSearched = true;
+                UClass* cls = UTexture2D::StaticClass();
+                for (UObject* obj : *UObject::GObjObjects())
+                {
+                    if (obj && obj->Class == cls && obj->IsDefaultObject())
+                    {
+                        cdo = obj;
+                        break;
+                    }
+                }
+            }
+            if (!cdo) return nullptr;
+
+            UTexture2D_execCreate_Params p{};
+            p.InSizeX = w;
+            p.InSizeY = h;
+            p.InFormat = static_cast<uint8_t>(EPixelFormat::PF_A8R8G8B8);
+            cdo->ProcessEvent(fn, &p, nullptr);
+            return p.ReturnValue;
+        }
+
+        inline constexpr int kUpdateResourceSlot = 80;
+
+        inline bool UpdateResource(UTexture* tex)
+        {
+            if (!tex || !tex->VfTableObject.Dummy) return false;
+
+            uintptr_t* vtable = reinterpret_cast<uintptr_t*>(tex->VfTableObject.Dummy);
+            uintptr_t target = vtable[kUpdateResourceSlot];
+
+            if (g_State.CodeLo && g_State.CodeHi && (target < g_State.CodeLo || target >= g_State.CodeHi))
+                return false;
+
+            using tUpdateResource = void(__thiscall*)(UTexture*);
+            reinterpret_cast<tUpdateResource>(target)(tex);
+            return true;
+        }
     }
 
-    inline void LoadAchievements(IDirect3DDevice9* dev)
+    inline UTexture2D* CreateEngineTexture(const std::vector<uint8_t>& bgra, int w, int h)
     {
-        if (g_achievementsLoaded || !dev)
+        if (w <= 0 || h <= 0 || (w & (w - 1)) || (h & (h - 1)))
+            return nullptr;
+
+        UTexture2D* tex = Native::Texture2DCreate(w, h);
+        if (!tex || tex->SizeX != w || tex->SizeY != h || tex->Format != EPixelFormat::PF_A8R8G8B8 || tex->Mips.ArrayNum < 1 || !tex->Mips.Data.Dummy)
+            return nullptr;
+
+        // TIndirectArray stores pointers to its elements
+        FTexture2DMipMap* mip = reinterpret_cast<FTexture2DMipMap**>(tex->Mips.Data.Dummy)[0];
+        if (!mip || mip->SizeX != w || mip->SizeY != h)
+            return nullptr;
+
+        FUntypedBulkData_Mirror& bulk = mip->Data;
+        const int expectedBytes = w * h * 4;
+        if (bulk.ElementCount != expectedBytes || !bulk.BulkData.Dummy || bulk.LockStatus != 0)
+            return nullptr;
+
+        memcpy(reinterpret_cast<void*>(bulk.BulkData.Dummy), bgra.data(), (size_t)expectedBytes);
+
+        tex->ObjectFlags |= RF_RootSet; // keep it alive across level loads
+        tex->NeverStream = 1;
+        tex->LODGroup = ETextureGroup::TEXTUREGROUP_UI;
+        tex->SRGB = 1;
+
+        // Init only allocates the mip, the render resource is created here once the pixels are in
+        if (!Native::UpdateResource(tex) || !tex->Resource.Dummy)
+            return nullptr;
+
+        return tex;
+    }
+
+    inline void LoadAchievements()
+    {
+        if (g_achievementsLoaded)
             return;
 
         g_achievementsLoaded = true;
-
-        int target = (int)(64.0f * g_uiScale + 0.5f); // icons draw at 64 * g_uiScale, load them ~1:1
 
         std::string dir = SystemHelper::GetModulePath() + "\\achievements\\img\\";
         for (int i = 0; ; i++)
@@ -782,7 +701,25 @@ namespace AchievementOverlay
             }
 
             Texture t;
-            LoadTextureFromFile(dev, p.c_str(), t, target); // keep index alignment even if a load fails
+            if (!g_iconsUnavailable)
+            {
+                std::vector<uint8_t> pixels;
+                int w = 0, h = 0;
+                if (DecodePngToBgra(p.c_str(), kIconTextureSize, pixels, w, h))
+                {
+                    t.tex = CreateEngineTexture(pixels, w, h);
+                    if (t.tex)
+                    {
+                        t.w = w;
+                        t.h = h;
+                    }
+                    else
+                    {
+                        g_iconsUnavailable = true;
+                    }
+                }
+            }
+
             g_achievements.push_back(t);
         }
 
@@ -853,64 +790,217 @@ namespace AchievementOverlay
             size_t bar = line.find('|');
             if (bar == std::string::npos)
             {
-                at.name = line;
+                at.name = Utf8ToWide(line);
             }
             else
             {
-                at.name = line.substr(0, bar);
-                at.desc = line.substr(bar + 1);
+                at.name = Utf8ToWide(line.substr(0, bar));
+                at.desc = Utf8ToWide(line.substr(bar + 1));
             }
 
             g_text.push_back(at);
         }
     }
 
-    // ImGui setup
-    inline void InitImGui(IDirect3DDevice9* pDevice)
+    struct DrawCtx
     {
-        if (g_imguiInitialized || !pDevice || !g_hWnd)
+        UCanvas* canvas = nullptr;
+        UTexture* white = nullptr;
+        float whiteU = 1.0f;
+        float whiteV = 1.0f;
+        float s = 1.0f;
+
+        float fontUnitHeight = 1.0f; // height of one unscaled line in the current font
+        float clipTop = -1.0e9f; // manual vertical clipping, UCanvas only clips right/bottom
+        float clipBottom = 1.0e9f;
+        float coverTop = -1.0e9f;
+        float coverBottom = 1.0e9f;
+    };
+
+    inline void FillRect(DrawCtx& d, float x, float y, float w, float h, const FLinearColor& color)
+    {
+        if (!d.white || w <= 0.0f || h <= 0.0f)
             return;
 
-        g_uiScale = (g_pendingScale > 0.0f) ? g_pendingScale : ComputeUiScale(pDevice);
+        float y0 = y > d.clipTop ? y : d.clipTop;
+        float y1 = (y + h) < d.clipBottom ? (y + h) : d.clipBottom;
+        if (y1 <= y0)
+            return;
 
-        ImGui::CreateContext();
+        Native::SetPos(d.canvas, x, y0);
+        Native::DrawTile(d.canvas, d.white, w, y1 - y0, 0.0f, 0.0f, d.whiteU, d.whiteV, color);
+    }
 
-        ImGuiIO& io = ImGui::GetIO();
-        io.IniFilename = nullptr;
+    inline void OutlineRect(DrawCtx& d, float x, float y, float w, float h, const FColor& color)
+    {
+        float y0 = y > d.clipTop ? y : d.clipTop;
+        float y1 = (y + h) < d.clipBottom ? (y + h) : d.clipBottom;
+        if (y1 <= y0)
+            return;
 
-        ImGuiStyle& style = ImGui::GetStyle();
-        ImGui::StyleColorsDark();
-        style.ScaleAllSizes(g_uiScale);
-        style.FontScaleDpi = g_uiScale; // scales the font to the render resolution
-        style.AntiAliasedLinesUseTex = false; // we render with point sampling, which the textured-line path can't use
+        if (y >= d.clipTop) Native::Draw2DLine(d.canvas, x, y, x + w, y, color);
+        if (y + h <= d.clipBottom) Native::Draw2DLine(d.canvas, x, y + h, x + w, y + h, color);
+        Native::Draw2DLine(d.canvas, x, y0, x, y1, color);
+        Native::Draw2DLine(d.canvas, x + w, y0, x + w, y1, color);
+    }
 
-        if (g_uiScale < 1.15f)
+    inline void DrawIcon(DrawCtx& d, const Texture& t, float x, float y, float size, const FLinearColor& tint)
+    {
+        if (!t.tex)
+            return;
+
+        float y0 = y > d.clipTop ? y : d.clipTop;
+        float y1 = (y + size) < d.clipBottom ? (y + size) : d.clipBottom;
+        if (y1 <= y0)
+            return;
+
+        // Trim the texture window to match the clipped rows
+        float v0 = (y0 - y) / size * (float)t.h;
+        float v1 = (y1 - y) / size * (float)t.h;
+
+        Native::SetPos(d.canvas, x, y0);
+        Native::DrawTile(d.canvas, t.tex, size, y1 - y0, 0.0f, v0, (float)t.w, v1 - v0, tint);
+    }
+
+    inline void MeasureText(DrawCtx& d, const wchar_t* text, float scale, float& outW, float& outH)
+    {
+        float xl = 0.0f, yl = 0.0f;
+        Native::TextSize(d.canvas, text, xl, yl);
+        outW = xl * scale;
+        outH = yl * scale;
+    }
+
+    // Draws one line, either fully inside the vertical window or skipped
+    inline void DrawTextLine(DrawCtx& d, const wchar_t* text, float x, float y, float scale, const FColor& color)
+    {
+        if (!text || !text[0])
+            return;
+
+        float lineH = d.fontUnitHeight * scale;
+        if (y + lineH <= d.clipTop || y >= d.clipBottom || y < d.coverTop || y + lineH > d.coverBottom)
+            return;
+
+        d.canvas->DrawColor = color;
+        Native::SetPos(d.canvas, x, y);
+        Native::DrawText(d.canvas, text, scale, scale, true);
+    }
+
+    // Word-wrap cache, re-measured only when the width, scale, font or text changes
+    struct WrappedText
+    {
+        std::vector<std::wstring> lines;
+        float width = -1.0f;
+        float scale = -1.0f;
+        UFont* font = nullptr;
+        std::wstring source;
+    };
+
+    inline void WrapText(DrawCtx& d, const std::wstring& text, float maxWidth, float scale, WrappedText& cache)
+    {
+        if (cache.width == maxWidth && cache.scale == scale && cache.font == d.canvas->Font && cache.source == text)
+            return;
+
+        cache.lines.clear();
+        cache.source = text;
+        cache.font = d.canvas->Font;
+        cache.width = maxWidth;
+        cache.scale = scale;
+
+        if (text.empty())
+            return;
+
+        std::wstring line;
+        size_t pos = 0;
+        while (pos <= text.size())
         {
-            io.Fonts->AddFontDefaultBitmap();
+            size_t sp = text.find(L' ', pos);
+            std::wstring word = (sp == std::wstring::npos) ? text.substr(pos) : text.substr(pos, sp - pos);
+            pos = (sp == std::wstring::npos) ? text.size() + 1 : sp + 1;
+
+            if (word.empty())
+                continue;
+
+            std::wstring candidate = line.empty() ? word : line + L" " + word;
+            float w = 0.0f, h = 0.0f;
+            MeasureText(d, candidate.c_str(), scale, w, h);
+
+            if (w <= maxWidth || line.empty())
+            {
+                line = candidate;
+            }
+            else
+            {
+                cache.lines.push_back(line);
+                line = word;
+            }
+        }
+
+        if (!line.empty())
+        {
+            cache.lines.push_back(line);
+        }
+    }
+
+    inline constexpr const char* kPreferredFontName = "Font WarfareFonts.Fonts.WarfareFonts_Euro20";
+
+    inline UFont* PickFont()
+    {
+        static UFont* s_preferred = nullptr;
+        static bool s_preferredSearched = false;
+        if (!s_preferredSearched)
+        {
+            s_preferred = UObject::FindObject<UFont>(kPreferredFontName);
+            s_preferredSearched = true;
+        }
+        if (s_preferred)
+            return s_preferred;
+
+        UEngine* engine = g_State.AliceEngine;
+        if (!engine)
+            return nullptr;
+
+        UFont* candidates[] = { engine->SubtitleFont, engine->MediumFont, engine->SmallFont, engine->LargeFont, engine->TinyFont, engine->LoadingTextFont };
+        for (UFont* f : candidates)
+        {
+            if (f) return f;
+        }
+        return nullptr;
+    }
+
+    inline std::unordered_map<UFont*, float> g_fontUnitH;
+
+    inline void UseFont(DrawCtx& d, UFont* f)
+    {
+        if (!f) return;
+
+        d.canvas->Font = f;
+        auto it = g_fontUnitH.find(f);
+        if (it == g_fontUnitH.end())
+        {
+            float w = 0.0f, h = 0.0f;
+            MeasureText(d, L"Ag", 1.0f, w, h);
+            h = h > 1.0f ? h : 16.0f;
+            g_fontUnitH[f] = h;
+            d.fontUnitHeight = h;
         }
         else
         {
-            io.Fonts->AddFontDefaultVector();
+            d.fontUnitHeight = it->second;
         }
-
-        ImGui_ImplWin32_Init(g_hWnd);
-        ImGui_ImplDX9_Init(pDevice);
-
-        g_imguiInitialized = true;
-        g_pInitializedDevice = pDevice;
     }
 
-    inline void ShutdownImGui()
-    {
-        if (!g_imguiInitialized) return;
+    // Layout state shared between the list and the toasts
+    inline std::vector<WrappedText> g_nameWrap;
+    inline std::vector<WrappedText> g_descWrap;
+    inline std::vector<WrappedText> g_toastNameWrap;
+    inline std::vector<WrappedText> g_toastDescWrap;
 
-        ImGui_ImplDX9_Shutdown();
-        ImGui_ImplWin32_Shutdown();
-        ImGui::DestroyContext();
+    inline const std::wstring g_emptyText;
+    inline const std::wstring g_hiddenName = L"???";
+    inline const std::wstring g_hiddenDesc = L"Hidden achievement";
 
-        g_imguiInitialized = false;
-        g_pInitializedDevice = nullptr;
-    }
+    inline const std::wstring& NameOf(size_t i) { return i < g_text.size() ? g_text[i].name : g_emptyText; }
+    inline const std::wstring& DescOf(size_t i) { return i < g_text.size() ? g_text[i].desc : g_emptyText; }
 
     // Input
     inline float GetControllerScrollAxis()
@@ -928,1003 +1018,240 @@ namespace AchievementOverlay
         return 0.0f;
     }
 
+    inline void Toggle()
+    {
+        g_visible = !g_visible;
+    }
+
     // Rendering
-    inline void DrawCoopDevModeBadge()
+    inline void DrawAchievementsWindow(DrawCtx& d, float deltaSeconds)
     {
-        if (!g_coopDevMode)
-            return;
+        UCanvas* c = d.canvas;
+        const float s = d.s;
+        const float dispW = (float)c->SizeX;
+        const float dispH = (float)c->SizeY;
 
-        const float scale = g_uiScale;
-        const ImVec2 padding(12.0f * scale, 8.0f * scale);
-        const ImVec2 origin(16.0f * scale, 16.0f * scale);
-        const char* label = "COOP DEV MODE";
-        const ImVec2 textSize = ImGui::CalcTextSize(label);
-        const ImVec2 statusSize = ImGui::CalcTextSize(
-            g_coopDevStatus.c_str());
-        const float contentWidth =
-            textSize.x > statusSize.x ? textSize.x : statusSize.x;
-        const float statusGap =
-            g_coopDevStatus.empty() ? 0.0f : 5.0f * scale;
-        const float contentHeight =
-            textSize.y + statusGap
-            + (g_coopDevStatus.empty() ? 0.0f : statusSize.y);
-        const ImVec2 minimum(
-            origin.x, origin.y);
-        const ImVec2 maximum(
-            origin.x + contentWidth + padding.x * 2.0f,
-            origin.y + contentHeight + padding.y * 2.0f);
-        ImDrawList* drawList = ImGui::GetForegroundDrawList();
-        drawList->AddRectFilled(
-            minimum, maximum, IM_COL32(7, 13, 23, 218),
-            5.0f * scale);
-        drawList->AddRect(
-            minimum, maximum, IM_COL32(80, 190, 255, 230),
-            5.0f * scale, 0, 1.0f * scale);
-        drawList->AddText(
-            ImVec2(origin.x + padding.x,
-                origin.y + padding.y),
-            IM_COL32(135, 220, 255, 255), label);
-        if (!g_coopDevStatus.empty())
+        const float maxW = dispW - 40.0f * s;
+        const float maxH = dispH - 40.0f * s;
+        const float winW = Clamp(dispW * 0.6f, 700.0f * s < maxW ? 700.0f * s : maxW, maxW);
+        const float winH = Clamp(dispH * 0.8f, 500.0f * s < maxH ? 500.0f * s : maxH, maxH);
+        const float winX = (dispW - winW) * 0.5f;
+        const float winY = (dispH - winH) * 0.5f;
+
+        // Pixel sizes at 1080p
+        const float pad = 12.0f * s;
+        const float titleScale = (26.0f * s) / d.fontUnitHeight;
+        const float nameScale = (20.0f * s) / d.fontUnitHeight;
+        const float bodyScale = (17.0f * s) / d.fontUnitHeight;
+        const float smallScale = (15.0f * s) / d.fontUnitHeight;
+        const float titleH = d.fontUnitHeight * titleScale;
+        const float bodyH = d.fontUnitHeight * bodyScale;
+        const float nameH = d.fontUnitHeight * nameScale;
+        const float smallH = d.fontUnitHeight * smallScale;
+
+        // Controller: A toggles secrets
+        static bool s_aPrev = false;
+        bool aNow = g_padConnected && (g_padState.Gamepad.wButtons & XINPUT_GAMEPAD_A);
+        if (aNow && !s_aPrev) g_showSecrets = !g_showSecrets;
+        s_aPrev = aNow;
+
+        FillRect(d, winX, winY, winW, winH, kWindowBg);
+
+        // Header and list layout. The bottom strip is at least one name line tall so cut text never leaves the window
+        const float titleBarH = titleH + pad;
+        const float helpY = winY + titleBarH + pad * 0.5f;
+        const float separatorY = helpY + smallH + 8.0f * s;
+        const float bottomPad = nameH + 4.0f * s;
+
+        // List region
+        const float listTop = separatorY + 6.0f * s;
+        const float listBottom = winY + winH - bottomPad;
+        const float listH = listBottom - listTop;
+        const float scrollbarW = 8.0f * s;
+        const float listX = winX + pad;
+        const float listW = winW - pad * 2.0f - scrollbarW - 6.0f * s;
+
+        const float iconSize = 64.0f * s;
+        const float textX = listX + iconSize + 10.0f * s;
+        const float textW = listX + listW - textX;
+        const float barH = smallH + 4.0f * s;
+        const float rowPad = 8.0f * s;
+
+        std::lock_guard<std::recursive_mutex> lock(g_stateMutex);
+
+        const size_t count = g_achievements.size();
+        if (g_nameWrap.size() < count) g_nameWrap.resize(count);
+        if (g_descWrap.size() < count) g_descWrap.resize(count);
+
+        // First pass: wrap text and measure row heights
+        static std::vector<float> rowH;
+        rowH.assign(count, 0.0f);
+        float contentH = 0.0f;
+        for (size_t i = 0; i < count; i++)
         {
-            drawList->AddText(
-                ImVec2(origin.x + padding.x,
-                    origin.y + padding.y + textSize.y + statusGap),
-                IM_COL32(205, 218, 228, 245),
-                g_coopDevStatus.c_str());
+            bool unlocked = (i < g_unlocked.size()) ? g_unlocked[i] : false;
+            bool reveal = !IsSecret((int)i) || g_showSecrets || unlocked;
+
+            WrapText(d, reveal ? NameOf(i) : g_hiddenName, textW, nameScale, g_nameWrap[i]);
+            WrapText(d, reveal ? DescOf(i) : g_hiddenDesc, textW, bodyScale, g_descWrap[i]);
+
+            float textH = g_nameWrap[i].lines.size() * nameH + g_descWrap[i].lines.size() * bodyH + 4.0f * s + barH;
+            rowH[i] = (textH > iconSize ? textH : iconSize) + rowPad * 2.0f;
+            contentH += rowH[i];
         }
-    }
-
-    inline bool IsCoopDevInteractive()
-    {
-        return g_coopDevMode
-            && (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-    }
-
-    inline bool IsCoopWaitInteractive()
-    {
-        return g_coopWaitingForPeer.load(std::memory_order_acquire)
-            && (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-    }
-
-    inline void PollCoopContextShortcut()
-    {
-		const bool confirmVisible =
-			g_coopSaveSyncWarningVisible.load(std::memory_order_acquire);
-		const bool yesDown = (GetAsyncKeyState('Y') & 0x8000) != 0;
-		const bool noDown = (GetAsyncKeyState('N') & 0x8000) != 0;
-		const bool confirmDown = yesDown || noDown;
-		if (confirmVisible && confirmDown
-			&& !g_coopSaveSyncConfirmKeyDown.load(
-				std::memory_order_relaxed))
-		{
-			g_coopSaveSyncWarningVisible.store(
-				false, std::memory_order_release);
-			if (yesDown)
-				g_coopSaveSyncRequested.store(
-					true, std::memory_order_release);
-		}
-		g_coopSaveSyncConfirmKeyDown.store(
-			confirmDown, std::memory_order_relaxed);
-
-		const bool saveSyncKeyDown =
-			(GetAsyncKeyState('K') & 0x8000) != 0;
-		if (saveSyncKeyDown
-			&& !g_coopSaveSyncShortcutDown.load(std::memory_order_relaxed)
-			&& !confirmVisible
-			&& g_coopMenuVisible.load(std::memory_order_acquire)
-			&& !g_coopMenuHostRole.load(std::memory_order_acquire)
-			&& g_coopSaveSyncAvailable.load(std::memory_order_acquire)
-			&& !g_coopSaveSyncInProgress.load(std::memory_order_acquire))
-		{
-			g_coopSaveSyncWarningVisible.store(
-				true, std::memory_order_release);
-		}
-		g_coopSaveSyncShortcutDown.store(
-			saveSyncKeyDown, std::memory_order_relaxed);
-
-        const bool keyDown =
-            (GetAsyncKeyState('L') & 0x8000) != 0;
-        if (keyDown && !g_coopContextShortcutDown)
-        {
-            // L is deliberately contextual: outside a visible co-op action it
-            // remains an ordinary game key and cannot queue a later command.
-            if (g_coopWaitingForPeer.load(std::memory_order_acquire))
-            {
-                g_coopForceCutsceneRequested.store(
-                    true, std::memory_order_release);
-            }
-            else if (g_coopMenuVisible.load(std::memory_order_acquire)
-                && !g_coopMenuHostRole.load(std::memory_order_acquire)
-                && g_coopMenuCanJoinHost.load(std::memory_order_acquire))
-            {
-                g_coopJoinHostRequested.store(
-                    true, std::memory_order_release);
-            }
-        }
-        g_coopContextShortcutDown = keyDown;
-    }
-
-    inline void QueueCoopDevCommand(CoopDevCommand command)
-    {
-        g_coopDevCommand.store(
-            static_cast<int>(command), std::memory_order_release);
-    }
-
-    inline void DrawCoopDevInteractivePanel()
-    {
-        if (!IsCoopDevInteractive())
-            return;
-
-        const float scale = g_uiScale;
-        ImGui::SetNextWindowPos(
-            ImVec2(16.0f * scale, 92.0f * scale),
-            ImGuiCond_Always);
-        ImGui::SetNextWindowSize(
-            ImVec2(430.0f * scale, 0.0f),
-            ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.94f);
-        constexpr ImGuiWindowFlags flags =
-            ImGuiWindowFlags_NoCollapse
-            | ImGuiWindowFlags_NoSavedSettings
-            | ImGuiWindowFlags_AlwaysAutoResize;
-        if (ImGui::Begin("AliceCoop dev mode",
-            nullptr, flags))
-        {
-            ImGui::TextDisabled(
-                "Runtime diagnostics. Hold Alt to keep this panel open.");
-            std::string details;
-            {
-                std::lock_guard<std::mutex> lock(g_coopDevMutex);
-                details = g_coopDevDetails;
-            }
-            if (!details.empty())
-                ImGui::TextUnformatted(details.c_str());
-            else
-                ImGui::TextDisabled("No remote presentation data yet.");
-        }
-        ImGui::End();
-    }
-
-    inline void DrawPeerCutsceneIndicator(IDirect3DDevice9* pDevice)
-    {
-        if (!g_peerWatchingCutscene.load(std::memory_order_acquire))
-            return;
-
-        LoadCutsceneWatchTexture(pDevice);
-
-        const float scale = g_uiScale;
-        const float iconSize = 58.0f * scale;
-        const float margin = 18.0f * scale;
-        const ImGuiIO& io = ImGui::GetIO();
-        ImDrawList* drawList = ImGui::GetForegroundDrawList();
-        const float preferredIconX =
-            io.DisplaySize.x - margin - iconSize;
-        const ImVec2 iconMinimum(
-            preferredIconX > margin ? preferredIconX : margin,
-            margin);
-        const ImVec2 iconMaximum(
-            iconMinimum.x + iconSize, iconMinimum.y + iconSize);
-        if (g_cutsceneWatchTexture.tex)
-        {
-            drawList->AddImage(
-                (ImTextureID)(uintptr_t)g_cutsceneWatchTexture.tex,
-                iconMinimum, iconMaximum);
-        }
-        else
-        {
-            drawList->AddCircle(
-                ImVec2(iconMinimum.x + iconSize * 0.5f,
-                    iconMinimum.y + iconSize * 0.5f),
-                iconSize * 0.34f,
-                IM_COL32(244, 205, 92, 235),
-                24, 2.0f * scale);
-        }
-    }
-
-    inline void DrawCoopWaitIndicator(IDirect3DDevice9* pDevice)
-    {
-        if (!g_coopWaitingForPeer.load(std::memory_order_acquire))
-            return;
-
-        LoadCoopWaitTexture(pDevice);
-        const float scale = g_uiScale;
-        const float panelWidth = 445.0f * scale;
-        const float panelHeight = 100.0f * scale;
-        const float iconSize = 58.0f * scale;
-        const float panelTop = 62.0f * scale;
-        const float padding = 12.0f * scale;
-        const ImGuiIO& io = ImGui::GetIO();
-        const ImVec2 panelMinimum(
-            (io.DisplaySize.x - panelWidth) * 0.5f,
-            panelTop);
-        const ImVec2 panelMaximum(
-            panelMinimum.x + panelWidth,
-            panelMinimum.y + panelHeight);
-        const ImVec2 iconMinimum(
-            panelMinimum.x + padding,
-            panelMinimum.y + (panelHeight - iconSize) * 0.5f);
-        const ImVec2 iconMaximum(
-            iconMinimum.x + iconSize,
-            iconMinimum.y + iconSize);
-        ImDrawList* drawList = ImGui::GetForegroundDrawList();
-        drawList->AddRectFilled(
-            panelMinimum, panelMaximum,
-            IM_COL32(15, 12, 20, 218),
-            9.0f * scale);
-        drawList->AddRect(
-            panelMinimum, panelMaximum,
-            IM_COL32(213, 193, 225, 185),
-            9.0f * scale, 0, 1.2f * scale);
-        if (g_coopWaitTexture.tex)
-        {
-            drawList->AddImage(
-                (ImTextureID)(uintptr_t)g_coopWaitTexture.tex,
-                iconMinimum, iconMaximum);
-        }
-        else
-        {
-            drawList->AddCircle(
-                ImVec2(iconMinimum.x + iconSize * 0.5f,
-                    iconMinimum.y + iconSize * 0.5f),
-                iconSize * 0.34f,
-                IM_COL32(244, 205, 92, 235),
-                28, 2.0f * scale);
-        }
-        const char* message = "Waiting for the other player...";
-        const ImVec2 textSize = ImGui::CalcTextSize(message);
-        const ImVec2 textPosition(
-            iconMaximum.x + 15.0f * scale,
-            panelMinimum.y + 25.0f * scale);
-        drawList->AddText(
-            textPosition,
-            IM_COL32(244, 240, 248, 245),
-            message);
-        const ImVec2 emergencyPosition(
-            textPosition.x,
-            textPosition.y + textSize.y + 8.0f * scale);
-        const ImVec2 buttonSize(320.0f * scale, 28.0f * scale);
-        ImGui::SetNextWindowPos(
-            ImVec2(emergencyPosition.x - 6.0f * scale,
-                emergencyPosition.y - 5.0f * scale),
-            ImGuiCond_Always);
-        ImGui::SetNextWindowSize(
-            ImVec2(buttonSize.x + 12.0f * scale,
-                buttonSize.y + 10.0f * scale),
-            ImGuiCond_Always);
-        constexpr ImGuiWindowFlags emergencyFlags =
-            ImGuiWindowFlags_NoDecoration
-            | ImGuiWindowFlags_NoMove
-            | ImGuiWindowFlags_NoSavedSettings
-            | ImGuiWindowFlags_NoBackground;
-        if (ImGui::Begin(
-            "##alicecoop_force_cutscene", nullptr, emergencyFlags))
-        {
-            constexpr const char* buttonText =
-                "Press \"L\"  |  FORCE ACTIVATE FOR BOTH PLAYERS";
-            const bool clicked = ImGui::InvisibleButton(
-                "##alicecoop_force_cutscene_button", buttonSize);
-            const ImVec2 buttonMinimum = ImGui::GetItemRectMin();
-            const ImVec2 buttonMaximum = ImGui::GetItemRectMax();
-            const bool buttonActive = ImGui::IsItemActive();
-            const bool buttonHovered = ImGui::IsItemHovered();
-            const ImU32 buttonColour = buttonActive
-                ? IM_COL32(255, 224, 92, 255)
-                : (buttonHovered
-                    ? IM_COL32(255, 235, 122, 255)
-                    : IM_COL32(255, 210, 54, 255));
-            // The wait panel itself is rendered on ImGui's foreground list.
-            // Draw the button there as well so its opaque colours are not
-            // composited underneath the panel background.
-            ImDrawList* buttonDrawList = ImGui::GetForegroundDrawList();
-            buttonDrawList->AddRectFilled(
-                buttonMinimum, buttonMaximum, buttonColour,
-                5.0f * scale);
-            buttonDrawList->AddRect(
-                buttonMinimum, buttonMaximum,
-                IM_COL32(32, 20, 8, 255),
-                5.0f * scale, 0, 2.0f * scale);
-            const ImVec2 buttonTextSize =
-                ImGui::CalcTextSize(buttonText);
-            buttonDrawList->AddText(
-                ImVec2(
-                    buttonMinimum.x
-                        + (buttonSize.x - buttonTextSize.x) * 0.5f,
-                    buttonMinimum.y
-                        + (buttonSize.y - buttonTextSize.y) * 0.5f),
-                IM_COL32(18, 12, 6, 255),
-                buttonText);
-            if (clicked && IsCoopWaitInteractive())
-            {
-                g_coopForceCutsceneRequested.store(
-                    true, std::memory_order_release);
-            }
-        }
-        ImGui::End();
-    }
-
-    inline bool IsSoloMinigameWarningVisible()
-    {
-        return GetTickCount64()
-            < g_soloMinigameWarningUntil.load(
-                std::memory_order_acquire);
-    }
-
-    inline bool IsCoopJoinTeleportHintVisible()
-    {
-        return GetTickCount64()
-            < g_coopJoinTeleportHintUntil.load(
-                std::memory_order_acquire);
-    }
-
-    inline void DrawCoopJoinTeleportHint()
-    {
-        if (!IsCoopJoinTeleportHintVisible())
-            return;
-
-        const float scale = g_uiScale;
-        const char* heading = "JOIN COMPLETE";
-        const char* message =
-            "Press \"P\": safe teleport   |   Press \"O\": forced teleport";
-        const ImVec2 headingSize = ImGui::CalcTextSize(heading);
-        const ImVec2 messageSize = ImGui::CalcTextSize(message);
-        const float paddingX = 18.0f * scale;
-        const float paddingY = 11.0f * scale;
-        const float gap = 5.0f * scale;
-        const float panelWidth = (std::max)(headingSize.x, messageSize.x)
-            + paddingX * 2.0f;
-        const float panelHeight = headingSize.y + messageSize.y + gap
-            + paddingY * 2.0f;
-        const ImGuiIO& io = ImGui::GetIO();
-        const ImVec2 minimum(
-            (io.DisplaySize.x - panelWidth) * 0.5f,
-            62.0f * scale);
-        const ImVec2 maximum(
-            minimum.x + panelWidth,
-            minimum.y + panelHeight);
-        ImDrawList* drawList = ImGui::GetForegroundDrawList();
-        drawList->AddRectFilled(
-            minimum, maximum, IM_COL32(12, 17, 27, 226),
-            8.0f * scale);
-        drawList->AddRect(
-            minimum, maximum, IM_COL32(104, 205, 255, 225),
-            8.0f * scale, 0, 1.2f * scale);
-        const float textX = minimum.x + paddingX;
-        drawList->AddText(
-            ImVec2(textX, minimum.y + paddingY),
-            IM_COL32(120, 220, 255, 255), heading);
-        drawList->AddText(
-            ImVec2(textX,
-                minimum.y + paddingY + headingSize.y + gap),
-            IM_COL32(242, 241, 237, 250), message);
-    }
-
-    inline void DrawCoopMainMenuPanel()
-    {
-        if (!g_coopMenuVisible.load(std::memory_order_acquire))
-        {
-            g_coopMenuHovered.store(false, std::memory_order_release);
-            return;
-        }
-
-        std::string peerMap;
-        std::string status;
-        {
-            std::lock_guard<std::mutex> lock(g_coopMenuMutex);
-            peerMap = g_coopMenuPeerMap;
-            status = g_coopMenuStatus;
-        }
-        const bool hostRole =
-            g_coopMenuHostRole.load(std::memory_order_acquire);
-        const bool relayConnected =
-            g_coopMenuRelayConnected.load(std::memory_order_acquire);
-        const bool peerConnected =
-            g_coopMenuPeerConnected.load(std::memory_order_acquire);
-        const bool canJoin =
-            g_coopMenuCanJoinHost.load(std::memory_order_acquire);
-		const bool saveSyncAvailable =
-			g_coopSaveSyncAvailable.load(std::memory_order_acquire);
-		const bool saveSyncInProgress =
-			g_coopSaveSyncInProgress.load(std::memory_order_acquire);
-		const int saveSyncProgress =
-			g_coopSaveSyncProgress.load(std::memory_order_acquire);
-		std::string saveSyncStatus;
-		{
-			std::lock_guard<std::mutex> lock(g_coopSaveSyncMutex);
-			saveSyncStatus = g_coopSaveSyncStatus;
-		}
-
-        if (peerMap.size() > 38)
-            peerMap = peerMap.substr(0, 35) + "...";
-        if (status.size() > 48)
-            status = status.substr(0, 45) + "...";
-
-        const float scale = g_uiScale;
-        const ImGuiIO& io = ImGui::GetIO();
-        const ImVec2 panelSize(
-            352.0f * scale,
-            (hostRole ? 130.0f : 216.0f) * scale);
-        const ImVec2 panelMinimum(
-            18.0f * scale,
-            io.DisplaySize.y - panelSize.y - 18.0f * scale);
-        const ImVec2 panelMaximum(
-            panelMinimum.x + panelSize.x,
-            panelMinimum.y + panelSize.y);
-        const float left = panelMinimum.x + 16.0f * scale;
-        const float line = 22.0f * scale;
-
-        ImDrawList* drawList = ImGui::GetForegroundDrawList();
-        drawList->AddRectFilled(
-            panelMinimum, panelMaximum,
-            IM_COL32(17, 15, 23, 226), 8.0f * scale);
-        drawList->AddRect(
-            panelMinimum, panelMaximum,
-            IM_COL32(185, 169, 204, 205),
-            8.0f * scale, 0, 1.3f * scale);
-        drawList->AddText(
-            ImVec2(left, panelMinimum.y + 13.0f * scale),
-            IM_COL32(250, 235, 255, 255),
-            "ALICE COOP");
-
-        const char* roleText = hostRole ? "ROLE: HOST" : "ROLE: CLIENT";
-        drawList->AddText(
-            ImVec2(left, panelMinimum.y + 13.0f * scale + line),
-            hostRole
-                ? IM_COL32(255, 191, 91, 255)
-                : IM_COL32(111, 196, 255, 255),
-            roleText);
-        drawList->AddText(
-            ImVec2(left, panelMinimum.y + 13.0f * scale + line * 2.0f),
-            relayConnected
-                ? IM_COL32(118, 237, 151, 255)
-                : IM_COL32(255, 206, 94, 255),
-            relayConnected
-                ? "RELAY: CONNECTED"
-                : "RELAY: CONNECTING...");
-        const std::string peerText = peerConnected
-            ? "PEER: ONLINE  |  " + (
-                peerMap.empty() ? std::string("map unknown") : peerMap)
-            : "PEER: OFFLINE";
-        drawList->AddText(
-            ImVec2(left, panelMinimum.y + 13.0f * scale + line * 3.0f),
-            peerConnected
-                ? IM_COL32(118, 237, 151, 255)
-                : IM_COL32(187, 180, 194, 255),
-            peerText.c_str());
-
-        if (!hostRole)
-        {
-            const ImVec2 buttonMinimum(
-                left,
-                panelMaximum.y - 83.0f * scale);
-            const ImVec2 buttonSize(
-                panelSize.x - 32.0f * scale,
-                29.0f * scale);
-            const ImVec2 buttonMaximum(
-                buttonMinimum.x + buttonSize.x,
-                buttonMinimum.y + buttonSize.y);
-
-            ImGui::SetNextWindowPos(
-                panelMinimum, ImGuiCond_Always);
-            ImGui::SetNextWindowSize(
-                panelSize, ImGuiCond_Always);
-            constexpr ImGuiWindowFlags panelFlags =
-                ImGuiWindowFlags_NoDecoration
-                | ImGuiWindowFlags_NoMove
-                | ImGuiWindowFlags_NoSavedSettings
-                | ImGuiWindowFlags_NoBackground;
-            if (ImGui::Begin(
-                "##alicecoop_main_menu_panel", nullptr, panelFlags))
-            {
-                g_coopMenuHovered.store(
-                    ImGui::IsWindowHovered(
-                        ImGuiHoveredFlags_AllowWhenBlockedByActiveItem),
-                    std::memory_order_release);
-                ImGui::SetCursorScreenPos(buttonMinimum);
-                const bool clicked = ImGui::InvisibleButton(
-                    "##alicecoop_join_host", buttonSize);
-                const bool active = ImGui::IsItemActive();
-                const bool hovered = ImGui::IsItemHovered();
-                const ImU32 fill = !canJoin
-                    ? IM_COL32(57, 53, 63, 245)
-                    : (active
-                        ? IM_COL32(255, 218, 94, 255)
-                        : (hovered
-                            ? IM_COL32(255, 232, 127, 255)
-                            : IM_COL32(247, 204, 70, 255)));
-                drawList->AddRectFilled(
-                    buttonMinimum, buttonMaximum,
-                    fill, 5.0f * scale);
-                drawList->AddRect(
-                    buttonMinimum, buttonMaximum,
-                    IM_COL32(29, 22, 12, 255),
-                    5.0f * scale, 0, 1.5f * scale);
-                const char* label = canJoin
-                    ? "Press \"L\"  |  JOIN HOST CHECKPOINT"
-                    : (status.empty()
-                        ? "WAITING FOR HOST..."
-                        : status.c_str());
-                const ImVec2 textSize =
-                    ImGui::CalcTextSize(label);
-                drawList->AddText(
-                    ImVec2(
-                        buttonMinimum.x
-                            + (buttonSize.x - textSize.x) * 0.5f,
-                        buttonMinimum.y
-                            + (buttonSize.y - textSize.y) * 0.5f),
-                    canJoin
-                        ? IM_COL32(22, 15, 8, 255)
-                        : IM_COL32(194, 188, 201, 255),
-                    label);
-                if (clicked && canJoin)
-                {
-                    g_coopJoinHostRequested.store(
-                        true, std::memory_order_release);
-                }
-
-				const ImVec2 syncMinimum(
-					left, panelMaximum.y - 45.0f * scale);
-				const ImVec2 syncMaximum(
-					syncMinimum.x + buttonSize.x,
-					syncMinimum.y + buttonSize.y);
-				ImGui::SetCursorScreenPos(syncMinimum);
-				const bool syncClicked = ImGui::InvisibleButton(
-					"##alicecoop_sync_host_save", buttonSize);
-				const bool syncActive = ImGui::IsItemActive();
-				const bool syncHovered = ImGui::IsItemHovered();
-				const bool syncEnabled = saveSyncAvailable
-					&& !saveSyncInProgress;
-				const ImU32 syncFill = !syncEnabled
-					? IM_COL32(57, 53, 63, 245)
-					: (syncActive
-						? IM_COL32(255, 134, 108, 255)
-						: (syncHovered
-							? IM_COL32(255, 159, 129, 255)
-							: IM_COL32(229, 112, 91, 255)));
-				drawList->AddRectFilled(
-					syncMinimum, syncMaximum,
-					syncFill, 5.0f * scale);
-				drawList->AddRect(
-					syncMinimum, syncMaximum,
-					IM_COL32(32, 18, 15, 255),
-					5.0f * scale, 0, 1.5f * scale);
-				std::string syncLabel;
-				if (saveSyncInProgress)
-					syncLabel = "RECEIVING HOST SAVE... "
-						+ std::to_string(saveSyncProgress) + "%";
-				else if (!saveSyncStatus.empty())
-					syncLabel = saveSyncStatus;
-				else if (syncEnabled)
-					syncLabel = "Press \"K\" | SYNC HOST SAVE (OVERWRITES PROFILE)";
-				else
-					syncLabel = "HOST SAVE SYNC UNAVAILABLE";
-				if (syncLabel.size() > 46)
-					syncLabel = syncLabel.substr(0, 43) + "...";
-				const ImVec2 syncTextSize =
-					ImGui::CalcTextSize(syncLabel.c_str());
-				drawList->AddText(
-					ImVec2(
-						syncMinimum.x
-							+ (buttonSize.x - syncTextSize.x) * 0.5f,
-						syncMinimum.y
-							+ (buttonSize.y - syncTextSize.y) * 0.5f),
-					syncEnabled
-						? IM_COL32(27, 13, 10, 255)
-						: IM_COL32(194, 188, 201, 255),
-					syncLabel.c_str());
-				if (syncClicked && syncEnabled)
-				{
-					g_coopSaveSyncWarningVisible.store(
-						true, std::memory_order_release);
-				}
-            }
-            ImGui::End();
-        }
-        else
-        {
-            g_coopMenuHovered.store(false, std::memory_order_release);
-        }
-    }
-
-	inline void DrawCoopSaveSyncWarning()
-	{
-		if (!g_coopSaveSyncWarningVisible.load(
-				std::memory_order_acquire))
-			return;
-
-		const float scale = g_uiScale;
-		const ImGuiIO& io = ImGui::GetIO();
-		std::string profileName;
-		{
-			std::lock_guard<std::mutex> lock(g_coopSaveSyncMutex);
-			profileName = g_coopSaveSyncProfileName;
-		}
-		if (profileName.size() > 40)
-			profileName = profileName.substr(0, 37) + "...";
-		const ImVec2 size(690.0f * scale, 232.0f * scale);
-		const ImVec2 minimum(
-			(io.DisplaySize.x - size.x) * 0.5f,
-			(io.DisplaySize.y - size.y) * 0.5f);
-		const ImVec2 maximum(minimum.x + size.x, minimum.y + size.y);
-		ImDrawList* drawList = ImGui::GetForegroundDrawList();
-		drawList->AddRectFilled(
-			minimum, maximum, IM_COL32(24, 12, 14, 246),
-			10.0f * scale);
-		drawList->AddRect(
-			minimum, maximum, IM_COL32(255, 92, 92, 255),
-			10.0f * scale, 0, 2.0f * scale);
-		const float left = minimum.x + 24.0f * scale;
-		float top = minimum.y + 20.0f * scale;
-		drawList->AddText(
-			ImVec2(left, top), IM_COL32(255, 91, 91, 255),
-			"WARNING: HOST SAVE SYNCHRONIZATION");
-		top += 34.0f * scale;
-		drawList->AddText(
-			ImVec2(left, top), IM_COL32(255, 224, 94, 255),
-			("SELECTED CLIENT PROFILE: \"" + profileName
-				+ "\" WILL BE OVERWRITTEN.").c_str());
-		top += 27.0f * scale;
-		drawList->AddText(
-			ImVec2(left, top), IM_COL32(255, 240, 240, 255),
-			"The HOST's complete saved progress will replace this profile.");
-		top += 25.0f * scale;
-		drawList->AddText(
-			ImVec2(left, top), IM_COL32(255, 194, 174, 255),
-			"The client's checkpoints, collectibles, statistics and upgrades will be lost.");
-		top += 25.0f * scale;
-		drawList->AddText(
-			ImVec2(left, top), IM_COL32(213, 205, 216, 255),
-			"Use a new empty client profile. Both files are verified before anything is replaced.");
-		top += 39.0f * scale;
-		drawList->AddText(
-			ImVec2(left, top), IM_COL32(255, 224, 94, 255),
-			"Press \"Y\" to receive and overwrite   |   Press \"N\" to cancel");
-	}
-
-	inline void DrawCoopPauseMenuPanel()
-	{
-		if (!g_coopPauseVisible.load(std::memory_order_acquire))
-		{
-			g_coopPauseHovered.store(false, std::memory_order_release);
-			return;
-		}
-
-		const float scale = g_uiScale;
-		const ImGuiIO& io = ImGui::GetIO();
-		const ImVec2 panelSize(500.0f * scale, 205.0f * scale);
-		const ImVec2 panelMinimum(
-			18.0f * scale,
-			io.DisplaySize.y - panelSize.y - 18.0f * scale);
-		const ImVec2 panelMaximum(
-			panelMinimum.x + panelSize.x,
-			panelMinimum.y + panelSize.y);
-		const float left = panelMinimum.x + 16.0f * scale;
-		const float line = 23.0f * scale;
-		const bool hostRole =
-			g_coopPauseHostRole.load(std::memory_order_acquire);
-		const bool peerConnected =
-			g_coopPausePeerConnected.load(std::memory_order_acquire);
-		bool trails = g_coopMovementTrailsEnabled.load(
-			std::memory_order_acquire);
-
-		// Use the foreground list just like the proven main-menu panel. A normal
-		// ImGui window can be occluded by Alice's Scaleform pause movie in DX9.
-		ImDrawList* drawList = ImGui::GetForegroundDrawList();
-		drawList->AddRectFilled(
-			panelMinimum, panelMaximum,
-			IM_COL32(17, 15, 23, 240), 8.0f * scale);
-		drawList->AddRect(
-			panelMinimum, panelMaximum,
-			IM_COL32(185, 169, 204, 225),
-			8.0f * scale, 0, 1.3f * scale);
-		drawList->AddText(
-			ImVec2(left, panelMinimum.y + 13.0f * scale),
-			IM_COL32(250, 235, 255, 255), "ALICE COOP");
-		const std::string stateText = std::string("ROLE: ")
-			+ (hostRole ? "HOST" : "CLIENT")
-			+ "  |  PEER: " + (peerConnected ? "ONLINE" : "OFFLINE");
-		drawList->AddText(
-			ImVec2(left, panelMinimum.y + 13.0f * scale + line),
-			peerConnected
-				? IM_COL32(118, 237, 151, 255)
-				: IM_COL32(205, 193, 211, 255),
-			stateText.c_str());
-		drawList->AddText(
-			ImVec2(left, panelMinimum.y + 13.0f * scale + line * 2.0f),
-			IM_COL32(230, 225, 234, 255),
-			"P - safe teleport   |   O - forced teleport");
-		drawList->AddText(
-			ImVec2(left, panelMinimum.y + 13.0f * scale + line * 3.0f),
-			IM_COL32(230, 225, 234, 255),
-			"L - visible JOIN / FORCE CUTSCENE action");
-
-		const ImVec2 checkMinimum(
-			left, panelMinimum.y + 13.0f * scale + line * 4.25f);
-		const float boxSize = 17.0f * scale;
-		const ImVec2 checkMaximum(
-			checkMinimum.x + boxSize, checkMinimum.y + boxSize);
-		g_coopPauseHovered.store(false, std::memory_order_release);
-
-		drawList->AddRectFilled(
-			checkMinimum, checkMaximum,
-			IM_COL32(48, 43, 56, 255),
-			3.0f * scale);
-		drawList->AddRect(
-			checkMinimum, checkMaximum,
-			IM_COL32(203, 186, 219, 255), 3.0f * scale);
-		if (trails)
-		{
-			drawList->AddRectFilled(
-				ImVec2(checkMinimum.x + 4.0f * scale,
-					checkMinimum.y + 4.0f * scale),
-				ImVec2(checkMaximum.x - 4.0f * scale,
-					checkMaximum.y - 4.0f * scale),
-				IM_COL32(255, 215, 93, 255), 2.0f * scale);
-		}
-		drawList->AddText(
-			ImVec2(checkMaximum.x + 9.0f * scale, checkMinimum.y),
-			IM_COL32(240, 232, 244, 255),
-			"Keep proxy movement trails (double jump / glide)");
-		drawList->AddText(
-			ImVec2(left, checkMinimum.y + 27.0f * scale),
-			IM_COL32(222, 207, 230, 255),
-			"Press T while this pause menu is open to toggle");
-		drawList->AddText(
-			ImVec2(left, checkMinimum.y + 51.0f * scale),
-			IM_COL32(174, 165, 183, 255),
-			"Profile sync: return to the main menu and press K.");
-	}
-
-    inline void DrawSoloMinigameWarning(
-        IDirect3DDevice9* pDevice)
-    {
-        if (!IsSoloMinigameWarningVisible())
-            return;
-
-        LoadSoloMinigameTexture(pDevice);
-        const float scale = g_uiScale;
-        const char* heading = "SOLO MINIGAME";
-        const char* message =
-            "This section is played separately - share your score with your friend!";
-        const ImVec2 headingSize = ImGui::CalcTextSize(heading);
-        const ImVec2 messageSize = ImGui::CalcTextSize(message);
-        const float iconSize = 72.0f * scale;
-        const float iconGap = 14.0f * scale;
-        const float paddingX = 18.0f * scale;
-        const float paddingY = 13.0f * scale;
-        const float gap = 6.0f * scale;
-        const float textWidth =
-            (std::max)(headingSize.x, messageSize.x);
-        const float textHeight =
-            headingSize.y + gap + messageSize.y;
-        const float panelWidth =
-            iconSize + iconGap + textWidth
-                + paddingX * 2.0f;
-        const float panelHeight =
-            (std::max)(iconSize, textHeight)
-                + paddingY * 2.0f;
-        const ImGuiIO& io = ImGui::GetIO();
-        const ImVec2 minimum(
-            (io.DisplaySize.x - panelWidth) * 0.5f,
-            62.0f * scale);
-        const ImVec2 maximum(
-            minimum.x + panelWidth,
-            minimum.y + panelHeight);
-        ImDrawList* drawList = ImGui::GetForegroundDrawList();
-        drawList->AddRectFilled(
-            minimum, maximum,
-            IM_COL32(12, 17, 27, 226),
-            8.0f * scale);
-        drawList->AddRect(
-            minimum, maximum,
-            IM_COL32(235, 188, 82, 225),
-            8.0f * scale, 0, 1.2f * scale);
-        const ImVec2 iconMinimum(
-            minimum.x + paddingX,
-            minimum.y + (panelHeight - iconSize) * 0.5f);
-        const ImVec2 iconMaximum(
-            iconMinimum.x + iconSize,
-            iconMinimum.y + iconSize);
-        if (g_soloMinigameTexture.tex)
-        {
-            drawList->AddImage(
-                (ImTextureID)(uintptr_t)
-                    g_soloMinigameTexture.tex,
-                iconMinimum, iconMaximum);
-        }
-        else
-        {
-            drawList->AddCircle(
-                ImVec2(
-                    iconMinimum.x + iconSize * 0.5f,
-                    iconMinimum.y + iconSize * 0.5f),
-                iconSize * 0.35f,
-                IM_COL32(255, 210, 105, 255),
-                24, 2.0f * scale);
-        }
-        const float textX =
-            iconMaximum.x + iconGap;
-        const float textY =
-            minimum.y + (panelHeight - textHeight) * 0.5f;
-        drawList->AddText(
-            ImVec2(textX, textY),
-            IM_COL32(255, 210, 105, 255),
-            heading);
-        drawList->AddText(
-            ImVec2(
-                textX, textY + headingSize.y + gap),
-            IM_COL32(242, 241, 237, 250),
-            message);
-    }
-
-    inline void DrawAchievementsWindow(IDirect3DDevice9* pDevice)
-    {
-        ImGuiIO& io = ImGui::GetIO();
-        ImVec2 disp = io.DisplaySize;
-
-        ImVec2 winSize(disp.x * 0.6f, disp.y * 0.8f);
-        const float availableWidth = (std::max)(1.0f, disp.x - 40.0f);
-        const float availableHeight = (std::max)(1.0f, disp.y - 40.0f);
-        winSize.x = (std::min)(availableWidth,
-            (std::max)((std::min)(700.0f, availableWidth), winSize.x));
-        winSize.y = (std::min)(availableHeight,
-            (std::max)((std::min)(500.0f, availableHeight), winSize.y));
-
-        bool resChanged = ((int)disp.x != g_lastDispW) || ((int)disp.y != g_lastDispH);
-        g_lastDispW = (int)disp.x;
-        g_lastDispH = (int)disp.y;
-
-        ImGuiCond sizeCond = resChanged ? ImGuiCond_Always : ImGuiCond_FirstUseEver;
-        ImGui::SetNextWindowSize(winSize, sizeCond);
-        ImGui::SetNextWindowPos(ImVec2(disp.x * 0.5f, disp.y * 0.5f), sizeCond, ImVec2(0.5f, 0.5f));
+        // Scrolling
+        float maxScroll = contentH - listH;
+        if (maxScroll < 0.0f) maxScroll = 0.0f;
 
         float axis = GetControllerScrollAxis();
-        float wheel = ImGui::GetIO().MouseWheel;
-
-        if (g_restoreScroll)
+        if (axis != 0.0f)
         {
-            ImGui::SetNextWindowScroll(ImVec2(-1.0f, g_savedScrollY));
+            g_scrollY -= axis * 1500.0f * s * deltaSeconds;
         }
-
-        if (ImGui::Begin("Achievements", &g_visible))
+        if (g_padConnected)
         {
-            static bool s_secretPrev = false;
-            bool secretNow = g_padConnected && (g_padState.Gamepad.wButtons & XINPUT_GAMEPAD_A);
+            static unsigned long long s_lastDpadTick = 0;
+            unsigned long long now = GetTickCount64();
 
-            if (secretNow && !s_secretPrev)
+            bool closeCombo = (g_padState.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) != 0;
+            bool up = !closeCombo && (g_padState.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP) != 0;
+            bool down = (g_padState.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_DOWN) != 0;
+            if ((up || down) && now - s_lastDpadTick > 120)
             {
-                g_showSecrets = !g_showSecrets;
+                g_scrollY += (down ? 1.0f : -1.0f) * 60.0f * s;
+                s_lastDpadTick = now;
             }
+        }
+        g_scrollY += g_pendingWheelScroll * 60.0f * s;
+        g_pendingWheelScroll = 0.0f;
+        g_scrollY = Clamp(g_scrollY, 0.0f, maxScroll);
 
-            s_secretPrev = secretNow;
+        // Second pass: draw rows inside the list window, text may spill into the header and bottom strip
+        d.clipTop = listTop;
+        d.clipBottom = listBottom;
+        d.coverTop = winY;
+        d.coverBottom = winY + winH;
 
-            if (g_restoreScroll)
+        float rowY = listTop - g_scrollY;
+        for (size_t i = 0; i < count; i++)
+        {
+            float h = rowH[i];
+            if (rowY + h >= listTop && rowY <= listBottom)
             {
-                float wanted = g_savedScrollY;
-                float maxY = ImGui::GetScrollMaxY();
-                if (wanted > maxY) wanted = maxY;
-
-                float diff = ImGui::GetScrollY() - wanted;
-                if (diff < 0.0f) diff = -diff;
-
-                if (diff < 0.5f || axis > 0.5f || axis < -0.5f || wheel != 0.0f || ++g_restoreScrollFrames > 10)
-                {
-                    g_restoreScroll = false;
-                    g_restoreScrollFrames = 0;
-                }
-            }
-            else if (axis != 0.0f)
-            {
-                float delta = axis * 1500.0f * g_uiScale * ImGui::GetIO().DeltaTime;
-                ImGui::SetScrollY(ImGui::GetScrollY() - delta);
-            }
-
-            ImGui::Checkbox("Show secret achievements", &g_showSecrets);
-            ImGui::Separator();
-
-            const float iconSize = 64.0f * g_uiScale;
-
-            std::vector<bool> unlockedSnapshot;
-            std::vector<int> currentSnapshot;
-            std::unordered_map<int, int> maxSnapshot;
-            {
-                std::lock_guard<std::recursive_mutex> lock(g_stateMutex);
-                unlockedSnapshot = g_unlocked;
-                currentSnapshot = g_current;
-                maxSnapshot = g_maxOverride;
-            }
-
-            for (size_t i = 0; i < g_achievements.size(); i++)
-            {
-                ImGui::PushID((int)i);
-
-                const Texture& t = g_achievements[i];
-                bool unlocked = (i < unlockedSnapshot.size()) ? unlockedSnapshot[i] : false;
-                int maxv = AchievementMaxFrom(maxSnapshot, (int)i);
-                int cur = (i < currentSnapshot.size()) ? currentSnapshot[i] : 0;
-
+                bool unlocked = (i < g_unlocked.size()) ? g_unlocked[i] : false;
+                int maxv = AchievementMaxFrom(g_maxOverride, (int)i);
+                int cur = (i < g_current.size()) ? g_current[i] : 0;
                 bool reveal = !IsSecret((int)i) || g_showSecrets || unlocked;
 
-                ImVec4 tint = unlocked ? ImVec4(1, 1, 1, 1) : ImVec4(0.35f, 0.35f, 0.35f, 1.0f);
-
+                float iy = rowY + rowPad;
+                const Texture& t = g_achievements[i];
                 if (reveal && t.tex)
                 {
-                    ImGui::ImageWithBg((ImTextureID)(uintptr_t)t.tex, ImVec2(iconSize, iconSize), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), tint);
+                    FLinearColor tint = unlocked ? FLinearColor(1, 1, 1, 1) : kLockedTint;
+                    DrawIcon(d, t, listX, iy, iconSize, tint);
                 }
                 else
                 {
-                    // Hidden placeholder box with a centered "?"
-                    ImVec2 p = ImGui::GetCursorScreenPos();
-                    ImVec2 p2(p.x + iconSize, p.y + iconSize);
-                    ImDrawList* dl = ImGui::GetWindowDrawList();
-                    dl->AddRectFilled(p, p2, IM_COL32(90, 90, 90, 255), 4.0f);
-                    dl->AddRectFilled(ImVec2(p.x + 1, p.y + 1), ImVec2(p2.x - 1, p2.y - 1), IM_COL32(35, 35, 35, 255), 4.0f);
-                    ImVec2 ts = ImGui::CalcTextSize("?");
-                    dl->AddText(ImVec2(p.x + (iconSize - ts.x) * 0.5f, p.y + (iconSize - ts.y) * 0.5f), IM_COL32(170, 170, 170, 255), "?");
-                    ImGui::Dummy(ImVec2(iconSize, iconSize));
+                    // Hidden or unavailable icon: placeholder box with a centered "?"
+                    FillRect(d, listX, iy, iconSize, iconSize, kHiddenBox);
+                    FillRect(d, listX + 1.0f, iy + 1.0f, iconSize - 2.0f, iconSize - 2.0f, kHiddenBoxInner);
+                    float qw = 0.0f, qh = 0.0f;
+                    MeasureText(d, L"?", nameScale, qw, qh);
+                    DrawTextLine(d, L"?", listX + (iconSize - qw) * 0.5f, iy + (iconSize - qh) * 0.5f, nameScale, kTextHintColor);
                 }
 
-                ImGui::SameLine();
-                ImGui::BeginGroup();
-
-                const char* name = "???";
-                const char* desc = "Hidden achievement";
-                if (reveal)
+                float ty = iy;
+                FColor nameCol = unlocked ? kGoldColor : kNameLockedColor;
+                for (const std::wstring& line : g_nameWrap[i].lines)
                 {
-                    name = (i < g_text.size()) ? g_text[i].name.c_str() : "???";
-                    desc = (i < g_text.size()) ? g_text[i].desc.c_str() : "";
+                    DrawTextLine(d, line.c_str(), textX, ty, nameScale, nameCol);
+                    ty += nameH;
                 }
+                for (const std::wstring& line : g_descWrap[i].lines)
+                {
+                    DrawTextLine(d, line.c_str(), textX, ty, bodyScale, kTextDimColor);
+                    ty += bodyH;
+                }
+                ty += 4.0f * s;
 
-                ImVec4 nameCol = unlocked ? ImVec4(1.0f, 0.84f, 0.40f, 1.0f) : ImVec4(0.85f, 0.85f, 0.85f, 1.0f);
-                ImGui::TextColored(nameCol, "%s", name);
-
-                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
-                ImGui::TextWrapped("%s", desc);
-                ImGui::PopTextWrapPos();
-
-                char overlay[32];
+                wchar_t overlay[32];
                 float barFrac;
                 if (!reveal)
                 {
-                    // Hidden achievement: don't reveal any progress
                     barFrac = 0.0f;
-                    snprintf(overlay, sizeof(overlay), "???");
+                    swprintf_s(overlay, L"???");
                 }
                 else
                 {
-                    // Counter-backed achievements show their stored value; binary ones use the unlock flag
                     bool hasCounter = maxv > 1;
                     int displayCur = hasCounter ? cur : (unlocked ? 1 : 0);
                     barFrac = maxv > 0 ? (float)displayCur / (float)maxv : (unlocked ? 1.0f : 0.0f);
                     if (barFrac > 1.0f) barFrac = 1.0f;
-                    snprintf(overlay, sizeof(overlay), "%d/%d", displayCur, maxv);
+                    swprintf_s(overlay, L"%d/%d", displayCur, maxv);
                 }
 
-                // Draw the bar without its built-in overlay, then place the counter at the top-left
-                ImVec2 barPos = ImGui::GetCursorScreenPos();
-                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.22f, 0.60f, 0.85f, 1.0f));
-                ImGui::ProgressBar(barFrac, ImVec2(-FLT_MIN, 0.0f), "");
-                ImGui::PopStyleColor();
+                FillRect(d, textX, ty, textW, barH, kFrameBg);
+                FillRect(d, textX, ty, textW * barFrac, barH, kBarFill);
+                DrawTextLine(d, overlay, textX + 6.0f * s, ty + (barH - smallH) * 0.5f, smallScale, kTextColor);
 
-                ImVec2 ots = ImGui::CalcTextSize(overlay);
-                float barH = ImGui::GetFrameHeight();
-                ImGui::GetWindowDrawList()->AddText(ImVec2(barPos.x + 6.0f * g_uiScale, barPos.y + (barH - ots.y) * 0.5f), IM_COL32(255, 255, 255, 255), overlay);
-
-                ImGui::EndGroup();
-                ImGui::PopID();
-
-                ImGui::Separator();
+                float sepY = rowY + h - 1.0f;
+                if (sepY >= listTop && sepY <= listBottom)
+                {
+                    Native::Draw2DLine(c, listX, sepY, listX + listW, sepY, kSeparatorColor);
+                }
             }
 
-            if (!g_restoreScroll)
-            {
-                g_savedScrollY = ImGui::GetScrollY();
-            }
+            rowY += h;
         }
 
-        ImGui::End();
+        d.clipTop = -1.0e9f;
+        d.clipBottom = 1.0e9f;
+        d.coverTop = -1.0e9f;
+        d.coverBottom = 1.0e9f;
+
+        // Header and bottom strip, drawn opaque over whatever spilled out of the list
+        FillRect(d, winX, winY, winW, titleBarH, kTitleBg);
+        FillRect(d, winX, winY + titleBarH, winW, listTop - winY - titleBarH, WithAlpha(kWindowBg, 1.0f));
+        FillRect(d, winX, listBottom, winW, bottomPad, WithAlpha(kWindowBg, 1.0f));
+
+        float y = winY + pad * 0.5f;
+        DrawTextLine(d, L"Achievements", winX + pad, y, titleScale, kTextColor);
+
+        int unlockedCount = 0;
+        for (size_t i = 0; i < g_achievements.size() && i < g_unlocked.size(); i++)
+        {
+            if (g_unlocked[i]) unlockedCount++;
+        }
+
+        wchar_t counter[64];
+        swprintf_s(counter, L"%d / %d", unlockedCount, (int)g_achievements.size());
+        float cw = 0.0f, ch = 0.0f;
+        MeasureText(d, counter, nameScale, cw, ch);
+        DrawTextLine(d, counter, winX + winW - pad - cw, y + (titleH - nameH) * 0.5f, nameScale, kGoldColor);
+
+        // Help line
+        const wchar_t* help = g_showSecrets
+            ? L"[Space / A]  Hide secret achievements      [Wheel / Stick]  Scroll      [Home / L3 + D-Pad Up]  Close"
+            : L"[Space / A]  Show secret achievements      [Wheel / Stick]  Scroll      [Home / L3 + D-Pad Up]  Close";
+        DrawTextLine(d, help, winX + pad, helpY, smallScale, kTextHintColor);
+        Native::Draw2DLine(c, winX + pad, separatorY, winX + winW - pad, separatorY, kSeparatorColor);
+
+        OutlineRect(d, winX, winY, winW, winH, kBorderColor);
+
+        // Scrollbar
+        if (maxScroll > 0.0f)
+        {
+            float trackX = winX + winW - pad - scrollbarW;
+            FillRect(d, trackX, listTop, scrollbarW, listH, kScrollBg);
+
+            float thumbH = listH * (listH / contentH);
+            if (thumbH < 20.0f * s) thumbH = 20.0f * s;
+            float thumbY = listTop + (listH - thumbH) * (g_scrollY / maxScroll);
+            FillRect(d, trackX, thumbY, scrollbarW, thumbH, kScrollGrab);
+        }
     }
 
-    inline void DrawUnlockToast()
+    inline void DrawUnlockToast(DrawCtx& d)
     {
         std::lock_guard<std::mutex> lock(g_toastMutex);
 
@@ -1950,19 +1277,35 @@ namespace AchievementOverlay
 
         if (g_toasts.empty()) return;
 
-        ImGuiIO& io = ImGui::GetIO();
-        float scale = g_uiScale;
-        float toastW = 420.0f * scale;
-        float margin = 20.0f * scale;
-        float spacing = 8.0f * scale;
-        float onX = io.DisplaySize.x - toastW - margin;
-        float offX = io.DisplaySize.x + 10.0f;
+        UCanvas* c = d.canvas;
+        const float s = d.s;
+        const float dispW = (float)c->SizeX;
 
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoInputs;
+        const float toastW = 420.0f * s;
+        const float margin = 20.0f * s;
+        const float spacing = 8.0f * s;
+        const float pad = 10.0f * s;
+        const float iconSize = 64.0f * s;
+        const float onX = dispW - toastW - margin;
+        const float offX = dispW + 10.0f;
+
+        const float headScale = (18.0f * s) / d.fontUnitHeight;
+        const float nameScale = (17.0f * s) / d.fontUnitHeight;
+        const float descScale = (15.0f * s) / d.fontUnitHeight;
+        const float headH = d.fontUnitHeight * headScale;
+        const float nameH = d.fontUnitHeight * nameScale;
+        const float descH = d.fontUnitHeight * descScale;
+
+        const float textX = pad + iconSize + 10.0f * s;
+        const float textW = toastW - textX - pad;
+
+        if (g_toastNameWrap.size() < g_toasts.size()) g_toastNameWrap.resize(g_toasts.size());
+        if (g_toastDescWrap.size() < g_toasts.size()) g_toastDescWrap.resize(g_toasts.size());
 
         float targetY = margin;
-        for (ToastItem& it : g_toasts)
+        for (size_t ti = 0; ti < g_toasts.size(); ti++)
         {
+            ToastItem& it = g_toasts[ti];
             float t = (float)(now - it.start);
 
             float x, alpha;
@@ -1995,402 +1338,117 @@ namespace AchievementOverlay
                 it.animY += (targetY - it.animY) * 0.25f;
             }
 
-            ImGui::SetNextWindowPos(ImVec2(x, it.animY));
-            ImGui::SetNextWindowSize(ImVec2(toastW, 0.0f));
+            int id = it.achvId;
+            const std::wstring& name = (id >= 0) ? NameOf((size_t)id) : g_emptyText;
+            const std::wstring& desc = (id >= 0) ? DescOf((size_t)id) : g_emptyText;
 
-            char wname[32];
-            snprintf(wname, sizeof(wname), "##toast_%u", it.uid);
+            WrapText(d, name, textW, nameScale, g_toastNameWrap[ti]);
+            WrapText(d, desc, textW, descScale, g_toastDescWrap[ti]);
 
-            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
-            if (ImGui::Begin(wname, nullptr, flags))
+            float textH = headH + g_toastNameWrap[ti].lines.size() * nameH + g_toastDescWrap[ti].lines.size() * descH;
+            float toastH = (textH > iconSize ? textH : iconSize) + pad * 2.0f;
+
+            uint8_t a8 = (uint8_t)(alpha * 255.0f + 0.5f);
+            float y = it.animY;
+
+            FillRect(d, x, y, toastW, toastH, WithAlpha(kWindowBg, 0.95f * alpha));
+            OutlineRect(d, x, y, toastW, toastH, FColor(110, 110, 128, (uint8_t)(a8 * 200 / 255)));
+
+            if (id >= 0 && id < (int)g_achievements.size() && g_achievements[id].tex)
             {
-                int id = it.achvId;
-                float iconSize = 64.0f * scale;
-
-                if (id >= 0 && id < (int)g_achievements.size() && g_achievements[id].tex)
-                {
-                    ImGui::ImageWithBg((ImTextureID)(uintptr_t)g_achievements[id].tex, ImVec2(iconSize, iconSize), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 0), ImVec4(1, 1, 1, 1));
-                    ImGui::SameLine();
-                }
-
-                ImGui::BeginGroup();
-                ImGui::TextColored(ImVec4(1.0f, 0.84f, 0.40f, 1.0f), "Achievement Unlocked");
-                const char* name = (id >= 0 && id < (int)g_text.size()) ? g_text[id].name.c_str() : "";
-                const char* desc = (id >= 0 && id < (int)g_text.size()) ? g_text[id].desc.c_str() : "";
-                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
-                ImGui::TextWrapped("%s", name);
-                if (desc[0])
-                {
-                    ImGui::TextColored(ImVec4(0.78f, 0.78f, 0.78f, 1.0f), "%s", desc);
-                }
-
-                ImGui::PopTextWrapPos();
-                ImGui::EndGroup();
+                DrawIcon(d, g_achievements[id], x + pad, y + pad, iconSize, FLinearColor(1, 1, 1, alpha));
             }
 
-            it.height = ImGui::GetWindowHeight();
-            ImGui::End();
-            ImGui::PopStyleVar();
-
-            targetY += (it.height > 1.0f ? it.height : 90.0f * scale) + spacing;
-        }
-    }
-
-    // The Win32 backend forces a hardware cursor while the overlay is up, which is wrong when playing
-    // on a controller. Keep it hidden unless the mouse moved or clicked in the last few seconds
-    inline void UpdateOverlayCursor()
-    {
-        ImGuiIO& io = ImGui::GetIO();
-
-        bool mouseActive = io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f || io.MouseWheel != 0.0f || ImGui::IsAnyMouseDown();
-
-        if (mouseActive)
-            g_lastMouseInputTick = GetTickCount64();
-
-        if (!g_lastMouseInputTick || GetTickCount64() - g_lastMouseInputTick > kCursorIdleHideMs)
-            ImGui::SetMouseCursor(ImGuiMouseCursor_None);
-    }
-
-    inline void Render(IDirect3DDevice9* pDevice)
-    {
-        ImGui_ImplDX9_NewFrame();
-        ImGui_ImplWin32_NewFrame();
-
-        ImGuiIO& io = ImGui::GetIO();
-
-        float clientW = io.DisplaySize.x;
-        float clientH = io.DisplaySize.y;
-
-        float layoutW = clientW, layoutH = clientH;
-        QueryOverlayLayoutSize(pDevice, layoutW, layoutH);
-
-        io.DisplaySize = ImVec2(layoutW, layoutH);
-        g_pendingScale = ComputeUiScaleFromHeight(layoutH);
-
-        if (clientW > 0.0f && clientH > 0.0f
-            && (layoutW != clientW || layoutH != clientH))
-        {
-            POINT pt;
-            if (GetCursorPos(&pt) && ScreenToClient(g_hWnd, &pt))
+            float ty = y + pad;
+            DrawTextLine(d, L"Achievement Unlocked", x + textX, ty, headScale, FColor(255, 214, 102, a8));
+            ty += headH;
+            for (const std::wstring& line : g_toastNameWrap[ti].lines)
             {
-                io.AddMousePosEvent(
-                    static_cast<float>(pt.x) * (layoutW / clientW),
-                    static_cast<float>(pt.y) * (layoutH / clientH));
+                DrawTextLine(d, line.c_str(), x + textX, ty, nameScale, FColor(255, 255, 255, a8));
+                ty += nameH;
             }
+            for (const std::wstring& line : g_toastDescWrap[ti].lines)
+            {
+                DrawTextLine(d, line.c_str(), x + textX, ty, descScale, FColor(200, 200, 200, a8));
+                ty += descH;
+            }
+
+            targetY += toastH + spacing;
         }
-
-        ImGui::NewFrame();
-
-        if (ImDrawCallback setNearest = ImGui::GetPlatformIO().DrawCallback_SetSamplerNearest)
-        {
-            ImGui::GetBackgroundDrawList()->AddCallback(setNearest, nullptr);
-        }
-
-        DrawPeerCutsceneIndicator(pDevice);
-        DrawCoopWaitIndicator(pDevice);
-        DrawSoloMinigameWarning(pDevice);
-        DrawCoopMainMenuPanel();
-		DrawCoopPauseMenuPanel();
-		DrawCoopSaveSyncWarning();
-
-        if (g_visible || IsCoopWaitInteractive()
-            || g_coopMenuHovered.load(std::memory_order_acquire)
-			|| g_coopPauseHovered.load(std::memory_order_acquire)
-			|| g_coopSaveSyncWarningVisible.load(std::memory_order_acquire))
-        {
-            UpdateOverlayCursor();
-            if (g_visible)
-                DrawAchievementsWindow(pDevice);
-        }
-        else
-        {
-            g_lastMouseInputTick = 0;
-        }
-
-        DrawUnlockToast();
-
-        ImGui::EndFrame();
-        ImGui::Render();
-
-        pDevice->SetRenderState(D3DRS_SRGBWRITEENABLE, FALSE);
-        pDevice->SetSamplerState(0, D3DSAMP_SRGBTEXTURE, FALSE);
-        pDevice->SetTextureStageState(1, D3DTSS_COLOROP, D3DTOP_DISABLE);
-        pDevice->SetTextureStageState(1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
-        pDevice->SetRenderState(D3DRS_TEXTUREFACTOR, 0xFFFFFFFF);
-        ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
     }
+
+    // Keeps keyboard/mouse away from the game while the list is open and turns the wheel/keys into scrolling
+    #include "CoopCanvasOverlay.inl"
 
     inline LRESULT CALLBACK WndProc_Hook(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
-        const bool coopMenuVisible =
-            g_coopMenuVisible.load(std::memory_order_acquire);
-        const bool coopMenuHovered =
-            g_coopMenuHovered.load(std::memory_order_acquire);
-		const bool coopPauseVisible =
-			g_coopPauseVisible.load(std::memory_order_acquire);
-		const bool coopPauseHovered =
-			g_coopPauseHovered.load(std::memory_order_acquire);
-        const bool captureInput =
-            g_visible || IsCoopWaitInteractive()
-			|| coopMenuHovered || coopPauseHovered
-			|| g_coopSaveSyncWarningVisible.load(
-				std::memory_order_acquire);
-        if (g_imguiInitialized
-            && (captureInput || coopMenuVisible || coopPauseVisible)
-            && !g_deviceLost)
+        if (HandleCoopCanvasInput(hWnd, msg, wParam, lParam)) return TRUE;
+        if (g_visible && kBlockGameInputWhileVisible && IsRendering())
         {
-            ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
-
-            if (kBlockGameInputWhileVisible && captureInput)
+            switch (msg)
             {
-                switch (msg)
-                {
-                    case WM_KEYUP: case WM_SYSKEYUP:
-                    case WM_LBUTTONUP: case WM_RBUTTONUP: case WM_MBUTTONUP:
-                        break;
+            case WM_MOUSEWHEEL:
+                g_pendingWheelScroll -= (float)GET_WHEEL_DELTA_WPARAM(wParam) / (float)WHEEL_DELTA;
+                return TRUE;
 
-                    case WM_SYSKEYDOWN:
-                        if (wParam == VK_F4 || wParam == VK_TAB) break;
-                        return TRUE;
+            case WM_KEYDOWN:
+                if (wParam == VK_SPACE) { g_showSecrets = !g_showSecrets; }
+                else if (wParam == VK_UP) { g_pendingWheelScroll -= 1.0f; }
+                else if (wParam == VK_DOWN) { g_pendingWheelScroll += 1.0f; }
+                else if (wParam == VK_PRIOR) { g_pendingWheelScroll -= 8.0f; }
+                else if (wParam == VK_NEXT) { g_pendingWheelScroll += 8.0f; }
+                return TRUE;
 
-                    case WM_MOUSEMOVE:
-                    case WM_LBUTTONDOWN: case WM_LBUTTONDBLCLK:
-                    case WM_RBUTTONDOWN: case WM_RBUTTONDBLCLK:
-                    case WM_MBUTTONDOWN: case WM_MBUTTONDBLCLK:
-                    case WM_MOUSEWHEEL: case WM_MOUSEHWHEEL:
-                    case WM_KEYDOWN: case WM_CHAR:
-                        return TRUE;
+            case WM_SYSKEYDOWN:
+                if (wParam == VK_F4) break;
+                return TRUE;
 
-                    default: break;
-                }
+            case WM_KEYUP: case WM_SYSKEYUP:
+            case WM_LBUTTONUP: case WM_RBUTTONUP: case WM_MBUTTONUP:
+                break;
+
+            case WM_MOUSEMOVE:
+            case WM_LBUTTONDOWN: case WM_LBUTTONDBLCLK:
+            case WM_RBUTTONDOWN: case WM_RBUTTONDBLCLK:
+            case WM_MBUTTONDOWN: case WM_MBUTTONDBLCLK:
+            case WM_MOUSEHWHEEL:
+            case WM_CHAR:
+                return TRUE;
+
+            default: break;
             }
         }
 
         return CallWindowProc(g_oWndProc, hWnd, msg, wParam, lParam);
     }
 
-    // Device
-    inline bool InstallHooks(IDirect3DDevice9* pDevice)
+    inline BOOL CALLBACK FindGameWindowProc(HWND hWnd, LPARAM lParam)
     {
-        if (g_hooksInstalled || !pDevice)
-            return g_hooksInstalled;
+        DWORD pid = 0;
+        GetWindowThreadProcessId(hWnd, &pid);
+        if (pid != GetCurrentProcessId() || !IsWindowVisible(hWnd) || GetWindow(hWnd, GW_OWNER) != nullptr)
+            return TRUE;
 
-        D3DDEVICE_CREATION_PARAMETERS cp{};
-        if (FAILED(pDevice->GetCreationParameters(&cp)) || !cp.hFocusWindow)
-        {
-            return false;
-        }
-
-        g_pDevice = pDevice;
-        g_hWnd = cp.hFocusWindow;
-
-        g_oWndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(g_hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&WndProc_Hook)));
-
-        g_hooksInstalled = true;
-        return true;
+        *reinterpret_cast<HWND*>(lParam) = hWnd;
+        return FALSE;
     }
 
-    inline bool PollDeviceHealth(IDirect3DDevice9* pDevice)
+    inline void InstallWndProc()
     {
-        if (!pDevice) return false;
+        if (g_wndProcInstalled)
+            return;
 
-        HRESULT coop = pDevice->TestCooperativeLevel();
-        if (coop != D3D_OK)
-        {
-            if (g_imguiInitialized && !g_deviceLost)
-            {
-                ImGui_ImplDX9_InvalidateDeviceObjects();
-                g_deviceLost = true;
-            }
+        HWND hWnd = nullptr;
+        EnumWindows(FindGameWindowProc, reinterpret_cast<LPARAM>(&hWnd));
+        if (!hWnd)
+            return;
 
-            return false;
-        }
-
-        if (g_imguiInitialized && (g_deviceLost || g_inReset))
-        {
-            ImGui_ImplDX9_CreateDeviceObjects();
-            g_deviceLost = false;
-            g_inReset = false;
-        }
-
-        return true;
+        g_hWnd = hWnd;
+        g_oWndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(g_hWnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&WndProc_Hook)));
+        g_wndProcInstalled = g_oWndProc != nullptr;
     }
 
     // Public API
-    inline void Init(uintptr_t devicePtrAddr)
-    {
-        g_devicePtrAddr = devicePtrAddr;
-    }
-
-    inline void SetCoopDevMode(bool enabled)
-    {
-        g_coopDevMode = enabled;
-    }
-
-    inline void SetCoopDevStatus(const std::string& status)
-    {
-        g_coopDevStatus = status;
-    }
-
-    inline void SetCoopDevDetails(const std::string& details)
-    {
-        std::lock_guard<std::mutex> lock(g_coopDevMutex);
-        g_coopDevDetails = details;
-    }
-
-    inline void SetPeerWatchingCutscene(
-        bool watching, bool hasScreenPosition = false,
-        float screenX = 0.0f, float screenY = 0.0f)
-    {
-        g_peerCutsceneScreenX.store(
-            screenX, std::memory_order_relaxed);
-        g_peerCutsceneScreenY.store(
-            screenY, std::memory_order_relaxed);
-        g_peerCutsceneScreenPositionValid.store(
-            watching && hasScreenPosition,
-            std::memory_order_release);
-        g_peerWatchingCutscene.store(
-            watching, std::memory_order_release);
-    }
-
-    inline void SetCoopWaitingForPeer(bool waiting)
-    {
-        g_coopWaitingForPeer.store(
-            waiting, std::memory_order_release);
-        if (!waiting)
-        {
-            g_coopForceCutsceneRequested.store(
-                false, std::memory_order_release);
-        }
-    }
-
-    inline void SetCoopMainMenuState(
-        bool visible, bool hostRole,
-        bool relayConnected, bool peerConnected,
-        const std::string& peerMap,
-        bool canJoinHost,
-        const std::string& status)
-    {
-        {
-            std::lock_guard<std::mutex> lock(g_coopMenuMutex);
-            g_coopMenuPeerMap = peerMap;
-            g_coopMenuStatus = status;
-        }
-        g_coopMenuHostRole.store(
-            hostRole, std::memory_order_relaxed);
-        g_coopMenuRelayConnected.store(
-            relayConnected, std::memory_order_relaxed);
-        g_coopMenuPeerConnected.store(
-            peerConnected, std::memory_order_relaxed);
-        g_coopMenuCanJoinHost.store(
-            canJoinHost, std::memory_order_relaxed);
-        g_coopMenuVisible.store(
-            visible, std::memory_order_release);
-        if (!visible)
-        {
-            g_coopMenuHovered.store(
-                false, std::memory_order_release);
-            g_coopJoinHostRequested.store(
-                false, std::memory_order_release);
-			g_coopSaveSyncWarningVisible.store(
-				false, std::memory_order_release);
-        }
-    }
-
-    inline bool ConsumeCoopJoinHostRequest()
-    {
-        return g_coopJoinHostRequested.exchange(
-            false, std::memory_order_acq_rel);
-    }
-
-	inline void SetCoopPauseMenuState(
-		bool visible, bool hostRole, bool peerConnected,
-		bool movementTrailsEnabled)
-	{
-		g_coopPauseHostRole.store(hostRole, std::memory_order_relaxed);
-		g_coopPausePeerConnected.store(
-			peerConnected, std::memory_order_relaxed);
-		g_coopMovementTrailsEnabled.store(
-			movementTrailsEnabled, std::memory_order_relaxed);
-		g_coopPauseVisible.store(visible, std::memory_order_release);
-		if (!visible)
-			g_coopPauseHovered.store(false, std::memory_order_release);
-	}
-
-	inline bool ConsumeCoopMovementTrailsToggle(bool& enabled)
-	{
-		if (!g_coopMovementTrailsToggleRequested.exchange(
-				false, std::memory_order_acq_rel))
-			return false;
-		enabled = g_coopMovementTrailsEnabled.load(
-			std::memory_order_acquire);
-		return true;
-	}
-
-	inline void SetCoopSaveSyncState(
-		bool available, bool inProgress, int progress,
-		const std::string& status, const std::string& profileName)
-	{
-		{
-			std::lock_guard<std::mutex> lock(g_coopSaveSyncMutex);
-			g_coopSaveSyncStatus = status;
-			g_coopSaveSyncProfileName = profileName;
-		}
-		g_coopSaveSyncAvailable.store(
-			available, std::memory_order_relaxed);
-		g_coopSaveSyncInProgress.store(
-			inProgress, std::memory_order_relaxed);
-		g_coopSaveSyncProgress.store(
-			std::clamp(progress, 0, 100), std::memory_order_release);
-	}
-
-	inline bool ConsumeCoopSaveSyncRequest()
-	{
-		return g_coopSaveSyncRequested.exchange(
-			false, std::memory_order_acq_rel);
-	}
-
-    inline bool ConsumeCoopForceCutsceneRequest()
-    {
-        return g_coopForceCutsceneRequested.exchange(
-            false, std::memory_order_acq_rel);
-    }
-
-    inline void ShowSoloMinigameWarning(
-        unsigned int durationMilliseconds)
-    {
-        g_soloMinigameWarningUntil.store(
-            GetTickCount64() + durationMilliseconds,
-            std::memory_order_release);
-    }
-
-    inline void HideSoloMinigameWarning()
-    {
-        g_soloMinigameWarningUntil.store(
-            0, std::memory_order_release);
-    }
-
-    inline void ShowCoopJoinTeleportHint(
-        unsigned int durationMilliseconds)
-    {
-        g_coopJoinTeleportHintUntil.store(
-            GetTickCount64() + durationMilliseconds,
-            std::memory_order_release);
-    }
-
-    inline void HideCoopJoinTeleportHint()
-    {
-        g_coopJoinTeleportHintUntil.store(
-            0, std::memory_order_release);
-    }
-
-    inline int ConsumeCoopDevCommand()
-    {
-        return g_coopDevCommand.exchange(
-            static_cast<int>(CoopDevCommand::None),
-            std::memory_order_acq_rel);
-    }
-
     inline void FeedControllerState(const XINPUT_STATE& state, bool connected)
     {
         g_padState = state;
@@ -2399,192 +1457,108 @@ namespace AchievementOverlay
 
     inline bool WantCaptureController()
     {
-        return kBlockGameInputWhileVisible && g_imguiInitialized && g_visible && !g_deviceLost;
+        return kBlockGameInputWhileVisible && IsRendering() && (g_visible || IsCoopCanvasFocused());
     }
 
-    inline void OnPresent(IDirect3DDevice9* pDevice)
+    // Called from the GameViewportClient.PostRender hook, after the HUD and the Scaleform movies
+    inline void OnPostRender(UCanvas* canvas)
     {
-        if (!pDevice)
+        if (!canvas || canvas->SizeX <= 0 || canvas->SizeY <= 0)
             return;
 
-        if (!g_hooksInstalled)
+        InstallWndProc();
+        if (AchievementSupport) { LoadAchievements(); LoadText(); }
+
+        unsigned long long now = GetTickCount64();
+        float deltaSeconds = g_lastDrawTick ? (float)(now - g_lastDrawTick) / 1000.0f : 0.0f;
+        if (deltaSeconds > 0.1f) deltaSeconds = 0.1f;
+        g_lastDrawTick = now;
+
+        // Canvas fonts scale with the viewport height, cached measurements are stale after a resolution change
+        if (canvas->SizeX != g_lastCanvasW || canvas->SizeY != g_lastCanvasH)
         {
-            InstallHooks(pDevice);
+            g_lastCanvasW = canvas->SizeX;
+            g_lastCanvasH = canvas->SizeY;
+            g_fontUnitH.clear();
+            g_nameWrap.clear();
+            g_descWrap.clear();
+            g_toastNameWrap.clear();
+            g_toastDescWrap.clear();
         }
 
-        if (!PollDeviceHealth(pDevice))
-        {
-            return;
-        }
-
-        // Query the new backbuffer before comparing scales. This prevents a
-        // frame rendered with the previous resolution's layout after Reset().
-        RefreshRenderMetrics(pDevice);
-
-        if (g_imguiInitialized && pDevice != g_pInitializedDevice)
-        {
-            ReleaseAchievements();
-            ReleaseCutsceneWatchTexture();
-            ShutdownImGui();
-        }
-
-        else if (g_imguiInitialized && g_pendingScale > 0.0f && ((g_pendingScale > g_uiScale ? g_pendingScale - g_uiScale : g_uiScale - g_pendingScale) > 0.01f))
-        {
-            ReleaseAchievements(); // resolution changed: reload icons and re-bake the font
-            ReleaseCutsceneWatchTexture();
-            ShutdownImGui();
-        }
-
-        if (!g_imguiInitialized)
-        {
-            InitImGui(pDevice);
-        }
-
-        if (g_imguiInitialized && AchievementSupport)
-        {
-            LoadAchievements(pDevice);
-            LoadText();
-        }
-
-        if (!g_imguiInitialized
-            || (!g_visible && g_toasts.empty()
-                && !g_peerWatchingCutscene.load(
-                    std::memory_order_acquire)
-                && !g_coopWaitingForPeer.load(
-                    std::memory_order_acquire)
-                && !IsSoloMinigameWarningVisible()
-                && !g_coopMenuVisible.load(
-                    std::memory_order_acquire)
-				&& !g_coopPauseVisible.load(
-					std::memory_order_acquire)
-				&& !g_coopSaveSyncWarningVisible.load(
-					std::memory_order_acquire)))
+        if (!g_visible && g_toasts.empty() && !HasCoopCanvasContent())
             return;
 
-        ImGui::GetIO().MouseDrawCursor =
-            g_visible || IsCoopWaitInteractive()
-			|| g_coopPauseVisible.load(std::memory_order_acquire)
-			|| g_coopSaveSyncWarningVisible.load(
-				std::memory_order_acquire);
+        UFont* font = PickFont();
+        if (!font)
+            return;
 
-        IDirect3DStateBlock9* stateBlock = nullptr;
-        if (FAILED(pDevice->CreateStateBlock(D3DSBT_ALL, &stateBlock)))
+        g_uiScale = canvas->SizeY > 1080 ? (float)canvas->SizeY / 1080.0f : 1.0f; // scale up above 1080p only
+
+        DrawCtx d;
+        d.canvas = canvas;
+        d.s = g_uiScale;
+        d.white = canvas->DefaultTexture;
+        if (canvas->DefaultTexture)
         {
-            stateBlock = nullptr;
+            d.whiteU = (float)canvas->DefaultTexture->SizeX;
+            d.whiteV = (float)canvas->DefaultTexture->SizeY;
         }
 
-        if (stateBlock)
-        {
-            stateBlock->Capture();
-        }
+        // Save the canvas state we touch and reset it for full-viewport drawing
+        UFont* prevFont = canvas->Font;
+        FColor prevColor = canvas->DrawColor;
+        float prevOrgX = canvas->OrgX, prevOrgY = canvas->OrgY, prevClipX = canvas->ClipX, prevClipY = canvas->ClipY;
 
-        IDirect3DSurface9* prevRT = nullptr;
-        IDirect3DSurface9* bb = nullptr;
+        // DrawText wraps at ClipX, push the clip out since the wrapping is done here
+        canvas->OrgX = 0.0f;
+        canvas->OrgY = 0.0f;
+        canvas->ClipX = (float)canvas->SizeX * 4.0f;
+        canvas->ClipY = (float)canvas->SizeY * 4.0f;
 
-        D3DVIEWPORT9 prevViewport{};
-        RECT prevScissor{};
-        const bool haveViewport = SUCCEEDED(pDevice->GetViewport(&prevViewport));
-        const bool haveScissor = SUCCEEDED(pDevice->GetScissorRect(&prevScissor));
-
-        if (SUCCEEDED(pDevice->GetRenderTarget(0, &prevRT)) && prevRT && SUCCEEDED(pDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) && bb && SUCCEEDED(pDevice->SetRenderTarget(0, bb)))
-        {
-            DWORD prevColorWrite = 0;
-            pDevice->GetRenderState(D3DRS_COLORWRITEENABLE, &prevColorWrite);
-            pDevice->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE | D3DCOLORWRITEENABLE_ALPHA);
-
-            HRESULT sceneHr = pDevice->BeginScene(); // if already open, skip our EndScene below
-            Render(pDevice);
-
-            if (SUCCEEDED(sceneHr))
-            {
-                pDevice->EndScene();
-            }
-
-            pDevice->SetRenderState(D3DRS_COLORWRITEENABLE, prevColorWrite);
-            pDevice->SetRenderTarget(0, prevRT);
-
-            if (haveViewport)
-            {
-                pDevice->SetViewport(&prevViewport);
-            }
-
-            if (haveScissor)
-            {
-                pDevice->SetScissorRect(&prevScissor);
-            }
-        }
-
-        if (stateBlock)
-        {
-            stateBlock->Apply();
-            stateBlock->Release();
-        }
-
-        if (bb)
-        {
-            bb->Release();
-        }
-
-        if (prevRT)
-        {
-            prevRT->Release();
-        }
-    }
-
-    inline void OnPresent()
-    {
-        OnPresent(GetDevice());
-    }
-
-    inline void OnDeviceLost()
-    {
-        g_inReset = true;
-        if (g_imguiInitialized)
-        {
-            ImGui_ImplDX9_InvalidateDeviceObjects();
-        }
-    }
-
-    inline void OnDeviceReset(IDirect3DDevice9* pDevice)
-    {
-        if (g_imguiInitialized)
-        {
-            ImGui_ImplDX9_CreateDeviceObjects();
-        }
-
-        g_inReset = false;
-    }
-
-    inline void OnDeviceReset()
-    {
-        OnDeviceReset(GetDevice());
-    }
-
-    inline void Toggle()
-    {
-        g_visible = !g_visible;
+        UseFont(d, font);
 
         if (g_visible)
         {
-            g_restoreScroll = true;
-            g_restoreScrollFrames = 0;
+            DrawAchievementsWindow(d, deltaSeconds);
         }
+
+        if (AchievementSupport) DrawUnlockToast(d);
+        DrawCoopCanvas(d);
+
+        canvas->Font = prevFont;
+        canvas->DrawColor = prevColor;
+        canvas->OrgX = prevOrgX;
+        canvas->OrgY = prevOrgY;
+        canvas->ClipX = prevClipX;
+        canvas->ClipY = prevClipY;
     }
 
-    inline void Update(IDirect3DDevice9* pDevice)
+    // Called every engine tick from the main loop hook
+    inline void Update()
     {
-        if (!g_hooksInstalled)
+        InstallWndProc();
+        TickCoopScaleformMenu();
+        PollCoopContextShortcut();
+        PollCoopCanvasController();
+        // A cutscene or loading movie stopped PostRender while the list was open, close it so it does not come back over gameplay
+        if (g_visible && !IsRendering())
         {
-            InstallHooks(pDevice);
+            g_visible = false;
         }
 
-        PollDeviceHealth(pDevice);
-
-        PollCoopContextShortcut();
-
-        if (GetAsyncKeyState(VK_HOME) & 1)
+        if (AchievementSupport && g_hWnd && GetForegroundWindow() == g_hWnd && (GetAsyncKeyState(VK_HOME) & 1))
         {
             Toggle();
         }
+
+        // Controller
+        static bool s_comboPrev = false;
+        bool comboNow = g_padConnected && (g_padState.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_THUMB) && (g_padState.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_UP);
+        if (AchievementSupport && comboNow && !s_comboPrev)
+        {
+            Toggle();
+        }
+        s_comboPrev = comboNow;
     }
 }

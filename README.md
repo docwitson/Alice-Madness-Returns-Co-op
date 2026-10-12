@@ -58,7 +58,7 @@ identify safely at runtime.
 - Localhost, a trusted LAN, or a trusted VPN such as Radmin VPN.
 
 Alice Co-op includes a combined client DLL based on
-[MadnessPatch 3.1.1](https://github.com/Wemino/MadnessPatch/releases/tag/3.1.1).
+[MadnessPatch 3.3.3](https://github.com/Wemino/MadnessPatch/releases/tag/3.3.3).
 A separate MadnessPatch installation is not required.
 
 ## Launcher
@@ -85,10 +85,14 @@ keeps each game role isolated without requiring BAT or INI editing.
    can identify one; other installations are started directly.
 6. Keep both launchers open during the session. The host launcher reports when
    both game processes have connected to the relay and owns the relay process.
-7. Load compatible profiles. The client can use `SYNC HOST SAVE` in the main
-   menu to copy the host's progression; read the warning carefully.
-8. Enter gameplay. If joining through the overlay loads the correct level but
-   not the host's exact position, press `O` once after the level has loaded.
+7. Load compatible profiles. The client can choose **Multiplayer > Receive host profile**
+   to copy the host's progression; read the confirmation carefully.
+8. The host first starts or continues a game. The client chooses
+   **Multiplayer > Join host**. Join receives an isolated session copy of the
+   host's saved checkpoint and loads its subarea through native Continue.
+   It keeps the client's selected profile intact. The client then prepares
+   the host's visible sublevels and automatically arrives beside the host
+   once the destination sublevels are ready. If loading times out, `O` retries.
 
 The relay server may run on either player's computer. Allow inbound UDP traffic
 for its configured port (default `27018`). Do not expose it directly to the
@@ -105,10 +109,12 @@ also demonstrates this workflow.
 | Key | Context | Action |
 | --- | --- | --- |
 | `P` | Gameplay | Safe teleport: client to host; host to client |
-| `O` | Client gameplay | Forced teleport to the host without the distance safety check |
-| `L` | Yellow action visible | Join the host checkpoint or force a waiting cutscene |
-| `K` | Client main menu | Open host-profile synchronization warning |
+| `O` | Gameplay | Client: preload distant host area and arrive safely; host: summon client |
+| `L` | Waiting for a shared cutscene | Continue together |
 | `T` | Pause menu | Toggle bounded proxy movement-trail history |
+
+Teleportation waits for destination sublevels when needed. P/O also work while either player is airborne; they do not require a floor trace.
+On timeout the player remains at the current location. The pause panel lists these controls.
 
 The normal game keeps ownership of these keys outside the listed contexts.
 

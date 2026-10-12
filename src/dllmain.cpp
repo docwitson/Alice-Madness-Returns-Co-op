@@ -68,10 +68,16 @@ static void Init()
 	ApplyIntroSkip();
 	ApplyWarnAlice1InstallFolder();
 	ApplyAchievementSupport();
+	ApplyGameLanguage();
+
+	// Modding
+	ApplyExportFiles();
+	ApplyModFiles();
 
 	// Display
 	ApplyFontScaling();
 	ApplyAutoResolution();
+	ApplyBorderlessFullscreen();
 	ApplyUseWindowed();
 
 	// Input

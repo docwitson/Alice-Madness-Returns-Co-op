@@ -6,8 +6,27 @@ depends on the protocol version shown in each release.
 
 ## Unreleased
 
+### Added
+
+- MadnessPatch 3.3.3, including high-FPS hair/cloth interpolation, language
+  selection, borderless mode and optional loose-file mod loading. Asset dumping
+  and loose-file loading are disabled by default.
+- Native Scaleform Multiplayer menus with the game's fonts, button templates
+  and mouse/keyboard/controller navigation. Actions depend on the host/client
+  role; About includes project credits and selectable social/source links.
+- Native Canvas co-op notices and pause controls with game frames and controller
+  glyphs, replacing the ImGui/D3D9 overlay. No game assets or fonts are bundled.
+
 ### Fixed
 
+- Join loads the host's saved subarea and checkpoint through native Continue
+  using a verified isolated session cache, preserving the client's profile.
+- P/O teleports preload host-visible sublevels before arrival, including distant
+  and airborne destinations. Source-camera streaming volumes no longer cancel
+  the preload; timeout and cancellation restore their original participation.
+- Proxy cloth controller and skirt attachments recover after native death cleanup.
+- Menu music initialization, full-viewport presentation, title/profile transition
+  overlap and stale button focus after opening Multiplayer or confirmation.
 - Proxy pepper and teapot projectile flight, impact particles and decals,
   including teapot splashes on walls.
 - Hobby-horse ground shockwaves and melee trail effects, with native spawn
@@ -21,8 +40,14 @@ depends on the protocol version shown in each release.
 
 ### Changed
 
-- Network protocol is now 40. Both players must use matching client DLL and
-  relay server builds; earlier protocol versions are incompatible.
+- Protocol 42 distinguishes isolated Join session transfers from explicit profile
+  replacement and carries host-visible streaming identities. Both games and the
+  relay must use matching builds; older protocols are incompatible.
+- Profile replacement requires explicit confirmation, with Back last and selected
+  by default. Obsolete L/K/Y/N main-menu shortcuts are removed; L remains available
+  while waiting for a shared cutscene.
+- Main-menu version/role status is hidden during gameplay. Co-op panels use native
+  fonts, compact layouts and translucent frames; successful teleports stay quiet.
 
 ## 0.1.0-alpha.2 — 2026-09-03
 

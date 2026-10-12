@@ -5,9 +5,9 @@
 #define NOMINMAX
 
 #include <Windows.h>
+#include <shellapi.h>
 #include <shlwapi.h>
 #include <Xinput.h>
-#include <d3d9.h>
 
 #include <cstdint>
 #include <cstdio>
@@ -17,7 +17,9 @@
 #include <string_view>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
+#include <atomic>
 #include <mutex>
 #include <utility>
 #include <filesystem>
@@ -25,6 +27,7 @@
 #include <stacktrace>
 
 #pragma comment(lib, "shlwapi.lib")
+#pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "SDL3-static.lib")
 
 #include "safetyhook/safetyhook.hpp"

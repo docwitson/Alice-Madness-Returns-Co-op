@@ -73,6 +73,56 @@ namespace
 			"truncated material state rejected");
 	}
 
+    void TestSessionCheckpointIdentity()
+    {
+        using namespace AliceCoopCore;
+        using namespace AliceCoopProtocol;
+        const std::string map = "Chapter2_W1_P";
+        std::vector<std::uint8_t> save(12 + map.size() + 1);
+        std::uint32_t version = 3; std::int32_t count = static_cast<std::int32_t>(map.size() + 1);
+        std::memcpy(save.data(), &version, 4); std::memcpy(save.data() + 8, &count, 4);
+        std::memcpy(save.data() + 12, map.c_str(), map.size() + 1);
+        Check(CheckpointMatchesMap(save, "chapter2_w1_p"), "saved map identity is case insensitive");
+        Check(!CheckpointMatchesMap(save, "Chapter2_W2_P"), "join rejects stale host checkpoint from another map");
+        Check(!CheckpointMatchesMap(save, "Chapter2_W1"), "map prefix cannot match another checkpoint");
+        save.pop_back(); Check(!CheckpointMatchesMap(save, map), "join rejects truncated checkpoint map");
+        save.push_back(1); Check(!CheckpointMatchesMap(save, map), "join requires terminated archive string");
+        save.back() = 0;
+        count = std::numeric_limits<std::int32_t>::min(); std::memcpy(save.data() + 8, &count, 4);
+        Check(!CheckpointMatchesMap(save, map), "malformed archive length cannot overflow");
+        count = -static_cast<std::int32_t>(map.size() + 1);
+        save.assign(12 + 2 * (map.size() + 1), 0);
+        std::memcpy(save.data(), &version, 4); std::memcpy(save.data() + 8, &count, 4);
+        for (std::size_t i = 0; i < map.size(); ++i) save[12 + i * 2] = map[i];
+        Check(CheckpointMatchesMap(save, map), "wide archive map supported");
+        save[13] = 1; Check(!CheckpointMatchesMap(save, map), "wide archive high bytes must match");
+        SaveSyncRequestPayload request{}; request.transferId = 123; request.flags = SaveRequestJoinSession;
+        const auto packet = MakePacket(PacketType::SaveSyncRequest, 1, 2, 3, request);
+        Check(IsValidHeader(packet.header, sizeof(packet)) && request.flags != SaveRequestReplaceProfile,
+            "session join has a distinct wire purpose from confirmed profile replacement");
+    }
+
+    void TestStreamingState()
+    {
+        using namespace AliceCoopCore;
+        using namespace AliceCoopProtocol;
+        HostSnapshotPayload snapshot{};
+        snapshot.streamingLevelCount = MaxVisibleStreamingLevels;
+        for (unsigned i = 0; i < MaxVisibleStreamingLevels; ++i)
+            snapshot.streamingLevelHashes[i] = HashMapName("Chapter2_W1_" + std::to_string(i));
+        Check(HasCompleteStreamingState(snapshot), "maximum streaming list is complete");
+        auto packet = MakePacket(PacketType::HostSnapshot, 1, 2, 3, snapshot);
+        Check(sizeof(packet) <= MaxDatagramSize && sizeof(packet) < 1200
+            && IsValidHeader(packet.header, sizeof(packet)), "host streaming and maximum enemy snapshot fit safe datagram");
+        Packet<HostSnapshotPayload> received{};
+        std::memcpy(&received, &packet, sizeof(packet));
+        Check(received.payload.streamingLevelHashes[31] == snapshot.streamingLevelHashes[31], "last streaming region survives relay copy");
+        snapshot.streamingLevelsOverflow = 1;
+        Check(!HasCompleteStreamingState(snapshot), "overflow cannot pretend all destination geometry was loaded");
+        snapshot.streamingLevelsOverflow = 0; snapshot.streamingLevelCount = 255;
+        Check(!HasCompleteStreamingState(snapshot), "corrupt streaming count cannot read outside packet");
+    }
+
 	void TestNativePawnStance()
 	{
 		using namespace AliceCoopCore;
@@ -112,7 +162,7 @@ namespace
 		PackAimOffset(0.6f, -0.4f, snapshot.clientState.aimOffset);
 		const auto packet = AliceCoopProtocol::MakePacket(
 			AliceCoopProtocol::PacketType::HostSnapshot, 1, 2, 3, snapshot);
-		Check(sizeof(packet) == AliceCoopProtocol::MaxDatagramSize
+		Check(sizeof(packet) <= AliceCoopProtocol::MaxDatagramSize
 			&& AliceCoopProtocol::IsValidHeader(packet.header, sizeof(packet)),
 			"both aiming states fit complete maximum enemy snapshot");
 		Check(std::fabs(UnpackAimOffset(packet.payload.hostState.aimOffset, 0) + 0.75f) < 0.00025f
@@ -138,7 +188,7 @@ namespace
 		Check(AnimationRootAxisOption(mixed, 1, true) == 2, "retain extracted rotation axis");
 		Check(AnimationRootAxisOption(0xffff, 0, false) == 0, "invalid wire root option uses default");
 		Check(sizeof(AliceCoopProtocol::Packet<AliceCoopProtocol::AnimationGraphPayload>)
-			== AliceCoopProtocol::MaxDatagramSize, "root metadata keeps graph within datagram budget");
+			<= AliceCoopProtocol::MaxDatagramSize, "root metadata keeps graph within datagram budget");
 	}
 
 	void TestSequenceComparison()
@@ -197,7 +247,7 @@ namespace
 		std::memcpy(wire.data(), &packet, wire.size());
 		Packet<AnimationGraphPayload> received{};
 		std::memcpy(&received, wire.data(), wire.size());
-		Check(IsValidHeader(received.header, wire.size()) && wire.size() == MaxDatagramSize,
+		Check(IsValidHeader(received.header, wire.size()) && wire.size() <= MaxDatagramSize,
 			"terminal pose and native release retain full graph packet budget");
 		const auto& pose = received.payload.sequences[0];
 		Check((pose.rootBoneOptions & AnimationPoseStopped) && pose.rate == 0.0f
@@ -240,7 +290,7 @@ namespace
 			Packet<AnimationGraphPayload> received{};
 			std::memcpy(&received, &packet, sizeof(packet));
 			const auto flags = received.payload.blends[0].flags;
-			Check(IsValidHeader(received.header, sizeof(packet)) && sizeof(packet) == MaxDatagramSize,
+			Check(IsValidHeader(received.header, sizeof(packet)) && sizeof(packet) <= MaxDatagramSize,
 				"native hold flag fits existing animation datagram");
 			Check(NativeAnimationSlot(flags) == 0 && (flags & AnimationBlendNativeSlotTiming)
 				&& received.payload.fullBodyBlendTicks == 0,
@@ -321,6 +371,8 @@ namespace
 int main()
 {
 	TestProtocolHeaders();
+    TestSessionCheckpointIdentity();
+    TestStreamingState();
 	TestSequenceComparison();
 	TestAnimationRootOptions();
 	TestAimOffset();

@@ -504,6 +504,14 @@
 		const bool localController = object
 			&& g_State.AlicePlayerController
 			&& object == g_State.AlicePlayerController;
+        if (!after && ((localController && functionName == "backtoTitle")
+            || (object && functionName == "QuitGame"
+                && object->IsA(UAliceGfxMovie_inGameMenu::StaticClass()))))
+        {
+            // Disable before native title/profile reload, not on the next Tick.
+            g_sessionReadActive.store(false);
+            FinishJoinHostAttempts();
+        }
 		if (!after && functionName == "Restart"
 			&& object
 			&& object->IsA(
@@ -2689,14 +2697,46 @@
 			error ? path : absolute;
 	}
 
+    void SetSessionSaveReadHookReady(bool ready)
+    {
+        g_sessionReadHookReady.store(ready, std::memory_order_release);
+    }
+
+    bool TryRedirectSessionSaveRead(const wchar_t* originalPath, std::wstring& redirectedPath)
+    {
+        if (!g_config.enabled || g_config.role != Role::Client
+            || !g_sessionReadActive.load(std::memory_order_acquire) || !originalPath) return false;
+        const std::filesystem::path path(originalPath);
+        const auto name = path.filename().wstring();
+        if (_wcsicmp(name.c_str(), L"Alice2Checkpoint.sav")
+            && _wcsicmp(name.c_str(), L"PersistentData_PC.PSD")) return false;
+        std::error_code error;
+        const auto full = std::filesystem::absolute(path, error).lexically_normal();
+        if (error) return false;
+        std::lock_guard lock(g_observedSavePathMutex);
+        for (const auto& original : g_sessionOriginalPaths)
+            if (_wcsicmp(full.c_str(), original.lexically_normal().c_str()) == 0)
+            {
+                redirectedPath = (g_sessionSaveDirectory / name).wstring();
+                Log("SESSIONJOIN native save read=" + NarrowAscii(name));
+                return true;
+            }
+        return false;
+    }
+
 	bool TryRedirectClientSave(const wchar_t* originalPath, std::wstring& redirectedPath)
 	{
 		if (!g_config.enabled || g_config.role != Role::Client || !originalPath || !*originalPath)
 			return false;
 		RememberOriginalClientSavePath(originalPath);
 
-		const std::filesystem::path sandboxDirectory =
-			std::filesystem::path(SystemHelper::GetModulePath()) / L"AliceCoop" / L"client-saves";
+		std::filesystem::path sandboxDirectory =
+            std::filesystem::path(SystemHelper::GetModulePath()) / L"AliceCoop" / L"client-saves";
+        if (g_sessionReadActive.load(std::memory_order_acquire))
+        {
+            std::lock_guard lock(g_observedSavePathMutex);
+            sandboxDirectory = g_sessionSaveDirectory;
+        }
 		std::error_code error;
 		std::filesystem::create_directories(sandboxDirectory, error);
 		const std::filesystem::path source(originalPath);

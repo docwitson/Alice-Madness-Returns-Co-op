@@ -72,82 +72,259 @@
 			Log("TELEPORT " + status + '.');
 		}
 
-		bool TeleportLocalPawnToHost(AAlicePawn* localPawn,
-			const PlayerStatePayload& hostState,
-			const char* source,
-			bool ignoreStreamingDistance = false)
-		{
-			if (!localPawn || g_currentMap.empty()
-				|| _stricmp(hostState.mapName,
-					g_currentMap.c_str()) != 0)
-			{
-				SetTeleportStatus(std::string(source)
-					+ " rejected: host is not on the same map");
-				return false;
-			}
-			const FVector hostLocation(
-				hostState.location[0],
-				hostState.location[1],
-				hostState.location[2]);
-			constexpr float MaximumSafeStreamingDistance =
-				50000.0f;
-			if (!ignoreStreamingDistance
-				&& (hostLocation - localPawn->Location).SizeSquared()
-				> MaximumSafeStreamingDistance
-					* MaximumSafeStreamingDistance)
-			{
-				SetTeleportStatus(std::string(source)
-					+ " rejected: peer is in another streaming "
-					"region; wait for synchronized progression");
-				return false;
-			}
-			constexpr float RotatorToRadians =
-				6.2831853071795864769f / 65536.0f;
-			const float yaw =
-				static_cast<float>(hostState.rotation[1])
-				* RotatorToRadians;
-			constexpr float FollowDistance = 110.0f;
-			FVector destination(
-				hostState.location[0]
-					- std::cos(yaw) * FollowDistance,
-				hostState.location[1]
-					- std::sin(yaw) * FollowDistance,
-				hostState.location[2] + 12.0f);
-			const FRotator rotation(
-				hostState.rotation[0],
-				hostState.rotation[1],
-				hostState.rotation[2]);
-			localPawn->Velocity = FVector(0.0f, 0.0f, 0.0f);
-			localPawn->FarMoveSetLocation(destination, true);
-			const float remainingDistanceSquared =
-				(localPawn->Location - destination).SizeSquared();
-			bool nativeLocationApplied = true;
-			if (remainingDistanceSquared > 25.0f * 25.0f)
-			{
-				nativeLocationApplied =
-					NativeSetActorLocationNoCheck(
-						localPawn, destination);
-			}
-			const bool nativeRotationApplied =
-				NativeSetActorRotation(localPawn, rotation);
-			if (!nativeLocationApplied)
-			{
-				SetTeleportStatus(std::string(source)
-					+ " failed: native SetLocationNoCheck rejected "
-					"the destination");
-				return false;
-			}
-			SetTeleportStatus(std::string(source)
-				+ " success, destination="
-				+ FormatWorldTraceVector(destination)
-				+ ", actual="
-				+ FormatWorldTraceVector(localPawn->Location)
-				+ ", rotation="
-				+ (nativeRotationApplied
-					? std::string("ok")
-					: std::string("unchanged")));
-			return true;
-		}
+
+        struct SafeArrival
+        {
+            AAlicePawn* pawn = nullptr;
+            AWorldInfo* world = nullptr;
+            std::string map, source, lastWait;
+            AAlicePlayerController* controller = nullptr;
+            bool originalStreamingVolumes = false, arrived = false;
+            std::uint32_t peerActor = 0, hostEpoch = 0;
+            Clock::time_point deadline{}, nextPoll{}, nextDiagnostic{}, settleUntil{};
+            struct LevelLease { ULevelStreaming* level; bool loaded, visible; };
+            std::vector<LevelLease> levels;
+        };
+        SafeArrival g_safeArrival;
+
+        template <typename Params>
+        bool InvokeArrivalNative(UObject* object, UFunction* function, Params& params)
+        {
+            if (!object || !function || !(function->FunctionFlags & 0x400)
+                || !function->iNative) return false;
+            // Actor.ProcessEvent adds an actor-script/world-begun-play gate.
+            // Arrival runs after the engine tick, not as an actor script event.
+            // Use the existing version-resolved UObject dispatcher for explicit
+            // native streaming-volume queries, preserving their native metadata.
+            using Dispatcher = void(__thiscall*)(UObject*, UFunction*, void*, void*);
+            const auto dispatcher = reinterpret_cast<Dispatcher>(GetAddress(Addr::ProcessEvent));
+            if (!dispatcher) return false;
+            dispatcher(object, function, &params, nullptr);
+            return true;
+        }
+
+        void ReleaseArrivalStreamingControl()
+        {
+            auto& arrival = g_safeArrival;
+            if (arrival.controller && IsLiveUObject(arrival.controller)
+                && arrival.controller == g_State.AlicePlayerController)
+                arrival.controller->bIsUsingStreamingVolumes = arrival.originalStreamingVolumes;
+        }
+
+        void ReportArrivalWait(const std::string& stage)
+        {
+            auto& arrival = g_safeArrival;
+            const auto now = Clock::now();
+            if (stage != arrival.lastWait || now >= arrival.nextDiagnostic)
+            {
+                Log("TELEPORT " + arrival.source + " waiting: " + stage);
+                arrival.nextDiagnostic = now + std::chrono::seconds(2);
+            }
+            arrival.lastWait = stage;
+        }
+
+        bool SetArrivalStreaming(ULevelStreaming* level, bool loaded, bool visible)
+        {
+            static UFunction* fn = UFunction::FindFunction(
+                "Function Engine.PlayerController.ClientUpdateLevelStreamingStatus");
+            APlayerController_execClientUpdateLevelStreamingStatus_Params p{};
+            p.PackageName = level->PackageName;
+            p.bNewShouldBeLoaded = loaded; p.bNewShouldBeVisible = visible;
+            // Never block the game tick on asynchronous disk IO.
+            return InvokeNativeFunction(g_State.AlicePlayerController, fn, p);
+        }
+
+        void CancelSafeArrival(const char* reason, bool notify)
+        {
+            if (!g_safeArrival.pawn) return;
+            // The pawn stays at its original, playable location while preloading.
+            // There is no suspended physics/visibility state to leak on timeout.
+            ReleaseArrivalStreamingControl();
+            if (!g_safeArrival.arrived && g_safeArrival.world == g_currentWorld && IsLiveUObject(g_safeArrival.world))
+                for (const auto& lease : g_safeArrival.levels)
+                    if (IsLiveUObject(lease.level))
+                        SetArrivalStreaming(lease.level, lease.loaded, lease.visible);
+            SetTeleportStatus(g_safeArrival.source + " cancelled: " + reason);
+            AchievementOverlay::SetCoopArrivalStatus(
+                notify ? "Could not meet partner. Press O to retry." : "", notify ? 5000 : 0);
+            g_safeArrival = {};
+        }
+
+        void CaptureVisibleStreamingLevels(AWorldInfo* world, HostSnapshotPayload& snapshot)
+        {
+            if (!world) return;
+            for (auto* level : world->StreamingLevels)
+            {
+                if (!level || !IsLiveUObject(level) || !level->bIsVisible || !level->LoadedLevel) continue;
+                const auto hash = HashMapName(level->PackageName.ToString());
+                if (snapshot.streamingLevelCount >= MaxVisibleStreamingLevels)
+                { snapshot.streamingLevelsOverflow = 1; break; }
+                snapshot.streamingLevelHashes[snapshot.streamingLevelCount++] = hash;
+            }
+        }
+
+        bool TeleportLocalPawnToHost(AAlicePawn* localPawn,
+            const PlayerStatePayload& peerState, const char* source,
+            bool allowDistantStreaming = false)
+        {
+            if (!localPawn || !localPawn->WorldInfo || g_currentMap.empty()
+                || _stricmp(peerState.mapName, g_currentMap.c_str()) != 0
+                || localPawn->Health <= 0 || peerState.health <= 0
+                || (peerState.flags & StateCinematic) != 0)
+            { SetTeleportStatus(std::string(source) + " rejected: partner is not ready on the same map"); return false; }
+            const FVector target(peerState.location[0], peerState.location[1], peerState.location[2]);
+            if (!std::isfinite(target.X) || !std::isfinite(target.Y) || !std::isfinite(target.Z)) return false;
+            if (!allowDistantStreaming && (target - localPawn->Location).SizeSquared() > 50000.0f * 50000.0f)
+            {
+                SetTeleportStatus(std::string(source) + " rejected: distant region; use O to prepare safe arrival");
+                AchievementOverlay::SetCoopArrivalStatus("Partner is far away. Press O to prepare the area.", 5000);
+                return false;
+            }
+            if (g_safeArrival.pawn) CancelSafeArrival("replaced by a new request", false);
+            g_safeArrival.pawn = localPawn; g_safeArrival.world = localPawn->WorldInfo;
+            g_safeArrival.map = g_currentMap; g_safeArrival.source = source;
+            g_safeArrival.peerActor = peerState.actorId;
+            g_safeArrival.controller = g_State.AlicePlayerController;
+            if (!g_safeArrival.controller)
+            { CancelSafeArrival("local controller unavailable"); return false; }
+            // Native ProcessLevelStreamingVolumes (0x799440) recalculates desired
+            // load/visibility at the SOURCE camera every tick, overwriting the
+            // destination request before it is serviced. Its per-player gate is
+            // bIsUsingStreamingVolumes. Hold it only for this bounded preload.
+            g_safeArrival.originalStreamingVolumes = g_safeArrival.controller->bIsUsingStreamingVolumes != 0;
+            g_safeArrival.controller->bIsUsingStreamingVolumes = false;
+            Log("TELEPORT " + g_safeArrival.source + " acquired streaming control; volumes="
+                + std::string(g_safeArrival.originalStreamingVolumes ? "on" : "off"));
+            if (g_config.role == Role::Client)
+                if (const auto host = ReadFreshHostSnapshot()) g_safeArrival.hostEpoch = host->snapshot.worldEpoch;
+            g_safeArrival.deadline = Clock::now() + std::chrono::seconds(16);
+            SetTeleportStatus(std::string(source) + " preparing destination sublevels");
+            // Show preparation only if loading really has to wait. Clear a
+            // previous failed request immediately, including on an ordinary P.
+            AchievementOverlay::SetCoopArrivalStatus("", 0);
+            return true;
+        }
+
+        void TickSafeArrival(AAlicePawn* pawn, const PlayerStatePayload& peer,
+            bool peerOnSameMap, bool cinematic)
+        {
+            auto& arrival = g_safeArrival;
+            if (!arrival.pawn) return;
+            const auto now = Clock::now();
+            if (pawn != arrival.pawn || arrival.world != g_currentWorld
+                || arrival.map != g_currentMap || !peerOnSameMap || peer.actorId != arrival.peerActor
+                || pawn->Health <= 0 || peer.health <= 0)
+            { CancelSafeArrival("world or partner changed"); return; }
+            if (arrival.arrived)
+            {
+                if (now >= arrival.settleUntil)
+                {
+                    ReleaseArrivalStreamingControl();
+                    Log("TELEPORT " + arrival.source + " native streaming control restored after arrival");
+                    arrival = {};
+                }
+                return;
+            }
+            if (now >= arrival.deadline)
+            { CancelSafeArrival(("not ready within 16 seconds; last stage=" + arrival.lastWait).c_str()); return; }
+            if (now < arrival.nextPoll) return;
+            arrival.nextPoll = now + std::chrono::milliseconds(100);
+            if (cinematic) { ReportArrivalWait("cinematic"); return; }
+            const FVector target(peer.location[0], peer.location[1], peer.location[2]);
+            if (!std::isfinite(target.X) || !std::isfinite(target.Y) || !std::isfinite(target.Z))
+            { CancelSafeArrival("invalid destination"); return; }
+
+            std::vector<ULevelStreaming*> required;
+            if (g_config.role == Role::Client)
+            {
+                const auto host = ReadFreshHostSnapshot();
+                if (!host || _stricmp(host->snapshot.hostState.mapName, arrival.map.c_str()) != 0
+                    || host->snapshot.worldEpoch != arrival.hostEpoch
+                    || !HasCompleteStreamingState(host->snapshot))
+                { CancelSafeArrival("host streaming state incomplete"); return; }
+                for (unsigned i = 0; i < host->snapshot.streamingLevelCount; ++i)
+                {
+                    ULevelStreaming* match = nullptr;
+                    for (auto* level : arrival.world->StreamingLevels)
+                        if (level && IsLiveUObject(level)
+                            && HashMapName(level->PackageName.ToString()) == host->snapshot.streamingLevelHashes[i])
+                        { match = level; break; }
+                    if (!match) { CancelSafeArrival("host sublevel not found in client world"); return; }
+                    required.push_back(match);
+                }
+            }
+            else
+            {
+                static UFunction* encompasses = UFunction::FindFunction("Function Engine.Volume.EncompassesPoint");
+                for (auto* level : arrival.world->StreamingLevels)
+                {
+                    if (!level || !IsLiveUObject(level)) continue;
+                    bool needed = false;
+                    for (auto* volume : level->EditorStreamingVolumes)
+                    {
+                        if (!volume || !IsLiveUObject(volume) || volume->bDisabled || volume->bEditorPreVisOnly) continue;
+                        AVolume_execEncompassesPoint_Params p{}; p.Loc = target;
+                        if (InvokeArrivalNative(volume, encompasses, p) && p.ReturnValue) { needed = true; break; }
+                    }
+                    if (needed) required.push_back(level);
+                }
+            }
+            bool ready = true;
+            std::string pendingLevels;
+            for (auto* level : required)
+            {
+                auto lease = std::find_if(arrival.levels.begin(), arrival.levels.end(),
+                    [&](const SafeArrival::LevelLease& item) { return item.level == level; });
+                if (lease == arrival.levels.end())
+                    arrival.levels.push_back({level, level->bShouldBeLoaded != 0, level->bShouldBeVisible != 0});
+                if (!SetArrivalStreaming(level, true, true)) { CancelSafeArrival("native streaming request failed"); return; }
+                if (!level->LoadedLevel || !level->bIsVisible || level->bHasLoadRequestPending || level->bHasUnloadRequestPending)
+                {
+                    ready = false;
+                    if (!pendingLevels.empty()) pendingLevels += ", ";
+                    pendingLevels += level->PackageName.ToString() + " [loaded="
+                        + (level->LoadedLevel ? "yes" : "no") + ", visible="
+                        + (level->bIsVisible ? "yes" : "no") + ", loadPending="
+                        + (level->bHasLoadRequestPending ? "yes" : "no") + "]";
+                }
+            }
+            if (!ready)
+            {
+                ReportArrivalWait("streaming: " + pendingLevels);
+                if (now - (arrival.deadline - std::chrono::seconds(16)) >= std::chrono::seconds(1))
+                    AchievementOverlay::SetCoopArrivalStatus("Preparing partner's area...", 17000);
+                return;
+            }
+
+            // Match the working pre-arrival teleport: behind the partner and
+            // slightly above their actual position. Neither player needs to be
+            // grounded, and a moving/airborne destination does not need to settle.
+            constexpr float RotatorToRadians = 6.2831853071795864769f / 65536.0f;
+            const float yaw = peer.rotation[1] * RotatorToRadians;
+            const FVector destination(target.X - std::cos(yaw) * 110.0f,
+                target.Y - std::sin(yaw) * 110.0f, target.Z + 12.0f);
+            static UFunction* farMove = UFunction::FindFunction(
+                "Function AliceGame.AlicePawn.FarMoveSetLocation");
+            AAlicePawn_execFarMoveSetLocation_Params move{};
+            move.SetLocation = destination; move.bNoCheck = true;
+            // Keep FUNC_Native/iNative intact instead of using the generated SDK
+            // wrapper, which clears them. Both methods are game-owned teleports.
+            InvokeNativeFunction(pawn, farMove, move);
+            if ((pawn->Location - destination).SizeSquared() > 25.0f * 25.0f)
+                NativeSetActorLocationNoCheck(pawn, destination);
+            if ((pawn->Location - destination).SizeSquared() > 25.0f * 25.0f)
+            { ReportArrivalWait("native teleport did not move pawn"); return; }
+            pawn->Velocity = FVector(0, 0, 0);
+            NativeSetActorRotation(pawn, FRotator(peer.rotation[0], peer.rotation[1], peer.rotation[2]));
+            SetTeleportStatus(arrival.source + " success, destination=" + FormatWorldTraceVector(destination)
+                + ", actual=" + FormatWorldTraceVector(pawn->Location)
+                + ", streamedLevels=" + std::to_string(required.size()));
+            AchievementOverlay::SetCoopArrivalStatus("", 0);
+            // Let the camera consume the teleport before enabling volume tests
+            // again; its old source position must not immediately unload arrival.
+            arrival.arrived = true;
+            arrival.settleUntil = now + std::chrono::seconds(1);
+        }
 
 		void RequestHostSummonClient()
 		{
@@ -328,7 +505,8 @@
 			Log("SESSION backtoTitle from "
 				+ (source ? std::string(source)
 					: std::string("<unknown>")) + '.');
-			controller->backtoTitle();
+			g_sessionReadActive.store(false);
+            controller->backtoTitle();
 			g_applyingNetworkReturnToMenu = false;
 			return true;
 		}

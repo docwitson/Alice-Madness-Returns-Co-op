@@ -8,9 +8,41 @@
 #include <cstdint>
 #include <cmath>
 #include <string_view>
+#include <vector>
+#include <string>
+#include <cstring>
 
 namespace AliceCoopCore
 {
+    // PC checkpoint v3 begins with version, format marker, then an FArchive
+    // FString base map. This checks identity/bounds; the game reads the payload.
+    inline bool CheckpointMatchesMap(const std::vector<std::uint8_t>& bytes, std::string_view expected)
+    {
+        if (bytes.size() < 12 || expected.empty()) return false;
+        std::uint32_t version = 0; std::int32_t count = 0;
+        std::memcpy(&version, bytes.data(), 4);
+        std::memcpy(&count, bytes.data() + 8, 4);
+        if (version != 3 || count == 0 || count < -128 || count > 128) return false;
+        const bool wide = count < 0;
+        const auto length = static_cast<std::size_t>(wide ? -count : count);
+        const std::size_t width = wide ? 2 : 1;
+        if (length < 2 || length * width > bytes.size() - 12 || expected.size() != length - 1) return false;
+        for (std::size_t i = 0; i < length; ++i)
+        {
+            const auto value = bytes[12 + i * width];
+            if (wide && bytes[13 + i * width] != 0) return false;
+            if (i == length - 1) { if (value != 0) return false; }
+            else if (std::tolower(value) != std::tolower(static_cast<unsigned char>(expected[i]))) return false;
+        }
+        return true;
+    }
+
+    inline bool HasCompleteStreamingState(const AliceCoopProtocol::HostSnapshotPayload& snapshot)
+    {
+        return !snapshot.streamingLevelsOverflow
+            && snapshot.streamingLevelCount <= AliceCoopProtocol::MaxVisibleStreamingLevels;
+    }
+
 	inline void PackAimOffset(float x, float y, std::uint8_t packed[3])
 	{
 		auto axis = [](float value) -> std::uint32_t

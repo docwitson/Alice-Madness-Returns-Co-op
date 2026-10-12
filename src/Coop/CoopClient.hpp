@@ -11,5 +11,7 @@ namespace AliceCoop
 	bool IsEnabled();
 	bool ShouldUseUniqueMutex();
 	void ObserveSavePath(const wchar_t* effectivePath);
+	void SetSessionSaveReadHookReady(bool ready);
+    bool TryRedirectSessionSaveRead(const wchar_t* originalPath, std::wstring& redirectedPath);
 	bool TryRedirectClientSave(const wchar_t* originalPath, std::wstring& redirectedPath);
 }

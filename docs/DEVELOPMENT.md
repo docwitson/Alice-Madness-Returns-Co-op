@@ -42,6 +42,24 @@ The relay reports the wire protocol version without opening logs or sockets:
 & .\bin\Release\AliceCoopServer.exe --protocol-version
 ```
 
+## Native menu changes
+
+`tools/Generate-Coop-Scaleform.py` generates only our AVM1 additions into
+`include/CoopScaleformActions.inl`; rerun it after changing that generator.
+`src/Graphics/CoopScaleformPatch.inl` patches the user's loaded movie after
+validating its layout, updates function/branch/tag sizes, and keeps existing
+MadnessPatch byte patches at their original offsets. Never check extracted
+movies or textures into the repository.
+
+```powershell
+python .\tools\Test-Coop-Scaleform-Actions.py
+```
+
+This pure action test covers own menu commands/back behavior and native menu
+passthrough. A native stream test against the installed movie and manual checks
+of fonts, mouse/controller navigation, submenu layout and return are also
+required after changing the stream rewriter.
+
 ## Packaging
 
 ```powershell
@@ -110,3 +128,52 @@ only report state and never repair or assert on it.
 - Create a signed or annotated version tag where practical.
 - Upload both archives and checksums to a draft GitHub Release.
 - Review the repository and Actions logs before changing visibility to public.
+
+The experimental MadnessPatch 3.3.3 native-menu build uses wire protocol 42.
+Host snapshots include up to 32 hashes of visible streaming packages (1,154 bytes
+including the header, within the 1,200-byte UDP budget). Both games and the relay
+must be updated together. Existing animation and weapon-event payloads are unchanged.
+Safe arrival preloads these native sublevels without moving or suspending the pawn,
+waits for visibility/loading, then uses native AlicePawn.FarMoveSetLocation with
+bNoCheck (Actor.SetLocationNoCheck fallback), verifying the resulting position.
+No floor, room, Walking-physics or stable-position gate is applied: teleportation
+also works in flight. Timeout, death, disconnect or world change cancels the request.
+
+During safe-arrival preparation the controller temporarily disables its native
+streaming-volume participation. The engine otherwise recomputes destination
+load/visibility from the still-distant source camera and cancels the preload.
+The original flag is restored on cancellation (including travel with a retained
+controller), or one second after successful native teleport for the camera
+to consume the teleport. TELEPORT waiting diagnostics distinguish sublevel
+load/visibility and a native teleport that did not move the pawn. Preparation UI
+is shown only while loading actually waits; native Join skips a redundant arrival
+when its valid checkpoint spawn is already within 250 units of the host.
+
+Join uses SaveRequestJoinSession, separate from confirmed SaveRequestReplaceProfile.
+Both files are verified and written under a unique client-saves/session-PID-ID cache.
+Only game-issued read opens of the exact selected-profile checkpoint/PSD paths are
+redirected during the session; native save writes remain isolated. Config reads and
+profile-list metadata replacement are not part of Join. Returning to title disables
+redirection before native profile reload. Native FindCheckpointData replaces the
+cached object, followed by the title's LoadLastCheckpointFromTitleMenu command.
+The manager processes this command asynchronously; do not require an immediate
+PendingCheckpointAction transition. Saved map identity and host world epoch are
+checked; no ambiguous chapter-start fallback is used.
+
+Native menu rebuilds must update selectedButton as well as currentId.menu.
+Stock setFirstMenu animates the button selected by the index but does not rebind
+this reference; the first deselect otherwise targets a removed clip. Clear the
+previous sfm interval before recreating buttons. Confirmation orders Receive and
+replace above Back, with both the index and focus reference pointing to Back.
+The native player-menu entrance at frame two releases outgoing title/profile
+listeners and hides the sibling screens; input still unlocks at native frame22.
+Only the patched title movie is fitted to the full viewport with GSM_ExactFit
+when FixAspectRatio is enabled; its readiness resets on root movie reload.
+Native main-menu music uses title.MainMenuMusicStart and the controller's uniqueAudio.
+Recovery checks IsPlaying with native metadata preserved, leaves active cues alone,
+and resumes the existing component or the title's PlayMusic callback while the
+title movie owns focus and its APC is the local controller. Do not require the
+controller's bInMainMenu flag: root callbacks may have run before it was ready,
+leaving that flag false and uniqueAudio absent. Restore SetInMainMenu through
+the movie's native script context, and report the component's post-call state.
+Startup title visibility restores at native frame150.

@@ -1271,6 +1271,34 @@
 			if (!remote || !remote->Mesh)
 				return;
 
+            if ((g_config.nativeClothSimulation || g_remoteNativeHairActive)
+                && (!remote->Controller || !IsLiveUObject(remote->Controller) || remote->Controller->bDeleteMe))
+            {
+                static Clock::time_point nextControllerRepair{};
+                if (Clock::now() >= nextControllerRepair)
+                {
+                    nextControllerRepair = Clock::now() + std::chrono::seconds(2);
+                    if (g_remoteClothController && IsLiveUObject(g_remoteClothController)
+                        && !g_remoteClothController->bDeleteMe)
+                    {
+                        g_remoteClothController->Pawn = remote;
+                        remote->Controller = g_remoteClothController;
+                        Log("CLOTHRECOVERY rebound dormant controller after native unpossess.");
+                    }
+                    else
+                    {
+                        g_remoteClothController = nullptr;
+                        remote->Controller = nullptr;
+                        AttachRemoteClothController(remote);
+                    }
+                    if (remote->Controller)
+                    {
+                        remote->eventResetClothHair(true, true);
+                        LogCosmeticState("remote-after-controller-recovery", remote);
+                    }
+                }
+            }
+
 			auto maintainRigidCosmetic =
 				[remote](USkeletalMeshComponent* component,
 					const char* label)
@@ -1319,6 +1347,12 @@
 				{
 					if (!cloth || !cloth->SkeletalMesh)
 						continue;
+                    if (cloth->Owner != remote || !cloth->bAttached)
+                    {
+                        NativeAttachComponent(remote, cloth);
+                        cloth->Reset();
+                        Log("CLOTHRECOVERY repaired native attachment: " + ObjectName(cloth));
+                    }
 					cloth->AttachedToSkelComponent = remote->Mesh;
 					cloth->bTransformFromAnimParent = 1;
 					cloth->bClothFrozen = false;
@@ -1488,6 +1522,19 @@
 					primitive->SetScale3D(scale3D);
 					primitive->Scale3D = scale3D;
 				};
+                static Clock::time_point nextSimulatorRepair{};
+                if (g_config.nativeClothSimulation && remote->SkirtComponent
+                    && remote->SkirtComponent->SkeletalMesh
+                    && !remote->SkirtComponent->Simulator.Dummy
+                    && remote->Controller && Clock::now() >= nextSimulatorRepair)
+                {
+                    nextSimulatorRepair = Clock::now() + std::chrono::seconds(2);
+                    remote->SkirtComponent->Reset();
+                    NativeForceComponentUpdate(remote->SkirtComponent, false);
+                    Log("CLOTHRECOVERY skirt simulator absent while visible; native Reset requested, attached="
+                        + std::to_string(remote->SkirtComponent->bAttached)
+                        + ", hidden=" + std::to_string(remote->SkirtComponent->HiddenGame));
+                }
 				remote->bForceTranslucency = false;
 				remote->ForceTranslucencyAlpha = 1.0f;
 				const FVector unitScale(1.0f, 1.0f, 1.0f);

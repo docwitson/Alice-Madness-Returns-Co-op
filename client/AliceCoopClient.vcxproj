@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -72,7 +72,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ModuleDefinitionFile>$(SolutionDir)src\dinput8.def</ModuleDefinitionFile>
-      <AdditionalDependencies>winmm.lib;imm32.lib;version.lib;setupapi.lib;d3d9.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>winmm.lib;imm32.lib;version.lib;setupapi.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -101,16 +101,10 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ModuleDefinitionFile>$(SolutionDir)src\dinput8.def</ModuleDefinitionFile>
-      <AdditionalDependencies>winmm.lib;imm32.lib;version.lib;setupapi.lib;d3d9.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>winmm.lib;imm32.lib;version.lib;setupapi.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\include\imgui\imgui.cpp" />
-    <ClCompile Include="..\include\imgui\imgui_draw.cpp" />
-    <ClCompile Include="..\include\imgui\imgui_impl_dx9.cpp" />
-    <ClCompile Include="..\include\imgui\imgui_impl_win32.cpp" />
-    <ClCompile Include="..\include\imgui\imgui_tables.cpp" />
-    <ClCompile Include="..\include\imgui\imgui_widgets.cpp" />
     <ClCompile Include="..\include\safetyhook\safetyhook.cpp" />
     <ClCompile Include="..\include\safetyhook\Zydis.c" />
     <ClCompile Include="..\include\SDK\GameDefines.cpp" />
@@ -136,6 +130,12 @@
     <ClCompile Include="..\src\General\IntroSkip.cpp" />
     <ClCompile Include="..\src\General\WarnAlice1InstallFolder.cpp" />
     <ClCompile Include="..\src\General\AchievementSupport.cpp" />
+    <ClCompile Include="..\src\Display\BorderlessFullscreen.cpp" />
+    <ClCompile Include="..\src\General\GameLanguage.cpp" />
+    <ClCompile Include="..\src\MainLoop\MenuMouseCursor.cpp" />
+    <ClCompile Include="..\src\Modding\ExportFiles.cpp" />
+    <ClCompile Include="..\src\Modding\ModFiles.cpp" />
+
     <ClCompile Include="..\src\Display\FontScaling.cpp" />
     <ClCompile Include="..\src\Display\AutoResolution.cpp" />
     <ClCompile Include="..\src\Display\UseWindowed.cpp" />
@@ -170,6 +170,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\AchievementOverlay.hpp" />
+    <ClInclude Include="..\include\CoopCanvasOverlay.inl" />
+    <ClInclude Include="..\include\CoopScaleformActions.inl" />
+    <ClInclude Include="..\src\Graphics\CoopScaleformPatch.inl" />
     <ClInclude Include="..\include\Controller.hpp" />
     <ClInclude Include="..\include\CrashHandler.hpp" />
     <ClInclude Include="..\include\FixIniBindings.hpp" />

@@ -386,7 +386,8 @@ namespace AliceCoop
 			&& _stricmp(g_currentMap.c_str(), "AliceEntry") == 0
 			&& peerConnectedForUi
 			&& HaveOriginalClientSaveTargets()
-			&& !g_saveSyncInProgress.load();
+			&& !g_saveSyncInProgress.load()
+            && !g_joinHostPending && g_joinHostRetryUntil == Clock::time_point{};
 		if (g_config.role == Role::Client
 			&& _stricmp(g_currentMap.c_str(), "AliceEntry") == 0
 			&& peerConnectedForUi
@@ -407,7 +408,8 @@ namespace AliceCoop
 		{
 			{
 				std::lock_guard<std::mutex> lock(g_observedSavePathMutex);
-				g_requestedClientSavePaths = g_originalClientSavePaths;
+				g_requestedSavePurpose.store(SaveRequestReplaceProfile);
+                g_requestedClientSavePaths = g_originalClientSavePaths;
 				g_requestedClientProfileName = g_activeSaveProfileName;
 			}
 			std::uint32_t transferId = static_cast<std::uint32_t>(
@@ -429,14 +431,18 @@ namespace AliceCoop
 			&& _stricmp(
 				g_currentMap.c_str(), "AliceEntry") != 0
 			&& localPawn && localPawn->Mesh
+            && g_State.AliceEngine
+            && g_State.AliceEngine->PendingCheckpointAction == ECheckpointAction::Checkpoint_Default
+            && _stricmp(g_currentMap.c_str(), g_joinSessionHostMap.c_str()) == 0
 			&& g_joinHostLoadInvokedAt != Clock::time_point{}
 			&& Clock::now() - g_joinHostLoadInvokedAt
 				>= std::chrono::milliseconds(2200))
 		{
 			g_joinHostPending = false;
 			FinishJoinHostAttempts();
+            g_joinArrivalRequested = true;
 			SetJoinHostStatus(
-				"HOST LOCATION LOADED; P SAFE / O FORCED");
+				"LEVEL LOADED; PREPARING ARRIVAL AT HOST");
 		}
 		if (g_soloMinigameActive)
 		{
@@ -447,6 +453,7 @@ namespace AliceCoop
 			return;
 		if (!localPawn || !localPawn->WorldInfo)
 		{
+            CancelSafeArrival("local pawn unavailable", false);
 			g_lastLoggedLocalWeapon = nullptr;
 			g_lastLoggedLocalAliceHealth =
 				(std::numeric_limits<int>::min)();
@@ -776,7 +783,7 @@ namespace AliceCoop
 			{
 				TeleportLocalPawnToHost(localPawn,
 					hostSnapshot->snapshot.hostState,
-					"host summon");
+					"host summon", true);
 			}
 		}
 
@@ -839,14 +846,31 @@ namespace AliceCoop
 			else if (g_config.role == Role::Client)
 			{
 				TeleportLocalPawnToHost(
-					localPawn, peerState, "client O force", true);
+					localPawn, peerState, "client O", true);
 			}
 			else
 			{
-				SetTeleportStatus(
-					"force request ignored: O is client-only");
+				RequestHostSummonClient();
 			}
 		}
+
+        if (_stricmp(g_currentMap.c_str(), "AliceEntry") == 0)
+        { g_joinArrivalRequested = false; CancelSafeArrival("returned to main menu", false); }
+        if (g_joinArrivalRequested && peerOnSameMap && !localCinematic && !peerCinematic)
+        {
+            g_joinArrivalRequested = false;
+            const FVector partner(peerState.location[0], peerState.location[1], peerState.location[2]);
+            if ((partner - localPawn->Location).SizeSquared() <= 250.0f * 250.0f)
+            {
+                // Native Continue already put us beside the host. Do not start
+                // another arrival request and then report its timeout as Join failure.
+                AchievementOverlay::SetCoopArrivalStatus("", 0);
+                SetJoinHostStatus("JOINED HOST SAVED AREA");
+                Log("SESSIONJOIN native checkpoint already beside host; no extra teleport");
+            }
+            else TeleportLocalPawnToHost(localPawn, peerState, "join arrival", true);
+        }
+        TickSafeArrival(localPawn, peerState, peerOnSameMap, localCinematic || peerCinematic);
 
 		if (g_config.visualProxy && peerOnSameMap && proxyAllowedOnMap)
 		{
@@ -884,6 +908,7 @@ namespace AliceCoop
 				world);
 			HostSnapshotPayload snapshot{};
 			snapshot.hostState = localState;
+            CaptureVisibleStreamingLevels(world, snapshot);
 			snapshot.snapshotNumber = ++g_snapshotNumber;
 			snapshot.worldEpoch = g_worldEpoch;
 			snapshot.hostTimeMs = ElapsedMilliseconds();

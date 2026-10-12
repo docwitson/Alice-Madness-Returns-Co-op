@@ -32,7 +32,7 @@ AliceCoop\images\...
 AliceCoop\Advanced\Manual\...
 ```
 
-Объединённый `dinput8.dll` уже содержит MadnessPatch 3.1.1. Не заменяйте его
+Объединённый `dinput8.dll` уже содержит MadnessPatch 3.3.3. Не заменяйте его
 другой proxy DLL.
 
 ## Запуск через лаунчер из архива

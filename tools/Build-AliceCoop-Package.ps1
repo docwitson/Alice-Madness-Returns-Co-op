@@ -88,7 +88,7 @@ foreach ($required in @($builtDll, $builtServer, $builtLauncher)) {
 & $builtServer --self-test
 if ($LASTEXITCODE -ne 0) { throw 'AliceCoopServer self-test failed.' }
 $launcherTest = Start-Process -FilePath $builtLauncher -ArgumentList '--self-test' `
-    -Wait -PassThru
+    -Wait -PassThru -WindowStyle Hidden
 if ($launcherTest.ExitCode -ne 0) { throw 'AliceCoopLauncher self-test failed.' }
 $protocolVersion = Get-AliceCoopProtocolVersion -ServerPath $builtServer
 
@@ -171,7 +171,7 @@ $manifest = [ordered]@{
     buildUtc = [DateTime]::UtcNow.ToString('o')
     sourceCommit = $commit
     sourceDirty = $sourceStatus.Length -gt 0
-    madnessPatchBase = '3.1.1'
+    madnessPatchBase = '3.3.3'
     installMode = 'External launcher + AliceCoop runtime payload'
     license = 'GPL-2.0-only'
     sourceRepository = 'https://github.com/docwitson/Alice-Madness-Returns-Co-op'

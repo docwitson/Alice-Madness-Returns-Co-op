@@ -1,8 +1,21 @@
 #include "Common.hpp"
 #include "Features.hpp"
 
+#pragma comment(lib, "gdi32.lib")
+
 safetyhook::InlineHook ProcessDeferredMessage;
 safetyhook::InlineHook UpdateMouseLock;
+
+static safetyhook::MidHook GameWindowClassMid{};
+
+static void OnRegisterGameWindowClass(safetyhook::Context& ctx)
+{
+	WNDCLASSEXW* windowClass = *reinterpret_cast<WNDCLASSEXW**>(ctx.esp);
+
+	if (windowClass->hbrBackground) return;
+
+	windowClass->hbrBackground = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+}
 
 static void __fastcall ProcessDeferredMessage_Hook(int thisPtr, int, int deferredMessage)
 {
@@ -47,6 +60,10 @@ void ApplyFixWindowHandling()
 
 	UpdateMouseLock = HookHelper::CreateHook((void*)GetAddress(Addr::UpdateMouseLock), &UpdateMouseLock_Hook);
 	ProcessDeferredMessage = HookHelper::CreateHook((void*)GetAddress(Addr::ProcessDeferredMessage), &ProcessDeferredMessage_Hook);
+
+	// Startup window presentation
+	GameWindowClassMid = safetyhook::create_mid(GetAddress(Addr::GameWindowClassRegister), OnRegisterGameWindowClass);
+	MemoryHelper::WriteMemory<uint8_t>(GetAddress(Addr::StartupShowWindowCmd), SW_HIDE);
 
 	if (Addresses::GetBuild() == GameBuild::Current)
 	{

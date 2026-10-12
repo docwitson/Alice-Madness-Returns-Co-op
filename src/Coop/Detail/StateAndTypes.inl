@@ -168,6 +168,7 @@
 
 		struct ClientSaveTransfer
 		{
+            bool sessionOnly = false;
 			bool active = false;
 			std::uint32_t transferId = 0;
 			std::array<SaveTransferFile, SaveSyncFileCount> files{};
@@ -185,6 +186,15 @@
 		HostSaveTransfer g_hostSaveTransfer;
 		ClientSaveTransfer g_clientSaveTransfer;
 		std::atomic_uint32_t g_requestedSaveTransferId{ 0 };
+        std::atomic_uint32_t g_requestedSavePurpose{ SaveRequestReplaceProfile };
+        std::atomic_uint32_t g_joinSessionReady{ 0 };
+        std::atomic_bool g_sessionReadHookReady{ false }, g_sessionReadActive{ false };
+        std::array<std::filesystem::path, SaveSyncFileCount> g_sessionOriginalPaths{};
+        std::filesystem::path g_sessionSaveDirectory;
+        std::string g_sessionExpectedMap;
+        std::uint32_t g_joinSessionTransferId = 0, g_joinSessionHostEpoch = 0;
+        std::string g_joinSessionHostMap;
+
 		std::atomic_bool g_saveSyncInProgress{ false };
 		std::atomic_int g_saveSyncProgress{ 0 };
 		std::mutex g_saveSyncStatusMutex;
@@ -721,6 +731,7 @@
 		bool g_hostReturnToMenuIssued = false;
 		Clock::time_point g_groupDeathSuppressUntil{};
 		bool g_joinHostPending = false;
+        bool g_joinArrivalRequested = false;
 		std::string g_joinHostStatus;
 		std::string g_joinHostEligibilityMap;
 		std::uint32_t g_joinHostEligibilityEpoch = 0;

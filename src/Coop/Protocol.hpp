@@ -7,13 +7,14 @@
 namespace AliceCoopProtocol
 {
 	constexpr std::uint32_t Magic = 0x504F4341; // "ACOP" in little-endian byte order.
-	constexpr std::uint16_t Version = 40;
+	constexpr std::uint16_t Version = 42;
 	constexpr std::uint16_t DefaultPort = 27018;
-	constexpr std::size_t MaxDatagramSize = 1024;
+	constexpr std::size_t MaxDatagramSize = 1200;
 	constexpr std::size_t MaxAnimationSequences = 12;
 	constexpr std::size_t ClockBombMaterialSlots = 3;
 	constexpr std::size_t MaxAnimationBlends = 20;
 	constexpr std::size_t MaxSharedEnemies = 10;
+	constexpr std::size_t MaxVisibleStreamingLevels = 32;
 	constexpr std::size_t SaveSyncFileCount = 2;
 	constexpr std::size_t SaveSyncChunkBytes = 900;
 
@@ -408,6 +409,10 @@ namespace AliceCoopProtocol
 		std::uint8_t enemyCount = 0;
 		std::uint8_t reserved[1]{};
 		SharedEnemyPosePayload enemies[MaxSharedEnemies]{};
+		// Host-visible geometry needed before a client may arrive at its position.
+		std::uint8_t streamingLevelCount = 0;
+		std::uint8_t streamingLevelsOverflow = 0;
+		std::uint32_t streamingLevelHashes[MaxVisibleStreamingLevels]{};
 	};
 
 	struct PeerLeftPayload
@@ -421,6 +426,9 @@ namespace AliceCoopProtocol
 	// UDP relay. The client never writes a partial transfer: both files are
 	// staged, SHA-256 checked, and committed together only after every chunk is
 	// present.
+	constexpr std::uint32_t SaveRequestReplaceProfile = 1;
+	constexpr std::uint32_t SaveRequestJoinSession = 2;
+
 	struct SaveSyncRequestPayload
 	{
 		std::uint32_t transferId = 0;
@@ -509,7 +517,7 @@ namespace AliceCoopProtocol
 	static_assert(sizeof(PlayerStatePayload) == 207);
 	static_assert(sizeof(ClientCommandPayload) == 795);
 	static_assert(sizeof(SharedEnemyPosePayload) == 56);
-	static_assert(sizeof(HostSnapshotPayload) == 1000);
+	static_assert(sizeof(HostSnapshotPayload) == 1130);
 	static_assert(sizeof(Header) + sizeof(HostSnapshotPayload)
 		<= MaxDatagramSize);
 	static_assert(sizeof(PeerLeftPayload) == 8);

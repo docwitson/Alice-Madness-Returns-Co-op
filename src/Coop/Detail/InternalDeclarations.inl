@@ -1,3 +1,6 @@
+        std::string FormatWorldTraceVector(const FVector& vector);
+        void CancelSafeArrival(const char* reason, bool notify = true);
+        bool AttachRemoteClothController(AAlicePawn* remote);
 		const char* VfxAttachmentCandidateName(
 			VfxAttachmentCandidate candidate);
 		UParticleSystem* FindLoadedParticleSystem(

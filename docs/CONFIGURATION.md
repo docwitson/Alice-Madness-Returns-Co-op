@@ -47,6 +47,37 @@ AliceCoop-Client.bat 26.x.x.x 27018
 AliceCoop-Server.bat 0.0.0.0 27018
 ```
 
+## Native co-op UI
+
+The experimental MadnessPatch 3.3.3 integration adds Multiplayer to the original
+Scaleform main menu using the game's button template, fonts and navigation.
+Its submenu shows role-specific connection information. The host sees only
+About and Back; the client can Join host and Receive host profile when available,
+plus About and Back. About groups the creator, MadnessPatch credits and license,
+and offers native selectable links to GitHub (Source & Releases), Nexus Mods, X and
+YouTube. Mouse, arrows/D-pad and Enter/A use the normal menu navigation; links
+open in the default browser. Back is last and selected by default on entry.
+Receiving a profile opens a separate native confirmation page with Back at the
+bottom, selected by default. Profile replacement requires the explicit Receive and replace
+choice, checks that the selected profile has not changed, and keeps a backup.
+Select the role and server address in the launcher.
+
+The main screen only shows AliceCoop 0.1.0-alpha.3. Native headings and normal
+body fonts come from the game's imported font library. Connection states use
+separate size/color styling. The information column sits on the right, with
+translucent vector panels separating status, instructions and navigation.
+The patch validates the known movie layout and
+leaves unsupported versions untouched. No game assets or fonts are bundled.
+
+Event notifications use compact UE3 Canvas panels referring to the original
+AliceGameUI.titlePlayerMenu.titlePlayerMenu_I177 texture, with a plain border
+fallback if unloaded. Passive messages do not capture gameplay input.
+
+Native navigation uses arrows / D-pad, Enter / A and Escape / B. Menu-specific
+L (join), K (profile), and Y / N confirmation shortcuts were removed. L remains
+only for an active shared-cutscene wait; T toggles movement trails while paused,
+and Home opens achievements when supported.
+
 ## AliceCoop.ini
 
 Normal releases ship conservative defaults. The most relevant sections are:

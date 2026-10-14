@@ -3,6 +3,7 @@
 // Fixes
 void ApplyFixHighFPSHairPhysics();
 void ApplyFixHighFPSClothPhysics();
+void InvalidateHighFPSParticleSimulation(const void* simulator);
 void ApplyFixHighFPSProjectileCollisionCheck();
 void ApplyFixHighFPSPhysX();
 void ApplyFixHighFPSWalkingPhysics();

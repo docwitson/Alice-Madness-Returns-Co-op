@@ -784,6 +784,7 @@
 
 		void LogCosmeticState(const char* label, const AAlicePawn* pawn)
 		{
+			if (!g_config.vfxLifecycleTrace && !g_config.localMirror) return;
 			if (!pawn)
 			{
 				Log(std::string("Cosmetics[") + label + "]: pawn=<null>");
@@ -1196,6 +1197,7 @@
 		void LogRemoteCosmeticSpatialSample(
 			AAlicePawn* remote)
 		{
+			if (!g_config.vfxLifecycleTrace && !g_config.localMirror) return;
 			if (!remote || !remote->Mesh)
 				return;
 

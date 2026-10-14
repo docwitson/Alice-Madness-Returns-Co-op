@@ -408,5 +408,8 @@
     <ClInclude Include="..\include\GfxMovieStreamOverride.hpp">
       <Filter>src\Graphics</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\NativePersistentReadCache.hpp">
+      <Filter>src\Coop</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

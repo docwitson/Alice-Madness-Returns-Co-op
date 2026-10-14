@@ -1629,6 +1629,7 @@
 
 		void LogClockBombPresentationCandidates()
 		{
+			if (!g_config.vfxLifecycleTrace) return;
 			TArray<UObject*>* objects = UObject::GObjObjects();
 			if (!objects)
 				return;
@@ -1888,7 +1889,7 @@
 			NativeSetActorHidden(remote, presentation.hidden);
 			ApplyRemoteComponentVisibility(remote, state,
 				presentation.hidden);
-			if (forceComponents)
+			if (forceComponents && !g_remoteRenderDetached)
 			{
 				NativeForceUpdateComponents(remote, false, true);
 				ForceRemoteCosmeticMasterPose(remote);
@@ -1920,10 +1921,7 @@
 				{
 					if (cloth && cloth->bAttached)
 					{
-						if (g_config.nativeClothSimulation)
-							NativeSetComponentHidden(cloth, true);
-						else
-							NativeDetachActorComponent(remote, cloth);
+                        NativeDetachActorComponent(remote, cloth);
 					}
 				}
 				if (remote->UpperBodyComponent
@@ -1938,6 +1936,8 @@
 			}
 			else
 			{
+				g_remoteClothNeedsReset = g_config.nativeClothSimulation;
+                g_remoteClothRecoveryAt = {};
 				if (remote->Mesh && !remote->Mesh->bAttached)
 					NativeAttachComponent(remote, remote->Mesh);
 				if (remote->UpperBodyComponent
@@ -2517,7 +2517,7 @@
 							? "remote-after-hair-owner-fallback"
 							: "remote-delayed",
 						remote);
-					if (remote->HairComponent)
+					if ((g_config.vfxLifecycleTrace || g_config.localMirror) && remote->HairComponent)
 					{
 						std::ostringstream stream;
 						stream
@@ -2535,7 +2535,7 @@
 							<< '.';
 						Log(stream.str());
 					}
-					if (g_remoteIndependentHair)
+					if ((g_config.vfxLifecycleTrace || g_config.localMirror) && g_remoteIndependentHair)
 					{
 						std::ostringstream stream;
 						stream
@@ -2599,7 +2599,7 @@
 							<< '.';
 						Log(stream.str());
 					}
-					if (g_remoteHairProxy
+					if ((g_config.vfxLifecycleTrace || g_config.localMirror) && g_remoteHairProxy
 						&& g_remoteHairProxy
 							->SkeletalMeshComponent)
 					{
@@ -2649,15 +2649,15 @@
 					// action pose reaches this render frame. Unlike the old raw
 					// graph driver, the tree stays unpaused and advances itself.
 					const std::uint64_t poseBefore =
-						PoseHash(remote->Mesh);
+						g_config.animationLifecycleTrace ? PoseHash(remote->Mesh) : 0;
 					NativeForceSkelUpdate(remote->Mesh);
 					ForceRemoteCosmeticMasterPose(remote);
 					const std::uint64_t poseAfter =
-						PoseHash(remote->Mesh);
+						g_config.animationLifecycleTrace ? PoseHash(remote->Mesh) : 0;
 					int& poseSamples =
 						g_animationStagePoseSamples[
 							g_remoteAppliedFullBodyName];
-					if (poseSamples < 3)
+					if (g_config.animationLifecycleTrace && poseSamples < 3)
 					{
 						++poseSamples;
 						std::ostringstream stream;
@@ -2690,7 +2690,7 @@
 							<< (poseBefore != poseAfter ? "yes." : "no.");
 						Log(stream.str());
 					}
-					if (!g_loggedPostEngineSkeletonRefresh)
+					if (g_config.animationLifecycleTrace && !g_loggedPostEngineSkeletonRefresh)
 					{
 						g_loggedPostEngineSkeletonRefresh = true;
 						Log("Post-EngineTick skeleton refresh v8 is active.");

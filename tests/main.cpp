@@ -1,6 +1,7 @@
 #include "Coop/Core/PureHelpers.hpp"
 #include "Coop/Protocol.hpp"
 #include "../include/GfxMovieStreamOverride.hpp"
+#include "../include/NativePersistentReadCache.hpp"
 
 #include <array>
 #include <cstdint>
@@ -20,6 +21,41 @@ namespace
 		std::cerr << "FAIL: " << name << '\n';
 		++g_failures;
 	}
+
+    void TestPersistentArchiveInvalidation()
+    {
+        using namespace AliceCoopNative;
+        // Relocated persistent loader: a paired global read/store and buffer
+        // layout are required. An unrelated operand or truncated code is unsafe.
+        std::array<std::uint8_t, 256> code{};
+        const std::uint8_t load[] = {0x8b,0x35,0x1c,0x70,0x49,1,0x3b,0xf3,
+            0x75,0x2b,0x6a,8,0x68,0x94,0,0,0,0xe8,0,0,0,0};
+        const std::uint8_t store[] = {0x89,0x35,0x1c,0x70,0x49,1,0x3b,0xc3,
+            0x74,8,0x8d,0xbe,0x88,0,0,0};
+        std::memcpy(code.data() + 40, load, sizeof(load));
+        std::memcpy(code.data() + 83, store, sizeof(store));
+        Check(FindPersistentArchiveCacheSlot(code) == 0x149701c, "persistent cache relocated read/store");
+        Check(!FindPersistentArchiveCacheSlot({code.data(), 95}), "truncated archive loader rejected");
+        code[85] ^= 4;
+        Check(!FindPersistentArchiveCacheSlot(code), "unrelated archive store rejected");
+        code[85] ^= 4;
+        std::memcpy(code.data() + 150, load, sizeof(load));
+        std::memcpy(code.data() + 193, store, sizeof(store));
+        Check(!FindPersistentArchiveCacheSlot(code), "ambiguous archive loader rejected");
+        ArchiveByteBuffer32 buffer{0x123400, 18782, 20000};
+        int seeks = 0;
+        Check(InvalidatePersistentArchiveBuffer(buffer, [&] { ++seeks; return true; })
+            && !buffer.count && buffer.data == 0x123400 && buffer.capacity == 20000
+            && seeks == 1, "invalidate stale profile bytes preserves native allocation");
+        Check(InvalidatePersistentArchiveBuffer(buffer, [&] { ++seeks; return true; })
+            && seeks == 1, "empty archive needs no rewind");
+        buffer.count = 12;
+        Check(!InvalidatePersistentArchiveBuffer(buffer, [] { return false; })
+            && buffer.count == 12, "failed rewind preserves archive");
+        buffer.count = 21000;
+        Check(!InvalidatePersistentArchiveBuffer(buffer, [&] { ++seeks; return true; })
+            && seeks == 1, "invalid archive layout rejected before native call");
+    }
 
 	void TestProtocolHeaders()
 	{
@@ -432,6 +468,7 @@ namespace
 int main()
 {
 	TestProtocolHeaders();
+    TestPersistentArchiveInvalidation();
     TestGfxMovieStreamBoundary();
     TestSessionCheckpointIdentity();
     TestStreamingState();

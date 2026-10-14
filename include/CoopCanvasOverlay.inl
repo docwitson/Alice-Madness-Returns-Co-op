@@ -456,13 +456,18 @@ inline void TickCoopScaleformMenu()
     const std::wstring state = hostInMenu ? L"Host must enter a level" : !relay ? L"Connecting to server" : (!peer ? L"Waiting for partner" : L"Partner connected");
     setText(L"_global.AliceCoopStatus", state);
     setNumber(L"_global.AliceCoopStatusColor", static_cast<float>(relay && peer && !hostInMenu ? 0xA8C894 : 0xE4B766));
+    const bool joinStatus = !host && !status.empty() && status != "CONNECTED"
+        && status != "HOST IS IN MAIN MENU" && status != "HOST IS IN CUTSCENE"
+        && status != "HOST IS LOADING..." && status != "CONNECTING TO RELAY..."
+        && status != "WAITING FOR PEER...";
     std::wstring details = relay ? L"Server connection ready." : L"Waiting for the server connection.";
     if (!host && status == "HOST IS IN MAIN MENU") details += L"\nJoin host unlocks after the host starts or continues a game.";
     else if (!host && status == "HOST IS IN CUTSCENE") details += L"\nThe host is watching a cutscene.";
     else if (!host && status == "HOST IS LOADING...") details += L"\nThe host is loading a checkpoint.";
-    else if (!host && g_coopMenuCanJoinHost.load()) details += L"\nThe host checkpoint is ready to join.";
+    else if (!host && !joinStatus && g_coopMenuCanJoinHost.load()) details += L"\nThe host checkpoint is ready to join.";
     if (g_coopSaveSyncInProgress.load()) details += L"\nReceiving profile: " + std::to_wstring(g_coopSaveSyncProgress.load()) + L"%.";
-    else if (!sync.empty()) details += L"\n" + Utf8ToWide(sync);
+    if (joinStatus) details += L"\n" + Utf8ToWide(status);
+    else if (!g_coopSaveSyncInProgress.load() && !sync.empty()) details += L"\n" + Utf8ToWide(sync);
     if (GetTickCount64() < profileChangedUntil) details = L"Profile selection changed. Open confirmation again.";
     setText(L"_global.AliceCoopDetails", details);
     setText(L"_global.AliceCoopHeading", host ? L"Playing together" : hostInMenu ? L"Waiting for the host" : L"Join the session");
@@ -642,6 +647,49 @@ inline void CoopCanvasPanel(DrawCtx& d, float x, float y, float w, float h)
     }
 }
 
+inline void CoopCanvasRoundedRect(DrawCtx& d, float x, float y, float w, float h,
+    float radius, const FLinearColor& color)
+{
+    const float r = std::clamp(radius, 0.0f, (std::min)(w, h) * 0.5f);
+    if (r < 1) { FillRect(d, x, y, w, h, color); return; }
+    FillRect(d, x, y + r, w, h - 2 * r, color);
+    const int strips = static_cast<int>(std::ceil(r));
+    const float step = r / strips;
+    // Disjoint rows keep the requested opacity uniform, including rounded corners.
+    for (int row = 0; row < strips; ++row)
+    {
+        const float dy = r - (row + 0.5f) * step;
+        const float inset = r - std::sqrt((std::max)(0.0f, r * r - dy * dy));
+        FillRect(d, x + inset, y + row * step, w - 2 * inset, step, color);
+        FillRect(d, x + inset, y + h - (row + 1) * step, w - 2 * inset, step, color);
+    }
+}
+
+inline void CoopCanvasNoticePanel(DrawCtx& d, float x, float y, float w, float h,
+    float opacity = 0.48f)
+{
+    // Match the Multiplayer information blocks (Generate-Coop-Scaleform.py).
+    FillRect(d, x, y, w, h, Srgb(12, 14, 13, opacity));
+    OutlineRect(d, x, y, w, h, FColor(171, 149, 112, 71));
+    Native::Draw2DLine(d.canvas, x + 14 * d.s, y + 1, x + w - 14 * d.s,
+        y + 1, FColor(222, 196, 147, 115));
+}
+
+inline void CoopCanvasCenteredText(DrawCtx& d, const std::wstring& text,
+    float x, float y, float w, float h, float pixels = 16)
+{
+    float scale = pixels * d.s / d.fontUnitHeight;
+    float textW = 0, textH = 0;
+    MeasureText(d, text.c_str(), scale, textW, textH);
+    if (textW > w && textW > 0)
+    {
+        scale *= w / textW;
+        MeasureText(d, text.c_str(), scale, textW, textH);
+    }
+    DrawTextLine(d, text.c_str(), x + (w - textW) * 0.5f,
+        y + (h - textH) * 0.5f, scale, FColor(255, 255, 255, 255));
+}
+
 inline void CoopCanvasDrawButton(DrawCtx& d, float x, float y, float w, const std::wstring& label,
     CoopCanvasAction action, bool enabled = true)
 {
@@ -652,10 +700,10 @@ inline void CoopCanvasDrawButton(DrawCtx& d, float x, float y, float w, const st
     float mx = 0, my = 0;
     const bool hovered = CoopCanvasMouse(mx, my) && CoopCanvasContains(button, mx, my);
     const bool selected = IsCoopCanvasFocused() && index == g_coopCanvasSelection;
-    FillRect(d, x, y, w, h, enabled
-        ? (hovered || selected ? FLinearColor(0.24f, 0.19f, 0.1f, 0.3f) : FLinearColor(0.015f, 0.015f, 0.015f, 0.18f))
-        : FLinearColor(0.08f, 0.07f, 0.07f, 1));
-    if (hovered || selected) OutlineRect(d, x, y, w, h, FColor(181, 154, 97, 230));
+    FillRect(d, x, y, w, h, Srgb(222, 196, 147,
+        enabled && (hovered || selected) ? 0.12f : 0.025f));
+    if (enabled && (hovered || selected))
+        OutlineRect(d, x, y, w, h, FColor(222, 196, 147, 115));
     float inset = 10 * d.s;
     if (selected && g_State.isUsingGamepad)
     {
@@ -669,16 +717,68 @@ inline void CoopCanvasDrawButton(DrawCtx& d, float x, float y, float w, const st
             inset = 34 * d.s;
         }
     }
-    CoopCanvasText(d, label, x + inset, y + 5 * d.s, 18,
-        enabled ? FColor(241, 216, 159, 255) : FColor(133, 128, 122, 255));
+    CoopCanvasText(d, label, x + inset, y + 6 * d.s, 16,
+        enabled ? FColor(215, 203, 184, 255) : FColor(133, 128, 122, 255));
 }
 
-inline void CoopCanvasMessage(DrawCtx& d, const std::wstring& text, float y)
+inline float CoopCanvasMessage(DrawCtx& d, const std::wstring& text, float y)
 {
     const float w = (std::min)(500 * d.s, static_cast<float>(d.canvas->SizeX) - 32 * d.s);
     const float x = (d.canvas->SizeX - w) * 0.5f;
-    CoopCanvasPanel(d, x, y, w, 32 * d.s);
-    CoopCanvasText(d, text, x + 12 * d.s, y + 7 * d.s, 16);
+    WrappedText wrapped;
+    const float scale = 16 * d.s / d.fontUnitHeight;
+    WrapText(d, text, w - 28 * d.s, scale, wrapped);
+    const float lineHeight = 20 * d.s;
+    const float h = (std::max)(40 * d.s, wrapped.lines.size() * lineHeight + 20 * d.s);
+    CoopCanvasNoticePanel(d, x, y, w, h);
+    for (std::size_t line = 0; line < wrapped.lines.size(); ++line)
+        CoopCanvasText(d, wrapped.lines[line], x + 14 * d.s,
+            y + 10 * d.s + line * lineHeight, 16, FColor(215, 203, 184, 255));
+    return h;
+}
+
+inline void CoopCanvasCutsceneEye(DrawCtx& d)
+{
+    const float s = d.s, w = 58 * s, h = 58 * s;
+    const float x = d.canvas->SizeX - w - 18 * s, y = 18 * s;
+    static UTexture2D* eye = nullptr;
+    static bool attempted = false;
+    if (!attempted)
+    {
+        attempted = true;
+        const auto path = SystemHelper::GetModulePath() + "\\AliceCoop\\images\\cutsceneWatch2.png";
+        std::vector<uint8_t> pixels;
+        int width = 0, height = 0;
+        if (DecodePngToBgra(path.c_str(), 0, pixels, width, height))
+            eye = CreateEngineTexture(pixels, width, height);
+    }
+    if (eye)
+    {
+        Native::SetPos(d.canvas, x, y);
+        Native::DrawTile(d.canvas, eye, w, h, 0, 0,
+            static_cast<float>(eye->SizeX), static_cast<float>(eye->SizeY), FLinearColor(1, 1, 1, 1));
+        return;
+    }
+    // Retain a legible icon if PNG loading is unavailable; never add a backing.
+    const float cx = x + w * 0.5f, cy = y + h * 0.5f;
+    const FColor white(255, 255, 255, 255);
+    constexpr float pi = 3.141592654f;
+    for (int segment = 0; segment < 16; ++segment)
+    {
+        const float t0 = segment / 16.0f, t1 = (segment + 1) / 16.0f;
+        const float x0 = cx + (t0 * 2 - 1) * 18 * s;
+        const float x1 = cx + (t1 * 2 - 1) * 18 * s;
+        const float y0 = std::sin(pi * t0) * 9 * s;
+        const float y1 = std::sin(pi * t1) * 9 * s;
+        Native::Draw2DLine(d.canvas, x0, cy - y0, x1, cy - y1, white);
+        Native::Draw2DLine(d.canvas, x0, cy + y0, x1, cy + y1, white);
+        const float a0 = 2 * pi * t0, a1 = 2 * pi * t1;
+        Native::Draw2DLine(d.canvas, cx + std::cos(a0) * 5 * s,
+            cy + std::sin(a0) * 5 * s, cx + std::cos(a1) * 5 * s,
+            cy + std::sin(a1) * 5 * s, white);
+    }
+    CoopCanvasRoundedRect(d, cx - 2 * s, cy - 2 * s, 4 * s, 4 * s,
+        2 * s, FLinearColor(1, 1, 1, 1));
 }
 
 inline void DrawCoopCanvas(DrawCtx& d)
@@ -702,33 +802,41 @@ inline void DrawCoopCanvas(DrawCtx& d)
     if (g_coopPauseVisible.load() && !g_coopMenuVisible.load())
     {
         const float w = 380 * s, h = 134 * s, x = 16 * s, y = d.canvas->SizeY - h - 44 * s;
-        CoopCanvasPanel(d, x, y, w, h);
-        CoopCanvasText(d, L"Multiplayer", x + 14 * s, y + 10 * s, 20);
-        CoopCanvasDrawButton(d, x + 12 * s, y + 37 * s, w - 24 * s,
-            g_coopMovementTrailsEnabled.load() ? L"T: Movement trails - on" : L"T: Movement trails - off", CoopCanvasAction::ToggleTrails);
+        CoopCanvasNoticePanel(d, x, y, w, 73 * s);
+        CoopCanvasNoticePanel(d, x, y + 79 * s, w, 55 * s);
+        CoopCanvasText(d, L"MULTIPLAYER", x + 14 * s, y + 9 * s,
+            20, FColor(222, 196, 147, 255));
+        CoopCanvasDrawButton(d, x + 4 * s, y + 37 * s, w - 8 * s,
+            g_coopMovementTrailsEnabled.load() ? L"T: Movement trails - on" : L"T: Movement trails - off",
+            CoopCanvasAction::ToggleTrails);
         CoopCanvasText(d, g_coopPauseHostRole.load()
             ? L"P: Go to partner    O: Summon partner"
-            : L"P: Go to host    O: Meet host across the level", x + 14 * s, y + 78 * s, 16);
-        CoopCanvasText(d, L"Tab / R3: focus    Enter / A: select", x + 14 * s, y + 103 * s, 15,
-            FColor(183, 169, 146, 255));
+            : L"P: Go to host    O: Meet host across the level",
+            x + 14 * s, y + 88 * s, 16, FColor(215, 203, 184, 255));
+        CoopCanvasText(d, L"Tab / R3: focus    Enter / A: select",
+            x + 14 * s, y + 112 * s, 14, FColor(189, 178, 160, 255));
     }
     if (g_coopWaitingForPeer.load())
     {
-        const float w = 460 * s, x = (d.canvas->SizeX - w) * 0.5f, y = d.canvas->SizeY - 76 * s;
-        CoopCanvasPanel(d, x, y, w, 60 * s);
-        CoopCanvasText(d, L"Waiting for partner to finish the cutscene", x + 10 * s, y + 6 * s, 16);
-        CoopCanvasDrawButton(d, x + 10 * s, y + 25 * s, w - 20 * s, L"L: Continue together", CoopCanvasAction::ForceCutscene);
+        const float w = (std::min)(460 * s, d.canvas->SizeX - 32 * s);
+        const float x = (d.canvas->SizeX - w) * 0.5f, y = 32 * s;
+        CoopCanvasNoticePanel(d, x, y, w, 58 * s, 0.30f);
+        CoopCanvasCenteredText(d, L"Your partner is watching a cutscene.",
+            x + 14 * s, y + 6 * s, w - 28 * s, 24 * s, 18);
+        CoopCanvasCenteredText(d, L"L: Continue together",
+            x + 14 * s, y + 30 * s, w - 28 * s, 22 * s, 15);
     }
     if (g_peerWatchingCutscene.load())
-        CoopCanvasMessage(d, L"Your partner is watching a cutscene", 32 * s);
+        CoopCanvasCutsceneEye(d);
+    float noticeY = (g_coopWaitingForPeer.load() ? 98 : 32) * s;
     if (GetTickCount64() < g_soloMinigameWarningUntil.load())
-        CoopCanvasMessage(d, L"Solo minigame - you will rejoin afterwards.", 70 * s);
+        noticeY += CoopCanvasMessage(d, L"Solo minigame - you will rejoin afterwards.", noticeY) + 8 * s;
     if (GetTickCount64() < g_coopJoinTeleportHintUntil.load())
-        CoopCanvasMessage(d, L"P: Go to host    O: Meet host across the level", 108 * s);
+        noticeY += CoopCanvasMessage(d, L"P: Go to host    O: Meet host across the level", noticeY) + 8 * s;
     {
         std::lock_guard<std::mutex> lock(g_coopArrivalMutex);
         if (GetTickCount64() < g_coopArrivalUntil)
-            CoopCanvasMessage(d, Utf8ToWide(g_coopArrivalStatus), 146 * s);
+            CoopCanvasMessage(d, Utf8ToWide(g_coopArrivalStatus), noticeY);
     }
     if (g_coopCanvasSelection >= g_coopCanvasButtons.size()) g_coopCanvasSelection = 0;
     if (g_coopCanvasButtons.empty()) g_coopCanvasFocus = false;

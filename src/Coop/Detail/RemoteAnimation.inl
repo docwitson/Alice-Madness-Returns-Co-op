@@ -688,7 +688,7 @@
 				? "ANIMSTAGE" : "UPPERSTAGE";
 			const std::string successKey = std::string(stage) + ':'
 				+ state.sequenceName;
-			if (g_loggedAnimationStageSuccesses.insert(
+			if (g_config.animationLifecycleTrace && g_loggedAnimationStageSuccesses.insert(
 				successKey).second)
 			{
 				std::ostringstream stream;
@@ -718,7 +718,7 @@
 			remote->PawnStance = stance;
 			// BlendByStance's native TickAnim reads PawnStance and applies its
 			// authored BlendTimes. Calling SetPawnStance would run gameplay script.
-			if (g_loggedConfigAnimationStages.insert("pawn-stance:" + std::to_string(static_cast<int>(stance))).second)
+			if (g_config.animationLifecycleTrace && g_loggedConfigAnimationStages.insert("pawn-stance:" + std::to_string(static_cast<int>(stance))).second)
 				Log("ANIMSTAGE native source PawnStance=" + std::to_string(static_cast<int>(stance)) + '.');
 		}
 

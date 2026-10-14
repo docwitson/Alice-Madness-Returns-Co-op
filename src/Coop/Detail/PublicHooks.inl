@@ -1814,7 +1814,7 @@
 						g_waitingCutsceneKey) + '.');
 			}
 		}
-		if (g_interpolationTraceCount >= 100)
+		if (!g_config.controlLifecycleTrace || g_interpolationTraceCount >= 100)
 			return;
 		++g_interpolationTraceCount;
 		Log("CUTSCENEINTERP start #" + std::to_string(
@@ -2718,6 +2718,8 @@
             if (_wcsicmp(full.c_str(), original.lexically_normal().c_str()) == 0)
             {
                 redirectedPath = (g_sessionSaveDirectory / name).wstring();
+                if (_wcsicmp(name.c_str(), L"PersistentData_PC.PSD") == 0)
+                    g_sessionPersistentReadObserved.store(true, std::memory_order_release);
                 Log("SESSIONJOIN native save read=" + NarrowAscii(name));
                 return true;
             }

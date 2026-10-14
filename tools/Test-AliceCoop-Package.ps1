@@ -19,6 +19,24 @@ function Assert-Condition([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
 
+# Validate the shipped configuration, not the user's preserved preferences.
+function Assert-QuietReleaseDefaults([string]$Path, [string[]]$DisabledKeys) {
+    $values = @{}
+    $section = ''
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        if ($line -match '^\s*\[([^]]+)\]\s*$') { $section = $Matches[1] }
+        elseif ($line -match '^\s*([^;=]+?)\s*=\s*([^;]*?)\s*(;.*)?$') {
+            $key = "$section/$($Matches[1])"
+            Assert-Condition (-not $values.ContainsKey($key)) "Duplicate INI setting: $key"
+            $values[$key] = $Matches[2]
+        }
+    }
+    foreach ($key in $DisabledKeys) {
+        Assert-Condition ($values.ContainsKey($key) -and $values[$key] -eq '0') `
+            "Release diagnostic must be disabled: $key in $Path"
+    }
+}
+
 function Get-RelativeFileList([string]$Root) {
     return @(Get-ChildItem -LiteralPath $Root -Recurse -File |
         ForEach-Object { $_.FullName.Substring($Root.Length + 1).Replace('/', '\') } |
@@ -145,6 +163,23 @@ try {
             Where-Object { $_.Extension -in @('.pdb', '.obj', '.log', '.sav', '.tmp') -or
                 $_.Name -eq 'AliceMadnessReturns.exe' })
         Assert-Condition ($forbidden.Count -eq 0) "Forbidden package files: $root"
+    }
+
+    foreach ($ini in @(
+        (Join-Path $installerRoot 'Advanced\Payload\AliceCoop.ini'),
+        (Join-Path $dropExtract 'AliceCoop\AliceCoop.ini'))) {
+        Assert-QuietReleaseDefaults $ini @(
+            'Trace/Enabled', 'Trace/WorldEnabled', 'Trace/VfxLifecycleEnabled',
+            'Trace/AnimationLifecycleEnabled', 'Trace/AnimationComparisonEnabled',
+            'Trace/ControlLifecycleEnabled', 'Trace/InvariantEnabled',
+            'Trace/ProcessEventBridgeEnabled', 'VisualProxy/LocalMirror',
+            'VisualProxy/HairTuningEnabled', 'VisualProxy/PreserveMovementTrails',
+            'SharedWorld/BackgroundWindowDamageGuard', 'Debug/OnScreenStatus')
+    }
+    foreach ($ini in @(
+        (Join-Path $installerRoot 'Advanced\Payload\MadnessPatch.ini'),
+        (Join-Path $dropExtract 'MadnessPatch.ini'))) {
+        Assert-QuietReleaseDefaults $ini @('Modding/DumpArchiveAssets', 'Modding/LoadModFiles')
     }
 
     Assert-ChecksumFile $installerRoot (Join-Path $installerRoot 'Advanced\SHA256SUMS.txt')

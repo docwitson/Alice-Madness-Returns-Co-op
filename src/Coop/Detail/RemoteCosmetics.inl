@@ -1268,7 +1268,7 @@
 
 		void ForceRemoteCosmeticMasterPose(AAlicePawn* remote)
 		{
-			if (!remote || !remote->Mesh)
+			if (!remote || !remote->Mesh || g_remoteRenderDetached)
 				return;
 
             if ((g_config.nativeClothSimulation || g_remoteNativeHairActive)
@@ -1293,6 +1293,8 @@
                     }
                     if (remote->Controller)
                     {
+                        g_remoteClothNeedsReset = g_config.nativeClothSimulation;
+                        g_remoteClothRecoveryAt = {};
                         remote->eventResetClothHair(true, true);
                         LogCosmeticState("remote-after-controller-recovery", remote);
                     }
@@ -1347,10 +1349,10 @@
 				{
 					if (!cloth || !cloth->SkeletalMesh)
 						continue;
-                    if (cloth->Owner != remote || !cloth->bAttached)
+                    if (!g_remoteHidden && (cloth->Owner != remote || !cloth->bAttached))
                     {
                         NativeAttachComponent(remote, cloth);
-                        cloth->Reset();
+                        g_remoteClothNeedsReset = true;
                         Log("CLOTHRECOVERY repaired native attachment: " + ObjectName(cloth));
                     }
 					cloth->AttachedToSkelComponent = remote->Mesh;
@@ -1567,6 +1569,40 @@
 				restore(remote->BowComponent, 1.0f, unitScale);
 				restore(remote->RibbonComponent, 1.0f, unitScale);
 				restore(remote->EarComponent, 1.0f, unitScale);
+                if (g_config.nativeClothSimulation && g_remoteClothNeedsReset
+                    && remote->Controller && !remote->Controller->bDeleteMe
+                    && Clock::now() >= g_remoteClothRecoveryAt)
+                {
+                    g_remoteClothRecoveryAt = Clock::now() + std::chrono::seconds(2);
+                    // The body, attachment hierarchy and unit scales are valid
+                    // again. Recreate only cloth, once, after the cinematic;
+                    // a non-null simulator can still hold collapsed particles.
+                    bool restored = true;
+                    unsigned int count = 0;
+                    for (UClothComponent* cloth : {remote->SkirtComponent,
+                        remote->BowComponent, remote->RibbonComponent, remote->EarComponent})
+                    {
+                        if (!cloth || !cloth->SkeletalMesh) continue;
+                        if (!cloth->bAttached || cloth->Owner != remote
+                            || !NativeDeleteClothSimulator(cloth))
+                        {
+                            restored = false;
+                            continue;
+                        }
+                        cloth->AttachedToSkelComponent = remote->Mesh;
+                        cloth->bTransformFromAnimParent = true;
+                        cloth->bClothFrozen = false;
+                        cloth->bOwnerNoSee = false;
+                        cloth->bOnlyOwnerSee = false;
+                        NativeSetComponentHidden(cloth, false);
+                        cloth->Reset();
+                        NativeForceComponentUpdate(cloth, false);
+                        ++count;
+                    }
+                    g_remoteClothNeedsReset = !restored;
+                    Log("CLOTHRECOVERY rebuilt visible cloth after render restore, count="
+                        + std::to_string(count) + ", complete=" + (restored ? "yes." : "no."));
+                }
 				if (g_remoteHairProxy)
 				{
 					float hairScaleFactor = 1.0f;

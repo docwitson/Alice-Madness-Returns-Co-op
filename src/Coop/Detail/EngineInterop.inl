@@ -879,6 +879,9 @@
 
 		bool NativeDeleteClothSimulator(UClothComponent* component)
 		{
+            if (component && component->Simulator.Dummy)
+                InvalidateHighFPSParticleSimulation(
+                    reinterpret_cast<const void*>(component->Simulator.Dummy));
 			static UFunction* function = nullptr;
 			if (!function)
 				function = UFunction::FindFunction(

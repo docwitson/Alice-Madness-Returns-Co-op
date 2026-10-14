@@ -1121,6 +1121,7 @@
 
 		void TraceNativeFullBodyTransition(AAlicePawn* pawn, const AnimationGraphPayload& graph, bool source)
 		{
+			if (!g_config.animationLifecycleTrace && !g_config.animationComparisonTrace) return;
 			if (!pawn || pawn->AnimBlendNodes.size() == 0) return;
 			auto* node = pawn->AnimBlendNodes.at(0);
 			if (!node || !node->IsA(UAliceGameAnimNode_BlendBySlot::StaticClass())) return;

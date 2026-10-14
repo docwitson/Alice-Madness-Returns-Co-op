@@ -8,6 +8,7 @@
 #include "Coop/Core/PureHelpers.hpp"
 #include "Coop/Detail/ProcessEventCallbacks.hpp"
 #include "Coop/Protocol.hpp"
+#include "NativePersistentReadCache.hpp"
 
 #include <array>
 #include <atomic>
@@ -497,7 +498,7 @@ namespace AliceCoop
 
 		AWorldInfo* world = localPawn->WorldInfo;
 		TickRetiredRemotePawns(world);
-		if (localPawn->Health != g_lastLoggedLocalAliceHealth)
+		if (g_config.worldTrace && localPawn->Health != g_lastLoggedLocalAliceHealth)
 		{
 			Log("SHAREDPLAYER local Alice health role="
 				+ std::string(g_config.role == Role::Host
@@ -720,7 +721,7 @@ namespace AliceCoop
 			|| localCinematic != g_lastLocalCinematic
 			|| peerCinematic != g_lastPeerCinematic)
 		{
-			if (g_cutsceneTraceInitialized)
+			if (g_config.controlLifecycleTrace && g_cutsceneTraceInitialized)
 			{
 				float peerDistance = -1.0f;
 				if (peerOnSameMap)

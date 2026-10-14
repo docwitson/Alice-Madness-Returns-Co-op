@@ -523,6 +523,21 @@ struct ParticleSimState
 
 static ParticleSimState simStates[SIM_MAX_INSTANCES];
 
+void InvalidateHighFPSParticleSimulation(const void* simulator)
+{
+    if (!simulator) return;
+    for (ParticleSimState& state : simStates)
+    {
+        if (state.key == reinterpret_cast<uintptr_t>(simulator))
+        {
+            // A native Reset/DeleteSimulator may reuse all allocation addresses.
+            // Never blend the new bind pose with pre-hide particle history.
+            state = ParticleSimState{};
+            return;
+        }
+    }
+}
+
 static uint64_t SimActivityClock(uint64_t now)
 {
 	static uint64_t lastNow = 0, clock = 0;

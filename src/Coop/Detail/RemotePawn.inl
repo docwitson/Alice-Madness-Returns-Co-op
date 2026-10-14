@@ -659,6 +659,8 @@
 			g_remoteController = nullptr;
 			g_remoteClothController = nullptr;
 			g_remoteWorld = nullptr;
+            g_remoteClothNeedsReset = false;
+            g_remoteClothRecoveryAt = {};
 			ResetRemoteWeaponPresentationState();
 			g_remoteDodgeVisualHidden = false;
 			g_remoteGlideVfxActive = false;

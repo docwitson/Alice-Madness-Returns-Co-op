@@ -69,9 +69,11 @@ translucent vector panels separating status, instructions and navigation.
 The patch validates the known movie layout and
 leaves unsupported versions untouched. No game assets or fonts are bundled.
 
-Event notifications use compact UE3 Canvas panels referring to the original
-AliceGameUI.titlePlayerMenu.titlePlayerMenu_I177 texture, with a plain border
-fallback if unloaded. Passive messages do not capture gameplay input.
+Event notifications and pause controls use compact UE3 Canvas panels with thin
+borders and translucent dark backgrounds matching the Multiplayer information
+blocks. The cutscene wait appears at the top center as two centered lines with
+an L reminder. The watching indicator uses the transparent eye icon. Passive
+messages do not capture gameplay input.
 
 Native navigation uses arrows / D-pad, Enter / A and Escape / B. Menu-specific
 L (join), K (profile), and Y / N confirmation shortcuts were removed. L remains
@@ -90,6 +92,14 @@ Normal releases ship conservative defaults. The most relevant sections are:
   or manual launch scripts normally override it.
 - `[Performance]`: process FPS and worker-thread limits.
 - `[Trace]`: diagnostic logging. Leave every trace disabled for normal play.
+
+Normal play retains startup, connection, travel, recovery and error logs.
+Animation transition/pose samples require `AnimationLifecycleEnabled` (transition
+state also accepts `AnimationComparisonEnabled`). Cosmetic snapshots require
+`VfxLifecycleEnabled` or the explicit local-mirror diagnostic mode. Periodic enemy
+pose summaries require `WorldEnabled`, and detailed cutscene state requires
+`ControlLifecycleEnabled`. These options default to 0; disabling them does not
+turn off native animation, cloth, effects or enemy reconciliation.
 
 `[Trace] InvariantEnabled = 1` enables passive completion-point checks for
 world reset, remote-player teardown, cutscene barrier release and save sync.

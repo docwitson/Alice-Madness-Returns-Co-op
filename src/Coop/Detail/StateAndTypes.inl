@@ -189,6 +189,8 @@
         std::atomic_uint32_t g_requestedSavePurpose{ SaveRequestReplaceProfile };
         std::atomic_uint32_t g_joinSessionReady{ 0 };
         std::atomic_bool g_sessionReadHookReady{ false }, g_sessionReadActive{ false };
+        std::atomic_bool g_sessionPersistentReadObserved{ false };
+        bool g_joinSessionPersistentLoadQueued = false;
         std::array<std::filesystem::path, SaveSyncFileCount> g_sessionOriginalPaths{};
         std::filesystem::path g_sessionSaveDirectory;
         std::string g_sessionExpectedMap;
@@ -491,6 +493,8 @@
 		bool g_remoteShrinkApplied = false;
 		bool g_remoteHidden = false;
 		bool g_remoteRenderDetached = false;
+        bool g_remoteClothNeedsReset = false;
+        Clock::time_point g_remoteClothRecoveryAt{};
 		bool g_loggedPostTickPresentation = false;
 		bool g_loggedPostEngineSkeletonRefresh = false;
 		bool g_loggedPresentedCosmetics = false;

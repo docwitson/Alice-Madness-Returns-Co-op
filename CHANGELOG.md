@@ -16,8 +16,10 @@ depends on the protocol version shown in each release.
 - Native Scaleform Multiplayer menus with the game's fonts, button templates
   and mouse/keyboard/controller navigation. Actions depend on the host/client
   role; About includes project credits and selectable social/source links.
-- Native Canvas co-op notices and pause controls with game frames and controller
-  glyphs, replacing the ImGui/D3D9 overlay. No game assets or fonts are bundled.
+- Native Canvas co-op notices and pause controls with thin translucent frames
+  matching Multiplayer, game fonts and controller glyphs, replacing the ImGui/D3D9
+  overlay. The cutscene eye uses the mod's transparent icon. No game assets or
+  fonts are bundled.
 
 ### Fixed
 
@@ -29,6 +31,10 @@ depends on the protocol version shown in each release.
   and airborne destinations. Source-camera streaming volumes no longer cancel
   the preload; timeout and cancellation restore their original participation.
 - Proxy cloth controller and skirt attachments recover after native death cleanup.
+- Cinematic visibility changes defer cloth reattachment/reset until the proxy is
+  visible again; recreated simulators discard stale high-FPS interpolation history.
+- Join refreshes both native persistent-profile and checkpoint caches before
+  Continue, rejecting inconsistent host/client chapter data before level travel.
 - Menu music initialization, full-viewport presentation, title/profile transition
   overlap and stale button focus after opening Multiplayer or confirmation.
 - Proxy pepper and teapot projectile flight, impact particles and decals,
@@ -52,6 +58,10 @@ depends on the protocol version shown in each release.
   while waiting for a shared cutscene.
 - Main-menu version/role status is hidden during gameplay. Co-op panels use native
   fonts, compact layouts and translucent frames; successful teleports stay quiet.
+- Cutscene waits use two centered lines at the top with an L hotkey reminder,
+  a lighter background and no extra button.
+- Frequent animation, cosmetic, enemy-pose and cutscene diagnostic samples are
+  opt-in through the existing trace settings; release defaults keep them disabled.
 
 ## 0.1.0-alpha.2 — 2026-09-03
 

@@ -42,6 +42,7 @@ void ApplyDisableBackgroundLevelStreaming();
 void ApplyFixBinkVideoBT709();
 void ApplyFixAspectRatio();
 void ApplyMenuScripts();
+bool ConsumeNativeMenuStreamNotice(std::string& notice);
 void ApplyAdaptivePhysXMemory();
 void ReapplyMenuLetterbox();
 void ReapplyMemoryPosition();

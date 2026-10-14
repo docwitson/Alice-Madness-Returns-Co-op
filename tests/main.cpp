@@ -1,5 +1,6 @@
 #include "Coop/Core/PureHelpers.hpp"
 #include "Coop/Protocol.hpp"
+#include "../include/GfxMovieStreamOverride.hpp"
 
 #include <array>
 #include <cstdint>
@@ -72,6 +73,66 @@ namespace
 		Check(!IsValidHeader(received.header, wire.size() - sizeof(bomb.clockBombMaterialHashes)),
 			"truncated material state rejected");
 	}
+
+    void TestGfxMovieStreamBoundary()
+    {
+        // Simulate the native tag loop after the GFX header has been consumed.
+        // An enlarged first tag moves the initialization action past old EOF.
+        std::vector<std::uint8_t> original(12, 0);
+        std::vector<std::uint8_t> compiled(35, 0);
+        const std::uint32_t originalLength = static_cast<std::uint32_t>(original.size());
+        const std::uint32_t compiledLength = static_cast<std::uint32_t>(compiled.size());
+        std::memcpy(original.data() + 4, &originalLength, sizeof(originalLength));
+        std::memcpy(compiled.data() + 4, &compiledLength, sizeof(compiledLength));
+        const std::uint16_t spriteTag = (39 << 6) | 20;
+        const std::uint16_t actionTag = (12 << 6) | 1;
+        std::memcpy(compiled.data() + 8, &spriteTag, sizeof(spriteTag));
+        std::memcpy(compiled.data() + 30, &actionTag, sizeof(actionTag));
+        auto reachesInitialization = [](const std::uint8_t* data, std::uint32_t size,
+            std::uint32_t cachedEnd) {
+            bool initialization = false;
+            std::uint32_t position = 8;
+            while (position < cachedEnd && position + 2 <= size)
+            {
+                std::uint16_t header = 0;
+                std::memcpy(&header, data + position, sizeof(header));
+                position += 2;
+                const std::uint32_t payloadSize = header & 63;
+                if (position + payloadSize > size) return false;
+                if ((header >> 6) == 12) initialization = true;
+                if ((header >> 6) == 0) return initialization;
+                position += payloadSize;
+            }
+            return false;
+        };
+        Check(!reachesInitialization(compiled.data(), compiledLength, originalLength),
+            "changing GFX bytes and header alone still truncates native root parsing");
+
+        auto* data = original.data();
+        std::uint32_t size = originalLength, end = originalLength;
+        {
+            GfxMovieStreamOverride override;
+            Check(override.Apply(data, size, end, compiled), "GFX root override accepted");
+            Check(reachesInitialization(data, size, end),
+                "GFX cached bound permits late initialization action and End tag");
+        }
+        Check(data == original.data() && size == originalLength && end == originalLength,
+            "GFX override restores engine allocation and cached bound together");
+
+        end = originalLength - 1;
+        {
+            GfxMovieStreamOverride override;
+            Check(!override.Apply(data, size, end, compiled), "unknown GFX loader bound rejected");
+        }
+        Check(data == original.data() && size == originalLength && end == originalLength - 1,
+            "rejected GFX stream leaves all original fields untouched");
+        end = originalLength;
+        compiled[4] ^= 1;
+        {
+            GfxMovieStreamOverride override;
+            Check(!override.Apply(data, size, end, compiled), "invalid compiled GFX length rejected");
+        }
+    }
 
     void TestSessionCheckpointIdentity()
     {
@@ -371,6 +432,7 @@ namespace
 int main()
 {
 	TestProtocolHeaders();
+    TestGfxMovieStreamBoundary();
     TestSessionCheckpointIdentity();
     TestStreamingState();
 	TestSequenceComparison();

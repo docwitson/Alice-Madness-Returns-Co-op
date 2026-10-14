@@ -1,6 +1,18 @@
 #include "Common.hpp"
 #include "Features.hpp"
 #include "Coop/CoopClient.hpp"
+#include "GfxMovieStreamOverride.hpp"
+
+static std::mutex g_menuStreamNoticeMutex;
+static std::string g_menuStreamNotice;
+
+bool ConsumeNativeMenuStreamNotice(std::string& notice)
+{
+    std::lock_guard<std::mutex> lock(g_menuStreamNoticeMutex);
+    notice.swap(g_menuStreamNotice);
+    g_menuStreamNotice.clear();
+    return !notice.empty();
+}
 
 safetyhook::InlineHook GFx_LoadRootMovie;
 static safetyhook::MidHook MenuScriptMid{};
@@ -267,16 +279,33 @@ static int __fastcall GFx_LoadRootMovie_Hook(uint32_t thisp, uint32_t, uint32_t 
 	uint32_t tr = *(uint32_t*)(a2 + 0x314);
 	if (!tr) tr = a2 + 0x28;
 
-	uint8_t** swappedData = nullptr;
-	uint32_t* swappedSize = nullptr;
-	uint8_t* originalData = nullptr;
-	uint32_t originalSize = 0;
+	GfxMovieStreamOverride movieOverride;
 
 	uint32_t src = *(uint32_t*)(tr + 0x10);
 	if (src)
 	{
 		uint8_t* blob = *(uint8_t**)(src + 0x08);
 		uint32_t size = blob ? *(uint32_t*)(src + 0x0C) : 0;
+
+        auto useCompiledMovie = [&](const std::vector<uint8_t>& compiled) {
+            // Native LoadRootMovie compares its read position against this
+            // cached end, not the source size or the rewritten GFX header.
+            auto* cachedEnd = reinterpret_cast<uint32_t*>(a2 + 0x270);
+            if (!MemoryHelper::IsWritable(cachedEnd, sizeof(*cachedEnd))) return false;
+            const uint32_t originalEnd = *cachedEnd;
+            const bool applied = movieOverride.Apply(
+                *reinterpret_cast<uint8_t**>(src + 0x08),
+                *reinterpret_cast<uint32_t*>(src + 0x0C), *cachedEnd, compiled);
+            if (AliceCoop::IsEnabled())
+            {
+                std::lock_guard<std::mutex> lock(g_menuStreamNoticeMutex);
+                g_menuStreamNotice = std::string(applied ? "expanded" : "rejected")
+                    + ", source=" + std::to_string(size)
+                    + ", compiled=" + std::to_string(compiled.size())
+                    + ", cachedEnd=" + std::to_string(originalEnd);
+            }
+            return applied;
+        };
 
 		if (blob && blob[0] == 'G' && blob[1] == 'F' && blob[2] == 'X')
 		{
@@ -326,10 +355,7 @@ static int __fastcall GFx_LoadRootMovie_Hook(uint32_t thisp, uint32_t, uint32_t 
                         coopMovies.push_back(std::make_unique<std::vector<uint8_t>>(std::move(patched)));
                         coopMovie = coopMovies.back().get();
                     }
-                    swappedData = reinterpret_cast<uint8_t**>(src + 0x08);
-                    swappedSize = reinterpret_cast<uint32_t*>(src + 0x0C);
-                    originalData = blob; originalSize = size;
-                    *swappedData = coopMovie->data(); *swappedSize = static_cast<uint32_t>(coopMovie->size());
+                    useCompiledMovie(*coopMovie);
                 }
             }
 
@@ -338,13 +364,7 @@ static int __fastcall GFx_LoadRootMovie_Hook(uint32_t thisp, uint32_t, uint32_t 
 				const std::vector<uint8_t>& fixed = TheatricalsTitles::Build(blob, size);
 				if (!fixed.empty())
 				{
-					swappedData = (uint8_t**)(src + 0x08);
-					swappedSize = (uint32_t*)(src + 0x0C);
-					originalData = blob;
-					originalSize = size;
-
-					*swappedData = const_cast<uint8_t*>(fixed.data());
-					*swappedSize = (uint32_t)fixed.size();
+					useCompiledMovie(fixed);
 				}
 			}
 		}
@@ -352,13 +372,7 @@ static int __fastcall GFx_LoadRootMovie_Hook(uint32_t thisp, uint32_t, uint32_t 
 
 	int result = GFx_LoadRootMovie.unsafe_thiscall<int>(thisp, a2, a3);
 
-	// Hand the engine its own allocation back
-	if (swappedData)
-	{
-		*swappedData = originalData;
-		*swappedSize = originalSize;
-	}
-
+	// The override restores the source allocation and loader bound together.
 	return result;
 }
 

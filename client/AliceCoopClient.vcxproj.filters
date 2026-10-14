@@ -405,5 +405,8 @@
     <None Include="..\src\Coop\VersionInfo.rcinc">
       <Filter>src\Coop</Filter>
     </None>
+    <ClInclude Include="..\include\GfxMovieStreamOverride.hpp">
+      <Filter>src\Graphics</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

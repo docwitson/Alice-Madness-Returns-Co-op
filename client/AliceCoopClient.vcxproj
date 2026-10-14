@@ -241,6 +241,7 @@
   <ItemGroup>
     <ResourceCompile Include="AliceCoopClient.rc" />
     <None Include="..\src\Coop\VersionInfo.rcinc" />
+    <ClInclude Include="..\include\GfxMovieStreamOverride.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

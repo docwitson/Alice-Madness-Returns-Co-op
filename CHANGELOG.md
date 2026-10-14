@@ -21,6 +21,8 @@ depends on the protocol version shown in each release.
 
 ### Fixed
 
+- Enlarged native menu GFX streams load completely: Chapter select, Memories
+  and return transitions no longer lose interface elements or leave an empty menu.
 - Join loads the host's saved subarea and checkpoint through native Continue
   using a verified isolated session cache, preserving the client's profile.
 - P/O teleports preload host-visible sublevels before arrival, including distant

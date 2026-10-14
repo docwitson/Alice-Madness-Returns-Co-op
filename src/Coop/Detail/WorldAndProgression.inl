@@ -1357,6 +1357,9 @@
 				status);
             if (AchievementOverlay::ConsumeNativeMenuNotice())
                 Log("UISTAGE native Scaleform Multiplayer ready; original button/navigation template active.");
+            std::string streamNotice;
+            if (ConsumeNativeMenuStreamNotice(streamNotice))
+                Log("UISTAGE native GFX stream: " + streamNotice);
             if (const auto music = AchievementOverlay::ConsumeNativeMusicResult())
                 Log(music == 1 ? "UISTAGE native main-menu music recovered; component is playing."
                     : music == 2 ? "UISTAGE native main-menu music recovery: component is stopped."

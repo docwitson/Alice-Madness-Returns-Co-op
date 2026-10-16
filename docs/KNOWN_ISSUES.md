@@ -34,10 +34,9 @@ the wrong costume.
 
 ## Visual proxy
 
-- Native remote cloth/hair simulation is enabled. Long cinematic sequences and
-  map transitions can still expose presentation differences.
-- Upper-body aiming, native attack blending, rabbit reveal and projectile impact
-  effects are implemented; some presentation differences may remain.
+Alpha.3 implements native cloth/hair simulation, upper-body aiming, attack
+blending, clock-bomb rabbit animations and projectile impact effects.
+
 - A transient T-pose was reported during a Cardbridge join but could not be
   reproduced in subsequent tests. No speculative animation change is included.
 - Remote particles are presentation-only; world/script state can still differ.

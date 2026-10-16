@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+    [ValidatePattern('^\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$')]
     [string]$Version = '0.1.0-alpha.3',
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',
@@ -72,7 +73,7 @@ if (-not $SkipBuild) {
         -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
     if (-not $msbuild) { throw 'MSBuild was not found.' }
     & $msbuild (Join-Path $repoRoot 'AliceCoop.sln') /restore /m /t:Build `
-        "/p:Configuration=$Configuration" /p:Platform=x86
+        "/p:Configuration=$Configuration" /p:Platform=x86 "/p:Version=$Version"
     if ($LASTEXITCODE -ne 0) { throw "MSBuild failed: $LASTEXITCODE" }
 }
 
@@ -80,11 +81,14 @@ $buildPath = Join-Path $repoRoot "bin\$Configuration"
 $builtDll = Join-Path $buildPath 'dinput8.dll'
 $builtServer = Join-Path $buildPath 'AliceCoopServer.exe'
 $builtLauncher = Join-Path $buildPath 'AliceCoopLauncher.exe'
-foreach ($required in @($builtDll, $builtServer, $builtLauncher)) {
+$builtTests = Join-Path $buildPath 'AliceCoopTests.exe'
+foreach ($required in @($builtDll, $builtServer, $builtLauncher, $builtTests)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
         throw "Required build output is missing: $required"
     }
 }
+& $builtTests
+if ($LASTEXITCODE -ne 0) { throw 'AliceCoop tests failed.' }
 & $builtServer --self-test
 if ($LASTEXITCODE -ne 0) { throw 'AliceCoopServer self-test failed.' }
 $launcherTest = Start-Process -FilePath $builtLauncher -ArgumentList '--self-test' `
@@ -143,6 +147,15 @@ foreach ($name in @(
 }
 Copy-Item -LiteralPath (Join-Path $repoRoot 'README.md') -Destination $documentation
 Copy-Item -LiteralPath (Join-Path $repoRoot 'README_RU.md') -Destination $documentation
+Copy-Item -LiteralPath (Join-Path $repoRoot 'CHANGELOG.md') -Destination $documentation
+$releaseNotes = Join-Path $repoRoot "docs\RELEASE_NOTES_$Version.md"
+if (Test-Path -LiteralPath $releaseNotes -PathType Leaf) {
+    Copy-Item -LiteralPath $releaseNotes -Destination $documentation
+}
+$releaseValidation = Join-Path $repoRoot "docs\RELEASE_VALIDATION_$Version.md"
+if (Test-Path -LiteralPath $releaseValidation -PathType Leaf) {
+    Copy-Item -LiteralPath $releaseValidation -Destination $documentation
+}
 foreach ($name in @('CONFIGURATION.md', 'DEVELOPMENT.md', 'INSTALL.md',
     'INSTALL_RU.md', 'MANUAL_INSTALL.md', 'MANUAL_INSTALL_RU.md',
     'KNOWN_ISSUES.md', 'SMOKE_TEST.md', 'TROUBLESHOOTING.md')) {
@@ -181,14 +194,23 @@ $manifest = [ordered]@{
 }
 $manifestPath = Join-Path $advanced 'package-manifest.json'
 $manifest | ConvertTo-Json | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+$sourceRevision = (& git -C $repoRoot rev-parse HEAD | Out-String).Trim()
+$sourceContext = if ($sourceStatus.Length -ne 0) {
+    "Local build based on $sourceRevision with uncommitted changes.`r`n" +
+    "Corresponding source must accompany this build as AliceCoop-$Version-source.zip."
+} else {
+    "Corresponding source revision: $sourceRevision`r`n" +
+    "https://github.com/docwitson/Alice-Madness-Returns-Co-op/tree/$sourceRevision"
+}
 $sourceNotice = @"
 Alice Co-op $Version corresponding source code
 
 Repository: https://github.com/docwitson/Alice-Madness-Returns-Co-op
-Release tag: https://github.com/docwitson/Alice-Madness-Returns-Co-op/tree/v$Version
+$sourceContext
 
-Alice Co-op is distributed under GNU GPL version 2.0. The tagged repository
-contains the source and build scripts corresponding to the release binaries.
+Alice Co-op is distributed under GNU GPL version 2.0. Source includes the code
+and build scripts corresponding to these binaries. A local candidate does not
+imply that a public release tag has been created.
 "@
 $sourceNotice | Set-Content -LiteralPath (Join-Path $advanced 'SOURCE_CODE.txt') `
     -Encoding UTF8

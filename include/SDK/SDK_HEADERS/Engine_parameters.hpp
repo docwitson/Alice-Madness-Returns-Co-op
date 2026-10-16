@@ -8858,7 +8858,8 @@ struct UAudioComponent_execFadeIn_Params
 // [0x00020401]  (iNative[16730])
 struct UAudioComponent_execIsPlaying_Params
 {
-	bool                                               ReturnValue : 1;                                  // 0x0000 (0x0004) [0x0000000000000580] [0x00000001] (CPF_Parm | CPF_OutParm | CPF_ReturnParm)
+	// execIsPlaying writes a full UE3 UBOOL/DWORD, including via ProcessEvent.
+	uint32_t                                           ReturnValue : 1;                                  // 0x0000 (0x0004) [0x0000000000000580] [0x00000001] (CPF_Parm | CPF_OutParm | CPF_ReturnParm)
 };
 
 // Function Engine.AudioComponent.Stop

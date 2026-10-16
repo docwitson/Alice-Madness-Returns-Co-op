@@ -7,7 +7,7 @@
 namespace AliceCoopProtocol
 {
 	constexpr std::uint32_t Magic = 0x504F4341; // "ACOP" in little-endian byte order.
-	constexpr std::uint16_t Version = 42;
+	constexpr std::uint16_t Version = 43;
 	constexpr std::uint16_t DefaultPort = 27018;
 	constexpr std::size_t MaxDatagramSize = 1200;
 	constexpr std::size_t MaxAnimationSequences = 12;
@@ -88,6 +88,12 @@ namespace AliceCoopProtocol
 		WeaponProjectileRemove = 9,
 		NativeWorldEffect = 10,
 		NativeWorldDecal = 11,
+		// SoundCue hash / audio instance ID. extra=volume, velocity[0]=pitch;
+		// variant=follow proxy, reserved bit0=100ms heartbeat/600ms timeout;
+		// bit1=one named native float parameter in effectParameterName/parameters[0].
+		NativeSoundStart = 12,
+		NativeSoundUpdate = 13,
+		NativeSoundStop = 14,
 	};
 
 	enum class SharedWorldEventKind : std::uint8_t

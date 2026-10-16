@@ -1346,6 +1346,12 @@
 
 			const Clock::time_point now = Clock::now();
 
+            if (notify->IsA(UAnimNotify_Sound::StaticClass()))
+            {
+                ReplayProxySoundNotify(remote, reinterpret_cast<UAnimNotify_Sound*>(notify));
+                return;
+            }
+
 			if (g_remoteMaterialsIsolated && notify->IsA(UAliceAnimNotify_SetMatParam::StaticClass()))
 			{
 				// Authored dodge uses a timed material curve, not Actor.bHidden.

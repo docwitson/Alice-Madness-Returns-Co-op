@@ -665,6 +665,7 @@
 
 		void ClearRemoteProjectileVisuals(bool destroyActors)
 		{
+            StopRemoteWeaponAudio(true);
 			for (RemotePepperVisual& visual :
 				g_remotePepperVisuals)
 			{
@@ -721,6 +722,16 @@
 				if (!finite) continue;
 				switch (event.kind)
 				{
+                case ProjectileEventKind::NativeSoundStart:
+                case ProjectileEventKind::NativeSoundUpdate:
+                case ProjectileEventKind::NativeSoundStop:
+                {
+                    const auto age = std::chrono::duration_cast<std::chrono::milliseconds>(now - received.receivedAt).count();
+                    if (event.kind == ProjectileEventKind::NativeSoundStop
+                        || (age >= 0 && AliceCoopNative::IsFreshAudioEvent(static_cast<std::uint64_t>(age), 0, (event.reserved & 1) != 0)))
+                        ApplyRemoteAudioEvent(event);
+                    break;
+                }
 				case ProjectileEventKind::PepperSpawn:
 				case ProjectileEventKind::TeapotSpawn:
 				case ProjectileEventKind::WeaponProjectileUpdate:
@@ -988,6 +999,7 @@
 			{
 				OnLocalClockBombSpawn(activeBomb);
 			}
+            if (activeBomb) CaptureLocalWeaponAudio(activeBomb, activeBomb->AmbientSoundComponent);
 			if (!activeBomb)
 			{
 				if (g_localClockBomb.bomb

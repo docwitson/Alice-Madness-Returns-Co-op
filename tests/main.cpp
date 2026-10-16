@@ -2,6 +2,7 @@
 #include "Coop/Protocol.hpp"
 #include "../include/GfxMovieStreamOverride.hpp"
 #include "../include/NativePersistentReadCache.hpp"
+#include "../include/NativeSoundArgument.hpp"
 
 #include <array>
 #include <cstdint>
@@ -9,6 +10,8 @@
 #include <iostream>
 #include <limits>
 #include <string>
+
+bool TestNativeAudioResultStorage();
 
 namespace
 {
@@ -21,6 +24,61 @@ namespace
 		std::cerr << "FAIL: " << name << '\n';
 		++g_failures;
 	}
+
+    void TestNativeSoundArgument()
+    {
+        using namespace AliceCoopNative;
+        std::uint32_t cue = 0;
+        auto read = [](std::uint32_t address, std::uint32_t& value) {
+            if (address != 0x1010 && address != 0x2010) return false;
+            value = address == 0x1010 ? 0xaaaa : 0xbbbb; return true;
+        };
+        auto offset = [](std::uint32_t property, std::int32_t& value) {
+            if (property != 0x3000) return false;
+            value = 0x10; return true;
+        };
+        const std::array<std::uint8_t, 5> local{0, 0, 0x30, 0, 0};
+        Check(ReadSoundArgument(local, 0x1000, 0x2000, read, offset, cue) && cue == 0xbbbb,
+            "native sound local argument reads caller locals");
+        auto instance = local; instance[0] = 1;
+        Check(ReadSoundArgument(instance, 0x1000, 0x2000, read, offset, cue) && cue == 0xaaaa,
+            "native sound instance argument reads actual actor");
+        auto constant = local; constant[0] = 0x20;
+        Check(ReadSoundArgument(constant, 0, 0, read, offset, cue) && cue == 0x3000,
+            "native sound object constant");
+        Check(!ReadSoundArgument(std::span(local).first(4), 0x1000, 0x2000, read, offset, cue),
+            "truncated sound expression rejected");
+        auto call = local; call[0] = 0x1c;
+        Check(!ReadSoundArgument(call, 0x1000, 0x2000, read, offset, cue),
+            "sound capture never evaluates an argument function twice");
+        Check(!ReadSoundArgument(local, 0x1000, 0, read, offset, cue), "missing native frame locals rejected");
+        Check(!ReadSoundArgument(instance, 0xfffffff0, 0, read, offset, cue), "sound address overflow rejected");
+        auto invalid = local; invalid[1] = 4;
+        Check(!ReadSoundArgument(invalid, 0x1000, 0x2000, read, offset, cue), "unknown sound property rejected");
+        auto arrayRead = [](std::uint32_t address, std::uint32_t& value) {
+            switch (address) {
+            case 0x1010: value = 0x5000; return true;
+            case 0x1014: value = 2; return true;
+            case 0x5000: value = 0xaaaa; return true;
+            case 0x5004: value = 0xbbbb; return true;
+            default: return false;
+            }
+        };
+        std::array<std::uint8_t, 7> array{0x10, 0x25, 1, 0, 0x30, 0, 0};
+        Check(ReadSoundArgument(array, 0x1000, 0, arrayRead, offset, cue) && cue == 0xaaaa,
+            "native firing sound array chooses authored first cue");
+        array[1] = 0x26;
+        Check(ReadSoundArgument(array, 0x1000, 0, arrayRead, offset, cue) && cue == 0xbbbb,
+            "native firing sound array chooses authored second cue");
+        Check(!ReadSoundArgument(std::span(array).first(6), 0x1000, 0, arrayRead, offset, cue),
+            "truncated native firing array expression rejected");
+        const std::array<std::uint8_t, 11> outOfBounds{0x10, 0x1d, 2,0,0,0, 1,0,0x30,0,0};
+        Check(!ReadSoundArgument(outOfBounds, 0x1000, 0, arrayRead, offset, cue),
+            "native firing array bounds checked before reading cue");
+        Check(IsFreshAudioEvent(350, 0, false) && !IsFreshAudioEvent(351, 0, false), "late one-shot audio discarded");
+        Check(IsFreshAudioEvent(600, 0, true) && !IsFreshAudioEvent(601, 0, true)
+            && !IsFreshAudioEvent(1, 2, true), "loop timeout and clock underflow guarded");
+    }
 
     void TestPersistentArchiveInvalidation()
     {
@@ -467,7 +525,9 @@ namespace
 
 int main()
 {
+	Check(TestNativeAudioResultStorage(), "native audio DWORD result preserves adjacent stack storage");
 	TestProtocolHeaders();
+    TestNativeSoundArgument();
     TestPersistentArchiveInvalidation();
     TestGfxMovieStreamBoundary();
     TestSessionCheckpointIdentity();

@@ -9,6 +9,7 @@
 #include "Coop/Detail/ProcessEventCallbacks.hpp"
 #include "Coop/Protocol.hpp"
 #include "NativePersistentReadCache.hpp"
+#include "NativeSoundArgument.hpp"
 
 #include <array>
 #include <atomic>
@@ -48,6 +49,7 @@ namespace AliceCoop
 		#include "Coop/Detail/InteractionDiscovery.inl"
 		#include "Coop/Detail/SharedWorldAndEnemies.inl"
 		#include "Coop/Detail/EngineInterop.inl"
+        #include "Coop/Detail/RemoteAudio.inl"
 		#include "Coop/Detail/Diagnostics.inl"
 		#include "Coop/Detail/RemoteCosmetics.inl"
 		#include "Coop/Detail/PresentationParticles.inl"
@@ -577,6 +579,8 @@ namespace AliceCoop
 		TickRemoteProjectileVisuals(world);
 		TickLocalClockBombReplication();
 		TickLocalWeaponProjectileReplication();
+        TickLocalWeaponAudio();
+        TickRemoteWeaponAudio();
 		if (g_config.localMirror)
 		{
 			g_activeRemoteAnimationGraph.reset();

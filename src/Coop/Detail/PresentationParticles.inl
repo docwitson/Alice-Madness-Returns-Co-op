@@ -1088,6 +1088,7 @@
 
 		void ResetRemoteWeaponPresentationState()
 		{
+            StopRemoteWeaponAudio(false);
 			FinishRemoteVisualNotifyTrails();
 			StopRemoteWeaponLoopParticles();
 			CleanupRemoteWeaponTransients(true);

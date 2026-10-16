@@ -13,6 +13,8 @@ class AAliceGameProjectile;
 class UCanvas;
 class UParticleSystem;
 class UParticleSystemComponent;
+class UAudioComponent;
+class USoundCue;
 struct FRotator;
 class UFunction;
 class UObject;
@@ -28,6 +30,8 @@ namespace AliceCoop
 	void OnLocalNativeEmitterSpawn(UObject* source, UParticleSystemComponent* component,
 		UParticleSystem* particle, const FVector& location, const FRotator& rotation);
 	void OnLocalNativeActorEmitterSpawn(UObject* source, AEmitter* emitter);
+    void OnLocalNativeAudioCreated(UObject* source, UObject* context, UAudioComponent* component);
+    void OnLocalNativeWeaponSound(UObject* source, UObject* context, USoundCue* cue);
 	void OnLocalNativeDecalSpawn(UObject* source, const ADecalManager_execSpawnDecal_Params& params);
 	void OnLocalWeaponProjectileSpawn(AAliceGameProjectile* projectile,
 		const FVector& direction);

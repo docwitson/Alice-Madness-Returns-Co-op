@@ -255,6 +255,22 @@
 		// pool spawn. Shutdown neither guesses a material nor suppresses them.
 	}
 
+    void OnLocalNativeAudioCreated(UObject* source, UObject* context, UAudioComponent* component)
+    {
+        UObject* owner = LocalWeaponAudioSource(source) ? source : context;
+        CaptureLocalWeaponAudio(owner, component);
+    }
+
+    void OnLocalNativeWeaponSound(UObject* source, UObject* context, USoundCue* cue)
+    {
+        auto* actor = LocalWeaponAudioSource(source);
+        if (!actor) actor = LocalWeaponAudioSource(context);
+        if (!actor || !cue || !IsLiveUObject(cue) || !cue->IsA(USoundCue::StaticClass())) return;
+        auto id = g_localAudioId++; if (!id) id = g_localAudioId++;
+        SendNativeWeaponAudio(ProjectileEventKind::NativeSoundStart, actor, nullptr, cue, id,
+            actor->IsA(AWeaponForAlice::StaticClass()));
+    }
+
 	void OnLocalNativeEmitterSpawn(UObject* source, UParticleSystemComponent* component,
 		UParticleSystem* particle, const FVector& location, const FRotator& rotation)
 	{

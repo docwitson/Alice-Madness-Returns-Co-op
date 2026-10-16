@@ -30,6 +30,10 @@
 		void TickLocalClockBombReplication();
 		void TickLocalWeaponProjectileReplication();
 		void FinishRemoteVisualNotifyTrails();
+        void QueueProjectileEvent(ProjectileEventPayload event);
+        void StopRemoteWeaponAudio(bool all);
+        void TickLocalWeaponAudio();
+        void TickRemoteWeaponAudio();
 		void TickRemoteProjectileVisuals(AWorldInfo* world);
 		void ApplyInboundProjectileEvents(AWorldInfo* world);
 		void ApplyInboundSharedWorldEvents(

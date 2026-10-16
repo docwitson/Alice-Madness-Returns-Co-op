@@ -54,8 +54,8 @@
 			bool backgroundWindowDamageGuard = false;
 			bool hairTuningEnabled = false;
 			bool disableProxyCollision = true;
-			bool nativeClothSimulation = false;
-			bool nativeHairSimulation = false;
+			bool nativeClothSimulation = true;
+			bool nativeHairSimulation = true;
 			bool forceWindowed = false;
 			bool manageWindowGeometry = false;
 			bool borderlessWindow = false;

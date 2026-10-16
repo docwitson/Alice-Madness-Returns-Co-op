@@ -3,7 +3,8 @@
 ![Alice Co-op — experimental two-player co-op alpha](docs/media/alice-co-op-banner.png)
 
 <p align="center">
-  <strong><a href="https://www.youtube.com/watch?v=QO0yarqS1-k">▶ WATCH THE FULL RELEASE TRAILER</a></strong><br>
+  <strong><a href="https://www.youtube.com/watch?v=I5nUTZjpCXY">▶ WATCH THE ALPHA.3 SHOWCASE</a></strong><br>
+  <strong><a href="https://www.youtube.com/watch?v=QO0yarqS1-k">▶ WATCH THE ORIGINAL RELEASE TRAILER</a></strong><br>
   <strong><a href="https://www.youtube.com/watch?v=uD7oxI4mNWY">▶ WATCH THE LAUNCHER INSTALLATION &amp; SETUP GUIDE</a></strong><br>
   <strong><a href="https://www.youtube.com/watch?v=j5VLSzZCsK0">▶ WATCH THE COMPLETE 10-HOUR PLAYTHROUGH</a></strong><br>
   <strong><a href="https://www.nexusmods.com/alicemadnessreturns/mods/87">⬇ DOWNLOAD ON NEXUS MODS</a></strong>
@@ -18,6 +19,18 @@ of *Alice: Madness Returns*. Each player runs their own game process; a small UD
 relay exchanges player, animation and world state while the host provides the
 authoritative view of ordinary enemies.
 
+## Alpha.3
+
+- Improved partner animations, weapon effects and spatial weapon sounds.
+- Native cloth and hair simulation for the remote Alice.
+- Multiplayer in the original game menu, with connection status, profile
+  transfer, About and matching pause/cutscene notices.
+- Built on MadnessPatch 3.3.3 by Wemino and contributors.
+
+Alpha.3 uses **protocol 43**. Update both players and the relay together; Alpha.2
+and Alpha.3 test builds using other protocols are incompatible. See the
+[release notes](docs/RELEASE_NOTES_0.1.0-alpha.3.md) and [changelog](CHANGELOG.md).
+
 > [!WARNING]
 > This is an alpha playtest build. Back up your saves, use a dedicated co-op
 > profile, and expect occasional checkpoint restarts or manual recovery in
@@ -25,9 +38,9 @@ authoritative view of ordinary enemies.
 
 ## Gameplay preview
 
-![Actual Alice Co-op gameplay from the current alpha build](docs/media/alice-co-op-gameplay-preview.webp)
+![Actual Alice Co-op gameplay](docs/media/alice-co-op-gameplay-preview.webp)
 
-*Actual in-game footage from the current alpha build. The header is unofficial
+*Actual Alice Co-op gameplay. The header is unofficial
 promotional artwork containing AI-generated elements.*
 
 ## What currently works
@@ -35,6 +48,8 @@ promotional artwork containing AI-generated elements.*
 - Host and client can see and independently control their own Alice.
 - Remote movement, jumping, gliding, shrinking, dodging, several attacks,
   equipped weapons, hair, dress and major presentation effects are represented.
+- Partner weapon sounds are spatial, including animation sound events,
+  projectiles and the clock bomb; sustained sounds stop with their source.
 - Ordinary enemies share host-authoritative position, health and death state.
 - Enemies can change focus between the host and client, and damage both players.
 - Many breakable props are destroyed for both players while loot remains local.
@@ -144,15 +159,21 @@ executable. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 - Some bosses and scripted waves can desynchronize between game processes.
 - Certain switches, pig snouts, moving platforms and secret rooms remain local.
-- Remote animation, upper-body aiming, hair, rigid dress and particles are
-  approximated and can differ from the owning player's view.
+- Remote animation, upper-body aiming, cloth, hair, particles and audio can
+  still differ from the owning player's view.
 - The hat bomb proxy does not reproduce every original animation detail.
-- Cutscene barriers are heuristic; use the yellow force action only when both
-  players are genuinely stuck.
+- Cutscene barriers are heuristic; use `L` during a shared wait only when both
+  players are stuck.
 - The side-scrolling ship stages intentionally run independently in solo mode.
 - Host profile synchronization overwrites the selected client profile.
 
 Read the complete [known-issues and recovery guide](docs/KNOWN_ISSUES.md).
+
+Alpha.2 received extensive playtesting. Alpha.3 mainly changes presentation and
+UI and has not received the same depth of testing. Enemy synchronization and
+interaction logic were not intentionally changed, but regressions remain possible.
+Alpha.2 remains available in Releases if you need to return to the previous build;
+both players and the relay must roll back together.
 
 ## Building from source
 

@@ -4,9 +4,13 @@ All notable user-facing changes are documented here. Alice Co-op follows
 [Semantic Versioning](https://semver.org/) where practical; compatibility also
 depends on the protocol version shown in each release.
 
-## Unreleased
+## 0.1.0-alpha.3
 
 ### Added
+
+- Native spatial proxy weapon audio: animation sound notifies and actual
+  weapon/projectile/clock-bomb sound calls, including tracked audio components.
+  Sustained audio uses start/update/stop events and a bounded keepalive timeout.
 
 - Windows VERSIONINFO for the native DLL and relay server, including product,
   description, authorship and alpha.3 version metadata.
@@ -22,6 +26,12 @@ depends on the protocol version shown in each release.
   fonts are bundled.
 
 ### Fixed
+
+- Proxy audio playback-state queries now reserve the full four-byte UE3 boolean
+  result, preventing stack corruption and a crash-handler freeze when audio starts.
+
+- Upgrading an alpha.2 INI without native cloth/hair keys now enables the new
+  simulation defaults; explicit zero values remain respected.
 
 - Enlarged native menu GFX streams load completely: Chapter select, Memories
   and return transitions no longer lose interface elements or leave an empty menu.
@@ -50,9 +60,10 @@ depends on the protocol version shown in each release.
 
 ### Changed
 
-- Protocol 42 distinguishes isolated Join session transfers from explicit profile
-  replacement and carries host-visible streaming identities. Both games and the
-  relay must use matching builds; older protocols are incompatible.
+- Protocol 43 carries proxy SoundCue start/update/stop events, distinguishes
+  isolated Join transfers from explicit profile replacement, and includes
+  host-visible streaming identities. Both games and the relay must be updated
+  together; Alpha.2 (protocol 29) and earlier Alpha.3 test builds are incompatible.
 - Profile replacement requires explicit confirmation, with Back last and selected
   by default. Obsolete L/K/Y/N main-menu shortcuts are removed; L remains available
   while waiting for a shared cutscene.

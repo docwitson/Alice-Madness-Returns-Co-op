@@ -61,8 +61,13 @@ manual tools, source notices and documentation remain in the extracted package.
 3. Choose **Join Game** to launch the game as the client.
 
 When connected, the host launcher log shows both `HOST connected` and
-`CLIENT connected`. Load compatible profiles. The client can use
-`SYNC HOST SAVE` in the main menu after reading its destructive warning.
+`CLIENT connected`. Select a profile on each game. The host starts or continues
+a level, then the client chooses **Multiplayer > Join host**. Join loads an
+isolated copy of the host's saved checkpoint/subarea and preserves the selected
+client profile. The host must enter a level before Join becomes available.
+
+**Multiplayer > Receive host profile** is a separate, optional replacement of
+the selected client profile. Read its confirmation before proceeding.
 
 The launcher starts a Steam installation through Steam only when the selected
 game directory matches that installation's app manifest. EA App, copied and
@@ -90,9 +95,16 @@ drop-in update, replace the packaged files while preserving your customized
 `AliceCoop.ini` and `MadnessPatch.ini`. Always update both players to the same
 release and protocol version.
 
+Alpha.3 uses protocol 43; Alpha.2 uses protocol 29. Earlier Alpha.3 test builds
+also used incompatible protocols. Use the relay beside the new launcher and
+run Install/Repair for the actual game copy on both PCs. Opening the launcher
+alone does not update an already installed DLL. If rolling back to Alpha.2,
+roll back both game DLLs and the relay together.
+
 ## Profiles
 
-Use a dedicated client co-op profile. Profile synchronization:
+Use a dedicated client co-op profile. Joining does not require replacing it.
+**Receive host profile**:
 
 - displays a destructive confirmation;
 - transfers selected host progress files in acknowledged chunks;

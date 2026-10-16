@@ -2,6 +2,12 @@
 
 This page describes alpha limitations that are not necessarily regressions.
 
+Alpha.2 received extensive playtesting. Alpha.3 mainly updates visuals, animation,
+audio and UI and has had more limited testing. Enemy synchronization and
+interaction logic were not intentionally changed, but regressions remain possible.
+The previous Alpha.2 release remains available; both games and the relay must
+use that version if rolling back.
+
 ## Scripted encounters and bosses
 
 Boss phases, miniboss introductions and scripted waves can advance at different
@@ -28,17 +34,19 @@ the wrong costume.
 
 ## Visual proxy
 
-- Native remote cloth/hair simulation is enabled. Cloth restoration after long
-  cinematic sequences still needs a longer play session with the current build.
+- Native remote cloth/hair simulation is enabled. Long cinematic sequences and
+  map transitions can still expose presentation differences.
 - Upper-body aiming, native attack blending, rabbit reveal and projectile impact
   effects are implemented; some presentation differences may remain.
 - A transient T-pose was reported during a Cardbridge join but could not be
   reproduced in subsequent tests. No speculative animation change is included.
 - Remote particles are presentation-only; world/script state can still differ.
+- Partner weapon audio is spatial. Unsupported sound argument expressions or
+  cues absent from the client's loaded assets can leave some events silent.
 
 The VFX guard bounds native proxy glide effects and clears orphan emitters on
 map/proxy transitions. Optional frozen movement trails have a separate bounded
-pool and can be disabled from the pause overlay with `T`.
+pool and can be disabled from the native pause panel with `T`.
 
 ## Joining and teleporting
 

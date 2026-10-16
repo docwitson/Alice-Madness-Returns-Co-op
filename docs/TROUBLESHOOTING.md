@@ -34,19 +34,23 @@
 
 - Wait until the host is fully in gameplay and not loading a map.
 - A join action is temporarily unavailable during a host cutscene or checkpoint
-  transition; wait for the yellow action to return and press `L`.
+  transition. Wait for **Multiplayer > Join host** to become available, then
+  select it with Enter/A or the mouse.
 - If the client profile has never initialized controls, start a normal new game
   once or use verified host-profile synchronization and restart the client.
 
 ## Client loaded far away
 
-This is intentional during world construction. Wait until geometry and controls
-are ready, then press `O`. Prefer `P` during ordinary same-area gameplay.
+Join normally loads the host's saved subarea/checkpoint and then prepares the
+host's streamed area before arriving beside them. If streaming times out, press
+`O` to retry after the host finishes loading. `P` goes to the partner during
+ordinary gameplay. If the client keeps starting at the beginning of a chapter,
+check that the new DLL is installed in the game copy actually being launched.
 
 ## A cutscene is waiting forever
 
 Move both players into the trigger area. If both are present and no encounter is
-still active, press `L` while the yellow force button is visible. Restart the
+still active, press `L` while the shared wait reminder is visible. Restart the
 checkpoint if the resulting world state is incomplete.
 
 ## Proxy effects remain in the world
@@ -55,3 +59,27 @@ Current builds periodically retire orphaned native glide effects and bound the
 optional static trail pools. Make sure both players use the same latest DLL. If
 the problem repeats, disable trails with `T` in the pause menu and attach the
 latest client log to an issue after redacting personal information.
+
+## Relay reports "rejected malformed packet" and client stays waiting
+
+This message includes invalid headers and mismatched protocol versions; it does
+not identify which field failed. Repeated attempts about once a second can be
+the client's Hello retry with an older DLL. Alpha.3 uses protocol 43, Alpha.2
+uses 29, and some earlier Alpha.3 test builds used 42.
+
+Close the games and run Install/Repair from the same release on both computers.
+Confirm the selected game path and start the relay beside that release's launcher.
+Opening a new launcher without installing its payload leaves the old DLL in place.
+The visible Alpha.3 label alone does not distinguish earlier test builds.
+
+## Antivirus flags a release file
+
+Compare the file's SHA-256 with the release checksums and record the vendor,
+detection name and report link. Scan results apply to that exact binary and can
+change later; a small detection count alone does not establish whether a file
+is safe. VirusTotal recommends rescanning and contacting the detecting vendor
+if a suspected false positive persists:
+https://docs.virustotal.com/docs/false-positive-contacts
+
+The dated [Alpha.3 validation record](RELEASE_VALIDATION_0.1.0-alpha.3.md)
+distinguishes user-reported scan results from build and playtest checks.

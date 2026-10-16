@@ -62,7 +62,7 @@ bottom, selected by default. Profile replacement requires the explicit Receive a
 choice, checks that the selected profile has not changed, and keeps a backup.
 Select the role and server address in the launcher.
 
-The main screen only shows AliceCoop 0.1.0-alpha.3. Native headings and normal
+The version/role/connection label appears only in the main menu. Native headings and normal
 body fonts come from the game's imported font library. Connection states use
 separate size/color styling. The information column sits on the right, with
 translucent vector panels separating status, instructions and navigation.
@@ -79,6 +79,23 @@ Native navigation uses arrows / D-pad, Enter / A and Escape / B. Menu-specific
 L (join), K (profile), and Y / N confirmation shortcuts were removed. L remains
 only for an active shared-cutscene wait; T toggles movement trails while paused,
 and Home opens achievements when supported.
+
+## Proxy weapon audio (protocol 43)
+
+Both games and the relay must use the audio build; protocol 42 cannot connect.
+Weapon/body sound notifies are selectively replayed without enabling damage or
+collision notifies. Native weapon, projectile and clock-bomb SoundCues are
+captured from the owner's actual audio calls; UI/music/NPC audio is excluded.
+Spatial components keep the original cue, volume and pitch. Tracked loops send
+100 ms keepalives and expire after 600 ms without updates; stopping, weapon
+changes, cinematics, disconnects and map changes retire their components.
+The log records installed audio hooks and the first transmitted/received cue.
+The fixed audio build passed a user-reported two-player check on 2026-10-16.
+Positional balance and full weapon/level coverage remain subject to playtesting.
+Unsupported argument expressions are not evaluated by capture.
+
+Missing native cloth/hair keys in an old alpha.2 INI now default to enabled;
+explicit `NativeClothSimulation = 0` or `NativeHairSimulation = 0` stays disabled.
 
 ## AliceCoop.ini
 

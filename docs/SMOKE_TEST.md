@@ -25,9 +25,13 @@ Launch `AliceCoop-Diagnostic-Both.bat` and play for 20–30 minutes. Exercise:
 - host/client connection, disconnect and reconnect;
 - movement, jump, glide, dodge, shrink, hair, dress, particles and trails;
 - weapon switching, ordinary combat, enemy targeting and breakables;
+- spatial partner weapon audio, repeated firing, charge/release, impacts and
+  clock-bomb sounds; verify sustained sounds stop after a source ends;
 - interactions, a synchronized cutscene and a map change;
-- safe/forced teleport (`P`/`O`), checkpoint restart and return to menu;
-- pause UI, window resizing and recovery of the overlay after resolution
+- partner/distant teleport (`P`/`O`), including airborne arrival, checkpoint
+  restart and return to menu;
+- native Multiplayer, Chapter select and Memories, then return to the main menu;
+- native pause/cutscene notices, window resizing and layout after resolution
   changes;
 - save sync on the dedicated test profiles only.
 

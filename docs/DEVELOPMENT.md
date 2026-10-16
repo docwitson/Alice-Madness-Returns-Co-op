@@ -63,10 +63,10 @@ required after changing the stream rewriter.
 ## Packaging
 
 ```powershell
-& .\tools\Build-AliceCoop-Package.ps1 -Version 0.1.0-alpha.2
+& .\tools\Build-AliceCoop-Package.ps1 -Version 0.1.0-alpha.3
 ```
 
-The script rebuilds `Release|x86`, runs the server and launcher self-tests,
+The script rebuilds `Release|x86`, runs the unit tests and server/launcher self-tests,
 stages installer and drop-in packages, writes manifests/checksums, and creates
 ZIP archives below `artifacts\deploy`.
 
@@ -74,12 +74,23 @@ Validate both archives against their manifests, checksums, exact file layouts
 and the freshly built DLL/server binaries:
 
 ```powershell
-& .\tools\Test-AliceCoop-Package.ps1 -Version 0.1.0-alpha.2
+& .\tools\Test-AliceCoop-Package.ps1 -Version 0.1.0-alpha.3
 ```
 
 CI and release workflows add `-RequireCleanSource` to both packaging and
 verification. Local packaging permits a dirty worktree unless that switch is
 specified.
+
+The release workflow creates a draft when a version tag is pushed. Review its
+notes and assets before publishing. Local installer/drop-in archives include
+the changelog and version-specific release notes. Local dirty builds need an
+accompanying source snapshot; a base commit alone does not include uncommitted files.
+
+Antivirus results are tied to file hashes. Repackaging documentation with
+`-SkipBuild` preserves the binaries; rebuilding locally or in Actions can change
+their hashes, even when behavior is unchanged. Record and scan the exact final
+files intended for distribution. A deterministic .NET PE timestamp is hash-derived
+and is not a wall-clock build date.
 
 ## Source layout
 
@@ -129,10 +140,15 @@ only report state and never repair or assert on it.
 - Upload both archives and checksums to a draft GitHub Release.
 - Review the repository and Actions logs before changing visibility to public.
 
-The experimental MadnessPatch 3.3.3 native-menu build uses wire protocol 42.
+The Alpha.3 MadnessPatch 3.3.3 build uses wire protocol 43 (Alpha.2 uses 29).
 Host snapshots include up to 32 hashes of visible streaming packages (1,154 bytes
 including the header, within the 1,200-byte UDP budget). Both games and the relay
 must be updated together. Existing animation and weapon-event payloads are unchanged.
+Proxy audio uses SoundCue start/update/stop kinds in the existing 148-byte weapon
+event payload. Native Sound notifies are selected without enabling damage notifies.
+The AudioComponent.IsPlaying result must use a four-byte UE3 UBOOL, with the
+reflected return offset/size checked before invoking it; a one-byte C++ bool
+corrupts the caller's stack. NativeAudioAbi.cpp exercises the actual SDK structure.
 Safe arrival preloads these native sublevels without moving or suspending the pawn,
 waits for visibility/loading, then uses native AlicePawn.FarMoveSetLocation with
 bNoCheck (Actor.SetLocationNoCheck fallback), verifying the resulting position.

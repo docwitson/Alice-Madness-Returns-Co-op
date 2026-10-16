@@ -6,7 +6,7 @@
   <strong><a href="https://www.youtube.com/watch?v=I5nUTZjpCXY">▶ WATCH THE ALPHA.3 SHOWCASE</a></strong><br>
   <strong><a href="https://www.youtube.com/watch?v=QO0yarqS1-k">▶ WATCH THE ORIGINAL RELEASE TRAILER</a></strong><br>
   <strong><a href="https://www.youtube.com/watch?v=uD7oxI4mNWY">▶ WATCH THE LAUNCHER INSTALLATION &amp; SETUP GUIDE</a></strong><br>
-  <strong><a href="https://www.youtube.com/watch?v=j5VLSzZCsK0">▶ WATCH THE COMPLETE 10-HOUR PLAYTHROUGH</a></strong><br>
+  <strong><a href="https://www.youtube.com/watch?v=j5VLSzZCsK0">▶ WATCH THE COMPLETE 10-HOUR PLAYTHROUGH (EARLIER BUILDS)</a></strong><br>
   <strong><a href="https://www.nexusmods.com/alicemadnessreturns/mods/87">⬇ DOWNLOAD ON NEXUS MODS</a></strong>
 </p>
 
@@ -46,8 +46,11 @@ promotional artwork containing AI-generated elements.*
 ## What currently works
 
 - Host and client can see and independently control their own Alice.
-- Remote movement, jumping, gliding, shrinking, dodging, several attacks,
-  equipped weapons, hair, dress and major presentation effects are represented.
+- Partner movement, jumps, gliding, shrinking, dodges, melee attacks and ranged
+  upper-body aiming are synchronized.
+- The remote Alice uses native cloth and hair simulation.
+- Weapon trails, pepper/teapot projectiles and impacts, hobby-horse shockwaves
+  and clock-bomb animations, including the rabbit reveal, are reproduced.
 - Partner weapon sounds are spatial, including animation sound events,
   projectiles and the clock bomb; sustained sounds stop with their source.
 - Ordinary enemies share host-authoritative position, health and death state.
@@ -55,9 +58,10 @@ promotional artwork containing AI-generated elements.*
 - Many breakable props are destroyed for both players while loot remains local.
 - Shared death, checkpoint restart and return to the main menu are coordinated.
 - Common interaction cinematics and trigger cutscenes can be synchronized.
-- The client can join the host checkpoint and optionally copy the host profile
-  after an explicit destructive warning and integrity verification.
-- Emergency teleports and a force-cutscene action recover many soft desyncs.
+- The client can join the host checkpoint without replacing their selected
+  profile. Optional host-profile replacement is a separate, explicitly confirmed
+  action with integrity verification and a backup.
+- Partner teleports and shared-cutscene recovery controls are available in game.
 
 This is not native Unreal Engine 3 networking. Both games still simulate parts
 of the level locally, and Alice Co-op reconciles the pieces that are practical to
@@ -86,12 +90,13 @@ keeps each game role isolated without requiring BAT or INI editing.
 
 ## Quick start
 
-1. Close the game on both computers.
+1. Close both games and the old relay before installing or updating.
 2. Download the latest `AliceCoop-*-installer.zip` from
    [Releases](https://github.com/docwitson/Alice-Madness-Returns-Co-op/releases).
-3. Extract it anywhere, run `AliceCoopLauncher.exe`, select the folder
-   containing `AliceMadnessReturns.exe`, and choose **Install**. Use **Add game**
-   if you keep more than one installed copy.
+3. Extract it into a normal writable folder, run `AliceCoopLauncher.exe`, select
+   the folder containing `AliceMadnessReturns.exe`, and choose **Install/Repair**.
+   Opening a new launcher alone does not update an already installed DLL.
+   Use **Add game** if you keep more than one installed copy.
 4. On the host PC, choose a trusted LAN/VPN address, allow the relay through
    the private-network firewall when prompted, and press **Host Game**. Use
    **Copy address** and send the copied endpoint to the other player.
@@ -100,8 +105,9 @@ keeps each game role isolated without requiring BAT or INI editing.
    can identify one; other installations are started directly.
 6. Keep both launchers open during the session. The host launcher reports when
    both game processes have connected to the relay and owns the relay process.
-7. Load compatible profiles. The client can choose **Multiplayer > Receive host profile**
-   to copy the host's progression; read the confirmation carefully.
+7. Select a profile in each game. **Multiplayer > Receive host profile** is
+   optional: it replaces the selected client profile with the host's progression
+   after confirmation and creates a backup. It is not required for Join.
 8. The host first starts or continues a game. The client chooses
    **Multiplayer > Join host**. Join receives an isolated session copy of the
    host's saved checkpoint and loads its subarea through native Continue.
@@ -123,13 +129,14 @@ also demonstrates this workflow.
 
 | Key | Context | Action |
 | --- | --- | --- |
-| `P` | Gameplay | Safe teleport: client to host; host to client |
-| `O` | Gameplay | Client: preload distant host area and arrive safely; host: summon client |
+| `P` | Gameplay | Go to the partner: client to host; host to client |
+| `O` | Gameplay | Client: meet the host across the level; host: summon the client |
 | `L` | Waiting for a shared cutscene | Continue together |
 | `T` | Pause menu | Toggle bounded proxy movement-trail history |
 
-Teleportation waits for destination sublevels when needed. P/O also work while either player is airborne; they do not require a floor trace.
-On timeout the player remains at the current location. The pause panel lists these controls.
+P/O wait for destination areas to load when needed and also work while either
+player is airborne. On timeout the player remains at the current location.
+The pause panel lists these controls.
 
 The normal game keeps ownership of these keys outside the listed contexts.
 
@@ -151,7 +158,7 @@ Advanced\Payload\Manual\AliceCoop-LaunchConfig.bat
 AliceCoop\AliceCoop.ini
 ```
 
-The drop-in archive places manual launch files under `AliceCoop\Advanced`
+The drop-in archive places manual launch files under `AliceCoop\Advanced\Manual`
 instead. MadnessPatch settings remain in `MadnessPatch.ini` next to the game
 executable. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
@@ -159,9 +166,6 @@ executable. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 - Some bosses and scripted waves can desynchronize between game processes.
 - Certain switches, pig snouts, moving platforms and secret rooms remain local.
-- Remote animation, upper-body aiming, cloth, hair, particles and audio can
-  still differ from the owning player's view.
-- The hat bomb proxy does not reproduce every original animation detail.
 - Cutscene barriers are heuristic; use `L` during a shared wait only when both
   players are stuck.
 - The side-scrolling ship stages intentionally run independently in solo mode.
@@ -169,9 +173,10 @@ executable. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 Read the complete [known-issues and recovery guide](docs/KNOWN_ISSUES.md).
 
-Alpha.2 received extensive playtesting. Alpha.3 mainly changes presentation and
-UI and has not received the same depth of testing. Enemy synchronization and
-interaction logic were not intentionally changed, but regressions remain possible.
+Alpha.2 received extensive playtesting. Alpha.3 mainly changes animation, physics,
+effects, audio and UI and has not received the same depth of testing. Enemy
+synchronization and interaction logic were not intentionally changed, but
+regressions remain possible.
 Alpha.2 remains available in Releases if you need to return to the previous build;
 both players and the relay must roll back together.
 

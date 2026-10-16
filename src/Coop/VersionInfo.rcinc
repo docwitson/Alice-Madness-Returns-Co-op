@@ -1,0 +1,36 @@
+#include <winver.h>
+
+// Shared release metadata for the native mod and relay server.
+1 VERSIONINFO
+FILEVERSION 0,1,0,3
+PRODUCTVERSION 0,1,0,3
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+FILEFLAGS VS_FF_DEBUG
+#else
+FILEFLAGS 0
+#endif
+FILEOS VOS_NT_WINDOWS32
+FILETYPE ALICECOOP_FILE_TYPE
+FILESUBTYPE 0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "Docwitson"
+            VALUE "FileDescription", ALICECOOP_FILE_DESCRIPTION
+            VALUE "FileVersion", "0.1.0.3"
+            VALUE "InternalName", ALICECOOP_INTERNAL_NAME
+            VALUE "LegalCopyright", ALICECOOP_COPYRIGHT
+            VALUE "OriginalFilename", ALICECOOP_ORIGINAL_FILENAME
+            VALUE "ProductName", "Alice Co-op"
+            VALUE "ProductVersion", "0.1.0-alpha.3"
+            VALUE "Comments", "Experimental two-player co-op mod. Open-source project, GPL-2.0-only."
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

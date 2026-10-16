@@ -12,7 +12,6 @@ safetyhook::InlineHook GameConsoleCommand;
 static safetyhook::InlineHook MenuCursorRead;
 static safetyhook::MidHook GetProfileName{};
 static safetyhook::MidHook PersistentDataLoaded{};
-static safetyhook::MidHook GetGameLanguage{};
 static safetyhook::MidHook ActorConsoleCommand{};
 
 static std::wstring g_profileName;
@@ -238,37 +237,6 @@ static void OnPersistentLoaded(safetyhook::Context& ctx)
 	}
 }
 
-static void OnLanguageSet(safetyhook::Context& ctx)
-{
-	const wchar_t* name = *reinterpret_cast<const wchar_t**>(GetAddress(Addr::GameLanguageName));
-
-	if (name == nullptr)
-	{
-		AchievementOverlay::SetLanguage("en");
-		return;
-	}
-
-	if (std::wcscmp(name, L"FRA") == 0)
-	{
-		AchievementOverlay::SetLanguage("fr");
-	}
-	else if (std::wcscmp(name, L"DEU") == 0)
-	{
-		AchievementOverlay::SetLanguage("de");
-	}
-	else if (std::wcscmp(name, L"ITA") == 0)
-	{
-		AchievementOverlay::SetLanguage("it");
-	}
-	else if (std::wcscmp(name, L"ESN") == 0)
-	{
-		AchievementOverlay::SetLanguage("es");
-	}
-	else
-	{
-		AchievementOverlay::SetLanguage("en");
-	}
-}
 
 void ApplyAchievementSupport()
 {
@@ -280,7 +248,6 @@ void ApplyAchievementSupport()
 	MenuCursorRead = HookHelper::CreateHook((void*)GetAddress(Addr::MenuCursorRead), &MenuCursorRead_Hook);
 	GetProfileName = safetyhook::create_mid(GetAddress(Addr::ProfileNameRead), OnProfileName);
 	PersistentDataLoaded = safetyhook::create_mid(GetAddress(Addr::PersistentLoaded), OnPersistentLoaded);
-	GetGameLanguage = safetyhook::create_mid(GetAddress(Addr::GameLanguageSet), OnLanguageSet);
 }
 
 void UpdateAchievementProgress()

@@ -448,7 +448,7 @@
 			std::error_code filesystemError;
 			std::filesystem::create_directories(directory, filesystemError);
 			if (filesystemError
-				|| !EnsureClientProfileBootstrap(directory, errorText))
+				|| (!transfer.sessionOnly && !EnsureClientProfileBootstrap(directory, errorText)))
 			{
 				if (errorText.empty())
 					errorText = "COULD NOT CREATE CLIENT PROFILE DIRECTORY";
@@ -571,7 +571,7 @@
 		{
 			SaveSyncRequestPayload payload{};
 			payload.transferId = transferId;
-			payload.flags = 1; // explicit destructive confirmation was accepted
+			payload.flags = g_requestedSavePurpose.load(std::memory_order_acquire);
 			const auto packet = MakePacket(PacketType::SaveSyncRequest,
 				g_sessionId.load(), g_playerId.load(), g_sequence++, payload);
 			SendBytes(&packet, sizeof(packet));
@@ -641,10 +641,16 @@
 			SendBytes(&packet, sizeof(packet));
 		}
 
-		bool PrepareHostSaveTransfer(std::uint32_t transferId)
+		bool PrepareHostSaveTransfer(std::uint32_t transferId, bool sessionOnly)
 		{
 			std::array<std::filesystem::path, SaveSyncFileCount> paths{};
-			if (!DiscoverHostSavePaths(paths))
+			if (sessionOnly)
+            {
+                // Join must use the selected host profile, never a newest-file guess.
+                std::lock_guard lock(g_observedSavePathMutex);
+                paths = g_observedSavePaths;
+            }
+            if (sessionOnly ? (paths[0].empty() || paths[1].empty()) : !DiscoverHostSavePaths(paths))
 			{
 				SetSaveSyncStatus(
 					"HOST SAVE FILES NOT FOUND", false, 0);
@@ -713,6 +719,7 @@
 			ClientSaveTransfer transfer{};
 			transfer.active = true;
 			transfer.transferId = manifest.transferId;
+            transfer.sessionOnly = g_requestedSavePurpose.load(std::memory_order_acquire) == SaveRequestJoinSession;
 			transfer.startedAt = Clock::now();
 			if (!std::isfinite(manifest.completionPercent)
 				|| !std::isfinite(manifest.playedHours)
@@ -825,7 +832,19 @@
 					return;
 				}
 			}
-			SetSaveSyncStatus("VERIFIED; APPLYING BOTH SAVE FILES", true, 100);
+			if (g_clientSaveTransfer.sessionOnly)
+            {
+                std::lock_guard lock(g_observedSavePathMutex);
+                if (!CheckpointMatchesMap(g_clientSaveTransfer.files[1].bytes, g_sessionExpectedMap))
+                {
+                    SendSaveSyncAck(chunk.transferId, SaveSyncFileKind::Checkpoint,
+                        SaveSyncAckStatus::TransferFailed, 0, 6);
+                    SetSaveSyncStatus("HOST SAVED CHECKPOINT IS ON ANOTHER MAP", false, 100);
+                    g_clientSaveTransfer = {}; g_requestedSaveTransferId.store(0);
+                    return;
+                }
+            }
+            SetSaveSyncStatus("VERIFIED; APPLYING BOTH SAVE FILES", true, 100);
 			std::string errorText;
 			const bool committed = CommitClientSaveTransfer(
 				g_clientSaveTransfer, errorText);
@@ -834,7 +853,14 @@
 				committed ? SaveSyncAckStatus::TransferVerified
 					: SaveSyncAckStatus::TransferFailed,
 				0, committed ? 0u : 5u);
-			if (committed)
+			if (committed && g_clientSaveTransfer.sessionOnly)
+            {
+                // Only publish after both cache files have been atomically written.
+                g_joinSessionReady.store(chunk.transferId, std::memory_order_release);
+                SetSaveSyncStatus("SESSION CHECKPOINT READY", false, 100);
+                Log("SESSIONJOIN verified isolated checkpoint transfer=" + std::to_string(chunk.transferId));
+            }
+            else if (committed)
 			{
 				{
 					std::lock_guard<std::mutex> lock(g_observedSavePathMutex);
@@ -1144,11 +1170,12 @@
 			{
 				const auto& request = *reinterpret_cast<const
 					SaveSyncRequestPayload*>(bytes + sizeof(Header));
-				if (request.transferId != 0 && (request.flags & 1u) != 0
+				if (request.transferId != 0
+                    && (request.flags == SaveRequestReplaceProfile || request.flags == SaveRequestJoinSession)
 					&& (!g_hostSaveTransfer.active
 						|| g_hostSaveTransfer.transferId != request.transferId))
 				{
-					PrepareHostSaveTransfer(request.transferId);
+					PrepareHostSaveTransfer(request.transferId, request.flags == SaveRequestJoinSession);
 				}
 			}
 			else if (g_config.role == Role::Client

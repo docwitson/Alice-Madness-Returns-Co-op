@@ -7,8 +7,15 @@
 class AAliceClonePawn;
 class AAlicePawn;
 class AActor;
-class APepperGrinderPrimaryProjectile;
+class AEmitter;
+struct ADecalManager_execSpawnDecal_Params;
+class AAliceGameProjectile;
 class UCanvas;
+class UParticleSystem;
+class UParticleSystemComponent;
+class UAudioComponent;
+class USoundCue;
+struct FRotator;
 class UFunction;
 class UObject;
 class USeqAct_Interp;
@@ -20,9 +27,17 @@ namespace AliceCoop
 	void OnAlicePawnTicked(AAlicePawn* pawn);
 	void DrawTuningOverlay(UCanvas* canvas);
 	void RecordLocalAction(AliceCoopProtocol::PlayerAction action);
-	void OnLocalPepperProjectileSpawn(
-		APepperGrinderPrimaryProjectile* projectile,
+	void OnLocalNativeEmitterSpawn(UObject* source, UParticleSystemComponent* component,
+		UParticleSystem* particle, const FVector& location, const FRotator& rotation);
+	void OnLocalNativeActorEmitterSpawn(UObject* source, AEmitter* emitter);
+    void OnLocalNativeAudioCreated(UObject* source, UObject* context, UAudioComponent* component);
+    void OnLocalNativeWeaponSound(UObject* source, UObject* context, USoundCue* cue);
+	void OnLocalNativeDecalSpawn(UObject* source, const ADecalManager_execSpawnDecal_Params& params);
+	void OnLocalWeaponProjectileSpawn(AAliceGameProjectile* projectile,
 		const FVector& direction);
+	void OnLocalWeaponProjectilePending(AAliceGameProjectile* projectile);
+	void OnLocalWeaponProjectileEnd(AAliceGameProjectile* projectile,
+		const FVector* hitLocation, const FVector* hitNormal);
 	void OnLocalClockBombSpawn(AAliceClonePawn* bomb);
 	void OnLocalClockBombDetonate(AAliceClonePawn* bomb);
 	void OnLocalClockBombDestroyed(AAliceClonePawn* bomb);

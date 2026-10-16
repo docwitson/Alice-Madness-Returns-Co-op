@@ -1,0 +1,6 @@
+#define ALICECOOP_FILE_TYPE VFT_APP
+#define ALICECOOP_FILE_DESCRIPTION "Alice Co-op UDP Relay Server"
+#define ALICECOOP_INTERNAL_NAME "AliceCoopServer"
+#define ALICECOOP_ORIGINAL_FILENAME "AliceCoopServer.exe"
+#define ALICECOOP_COPYRIGHT "Copyright (c) Docwitson and Alice Co-op contributors"
+#include "../src/Coop/VersionInfo.rcinc"

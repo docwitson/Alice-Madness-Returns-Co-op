@@ -5,6 +5,15 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>AliceCoopLauncher</AssemblyName>
     <RootNamespace>AliceCoopLauncher</RootNamespace>
+    <Version>0.1.0-alpha.3</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.3</FileVersion>
+    <Product>Alice Co-op Launcher</Product>
+    <Title>Alice Co-op Launcher</Title>
+    <AssemblyTitle>Alice Co-op Launcher</AssemblyTitle>
+    <Description>Experimental two-player co-op launcher for Alice: Madness Returns</Description>
+    <Company>Docwitson</Company>
+    <Copyright>Copyright (c) Docwitson</Copyright>
     <LangVersion>latest</LangVersion>
     <Platforms>AnyCPU</Platforms>
     <Prefer32Bit>false</Prefer32Bit>

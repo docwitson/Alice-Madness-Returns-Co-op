@@ -1,4 +1,3 @@
-		constexpr bool PepperProjectileReplicationEnabled = false;
 
 		enum class HairRotationCandidate : std::uint8_t
 		{
@@ -55,6 +54,8 @@
 			bool backgroundWindowDamageGuard = false;
 			bool hairTuningEnabled = false;
 			bool disableProxyCollision = true;
+			bool nativeClothSimulation = true;
+			bool nativeHairSimulation = true;
 			bool forceWindowed = false;
 			bool manageWindowGeometry = false;
 			bool borderlessWindow = false;
@@ -167,6 +168,7 @@
 
 		struct ClientSaveTransfer
 		{
+            bool sessionOnly = false;
 			bool active = false;
 			std::uint32_t transferId = 0;
 			std::array<SaveTransferFile, SaveSyncFileCount> files{};
@@ -184,6 +186,17 @@
 		HostSaveTransfer g_hostSaveTransfer;
 		ClientSaveTransfer g_clientSaveTransfer;
 		std::atomic_uint32_t g_requestedSaveTransferId{ 0 };
+        std::atomic_uint32_t g_requestedSavePurpose{ SaveRequestReplaceProfile };
+        std::atomic_uint32_t g_joinSessionReady{ 0 };
+        std::atomic_bool g_sessionReadHookReady{ false }, g_sessionReadActive{ false };
+        std::atomic_bool g_sessionPersistentReadObserved{ false };
+        bool g_joinSessionPersistentLoadQueued = false;
+        std::array<std::filesystem::path, SaveSyncFileCount> g_sessionOriginalPaths{};
+        std::filesystem::path g_sessionSaveDirectory;
+        std::string g_sessionExpectedMap;
+        std::uint32_t g_joinSessionTransferId = 0, g_joinSessionHostEpoch = 0;
+        std::string g_joinSessionHostMap;
+
 		std::atomic_bool g_saveSyncInProgress{ false };
 		std::atomic_int g_saveSyncProgress{ 0 };
 		std::mutex g_saveSyncStatusMutex;
@@ -236,9 +249,11 @@
 
 		AAlicePawn* g_remotePawn = nullptr;
 		AController* g_remoteController = nullptr;
+		AController* g_remoteClothController = nullptr;
 		AWorldInfo* g_remoteWorld = nullptr;
 		ASkeletalMeshActor* g_remoteHairProxy = nullptr;
 		UHairComponent* g_remoteIndependentHair = nullptr;
+		bool g_remoteNativeHairActive = false;
 		float g_remoteHairProxyBaseDrawScale = 1.0f;
 		float g_remoteHairSkeletalBaseScale = 1.0f;
 		float g_remoteIndependentHairBaseScale = 1.0f;
@@ -324,26 +339,25 @@
 		{
 			std::uint32_t projectileId = 0;
 			UParticleSystemComponent* particle = nullptr;
-			ADynamicSMActor_Spawnable* marker = nullptr;
+			UParticleSystem* particleTemplate = nullptr;
 			FVector location = FVector(0.0f, 0.0f, 0.0f);
 			FVector velocity = FVector(0.0f, 0.0f, 0.0f);
 			FRotator rotation = FRotator(0, 0, 0);
 			float scale = 1.0f;
-			std::uint8_t hypothesis = 1;
+			std::uint32_t lastEventSerial = 0;
 			Clock::time_point lastTick{};
 			Clock::time_point expiresAt{};
 		};
 		struct RemoteClockBombVisual
 		{
 			std::uint32_t projectileId = 0;
+			std::uint32_t materialHashes[ClockBombMaterialSlots]{};
 			ASkeletalMeshActorSpawnable* actor = nullptr;
 			FVector targetLocation = FVector(0.0f, 0.0f, 0.0f);
 			FVector velocity = FVector(0.0f, 0.0f, 0.0f);
 			FRotator targetRotation = FRotator(0, 0, 0);
 			std::uint8_t cloneState = 0;
-			std::uint8_t lastForcedCloneState = 255;
 			std::uint8_t hypothesis = 1;
-			std::uint16_t animationNodeCount = 0;
 			Clock::time_point lastTick{};
 			Clock::time_point lastUpdate{};
 			Clock::time_point spawnedAt{};
@@ -353,20 +367,38 @@
 			g_remoteClockBombVisuals;
 		std::atomic_uint32_t g_localProjectileSerial = 1;
 		std::atomic_uint32_t g_localProjectileId = 1;
-		std::unordered_map<
-			APepperGrinderPrimaryProjectile*, Clock::time_point>
-			g_recentLocalPepperProjectiles;
-		UParticleSystem* g_pepperFlightTemplate = nullptr;
-		UStaticMesh* g_pepperMarkerMesh = nullptr;
+		struct LocalWeaponProjectileTrack
+		{
+			std::uint32_t projectileId = 0;
+			int32_t objectIndex = -1;
+			ProjectileEventPayload spawn{};
+			Clock::time_point nextUpdate{};
+			Clock::time_point expiresAt{};
+		};
+		std::unordered_map<AAliceGameProjectile*, LocalWeaponProjectileTrack>
+			g_localWeaponProjectiles;
+		std::unordered_map<AAliceGameProjectile*, int32_t> g_pendingWeaponProjectiles;
+		std::unordered_map<std::uint32_t, UParticleSystem*>
+			g_projectileParticleTemplates;
+		std::unordered_map<std::uint32_t, Clock::time_point>
+			g_completedRemoteProjectiles;
 		UParticleSystem* g_clockBombExplosionTemplate = nullptr;
 		USkeletalMeshComponent* g_clockBombMeshTemplate = nullptr;
 		int g_pepperProjectileHypothesis = 2;
 		int g_clockBombHypothesis = 3;
-		constexpr float ClockBombZOffset = -138.0f;
+		constexpr float ClockBombZOffset = 0.0f;
+		bool g_remoteMaterialsIsolated = false;
 		bool g_devForceProxyHidden = false;
 		Clock::time_point g_devDodgeHideUntil{};
 		Clock::time_point g_devMuzzleUntil{};
 		Clock::time_point g_devGlideUntil{};
+		thread_local unsigned g_remoteParticleReplayDepth = 0;
+		struct RemoteParticleReplayScope
+		{
+			RemoteParticleReplayScope() { ++g_remoteParticleReplayDepth; }
+			~RemoteParticleReplayScope() { --g_remoteParticleReplayDepth; }
+		};
+		AAliceDodgeParticleTrace* g_remoteNativeDodgeEmitter = nullptr;
 		UParticleSystem* g_remoteDodgeParticleTemplate = nullptr;
 		Clock::time_point g_remoteDodgeParticleUntil{};
 		Clock::time_point g_nextRemoteDodgeParticle{};
@@ -385,8 +417,6 @@
 		LONG g_sharedDevCommandRevision = 0;
 		bool g_applyingSharedDevCommand = false;
 		float g_remoteWeaponBaseDrawScale = 1.0f;
-		std::unordered_map<std::uint64_t, Clock::time_point>
-			g_recentRemoteVisualNotifies;
 		struct VisualNotifyCursor
 		{
 			UAnimNodeSequence* node = nullptr;
@@ -431,7 +461,23 @@
 			std::uint32_t sample = 0;
 			bool retired = false;
 		};
-		VisualNotifyCursor g_remoteFullBodyNotifyCursor;
+		struct ActiveVisualTrail
+		{
+			UAnimNotify_Trails* notify = nullptr;
+			float startTime = 0.0f;
+			float endTime = 0.0f;
+			float previousTime = 0.0f;
+		};
+		struct VisualNotifyChannel
+		{
+			VisualNotifyCursor cursor{};
+			std::uint32_t actionSerial = 0;
+			std::vector<ActiveVisualTrail> trails;
+		};
+		std::array<VisualNotifyChannel, 4> g_remoteVisualNotifyChannels;
+		UAnimNodeSequence* g_remoteAppliedUpperBodyNode = nullptr;
+		UAnimNodeSequence* g_remoteAppliedHalfBodyNode = nullptr;
+		UAnimNodeSequence* g_remoteAppliedWeaponNode = nullptr;
 		std::vector<TrackedPresentationParticle>
 			g_remoteWeaponTransientParticles;
 		std::vector<RetiredPresentationParticle>
@@ -447,6 +493,8 @@
 		bool g_remoteShrinkApplied = false;
 		bool g_remoteHidden = false;
 		bool g_remoteRenderDetached = false;
+        bool g_remoteClothNeedsReset = false;
+        Clock::time_point g_remoteClothRecoveryAt{};
 		bool g_loggedPostTickPresentation = false;
 		bool g_loggedPostEngineSkeletonRefresh = false;
 		bool g_loggedPresentedCosmetics = false;
@@ -503,14 +551,13 @@
 		};
 		PresentationAnimChannel g_remoteFullBodyChannel;
 		PresentationAnimChannel g_remoteUpperAdditiveChannel;
+		PresentationAnimChannel g_remoteHalfBodyChannel;
 		std::unordered_set<std::string> g_loggedAnimationStageFailures;
 		std::unordered_set<std::string> g_loggedAnimationStageSuccesses;
 		std::unordered_set<std::string> g_loggedConfigAnimationStages;
 		std::unordered_map<std::string, int> g_animationStagePoseSamples;
 		std::unordered_set<std::string>
 			g_loggedWeaponHierarchySignatures;
-		std::unordered_set<const UAnimSequence*>
-			g_loggedNotifyInventories;
 		bool g_loggedLocalMirrorBinding = false;
 		bool g_loggedLocalMirrorIncompatibility = false;
 		std::uint32_t g_lastRemoteActionSerial = 0;
@@ -688,6 +735,7 @@
 		bool g_hostReturnToMenuIssued = false;
 		Clock::time_point g_groupDeathSuppressUntil{};
 		bool g_joinHostPending = false;
+        bool g_joinArrivalRequested = false;
 		std::string g_joinHostStatus;
 		std::string g_joinHostEligibilityMap;
 		std::uint32_t g_joinHostEligibilityEpoch = 0;

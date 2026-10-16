@@ -2,6 +2,12 @@
 
 This page describes alpha limitations that are not necessarily regressions.
 
+Alpha.2 received extensive playtesting. Alpha.3 mainly updates visuals, animation,
+audio and UI and has had more limited testing. Enemy synchronization and
+interaction logic were not intentionally changed, but regressions remain possible.
+The previous Alpha.2 release remains available; both games and the relay must
+use that version if rolling back.
+
 ## Scripted encounters and bosses
 
 Boss phases, miniboss introductions and scripted waves can advance at different
@@ -10,7 +16,7 @@ other is already waiting in a cutscene:
 
 1. bring both players to the same area with `P` or client `O`;
 2. wait a few seconds for host enemy state reconciliation;
-3. use the yellow `L` force action only if both players are stuck;
+3. use the `L` force action only if both players are stuck;
 4. restart the checkpoint if the encounter still cannot progress.
 
 ## Interactions and world mechanisms
@@ -28,26 +34,30 @@ the wrong costume.
 
 ## Visual proxy
 
-- The remote dress is rigid instead of fully simulated cloth.
-- Remote hair uses an independent approximation and has limited collision.
-- Upper-body aiming and some weapon transitions do not exactly match the owner.
-- Particles are presentation-only and may be simplified.
-- Hat-bomb rabbit and some projectile visuals are incomplete.
+- Native remote cloth/hair simulation is enabled. Long cinematic sequences and
+  map transitions can still expose presentation differences.
+- Upper-body aiming, native attack blending, rabbit reveal and projectile impact
+  effects are implemented; some presentation differences may remain.
+- A transient T-pose was reported during a Cardbridge join but could not be
+  reproduced in subsequent tests. No speculative animation change is included.
+- Remote particles are presentation-only; world/script state can still differ.
+- Partner weapon audio is spatial. Unsupported sound argument expressions or
+  cues absent from the client's loaded assets can leave some events silent.
 
 The VFX guard bounds native proxy glide effects and clears orphan emitters on
 map/proxy transitions. Optional frozen movement trails have a separate bounded
-pool and can be disabled from the pause overlay with `T`.
+pool and can be disabled from the native pause panel with `T`.
 
 ## Joining and teleporting
 
-Joining loads the host chapter/checkpoint but intentionally does not teleport
-during the initial world construction. Wait until the client can move, then use:
+Join loads the host's saved subarea/checkpoint through native Continue using
+an isolated copy of the host session data. The client's selected profile is
+preserved. The host must enter a level before Join becomes available.
 
-- `P` when both players are on the same map and reasonably close;
-- client `O` for emergency long-distance teleport.
-
-Using `O` while a level or cinematic is still loading can place Alice in an
-invalid location. Reload the checkpoint if that happens.
+`P` goes to the partner (to the host on a client). Client `O` retries a distant
+rendezvous and host `O` summons the client. Host-visible sublevels are prepared
+before arrival; airborne destinations are supported. A timeout leaves a retry
+hint. If streaming or scripts still fail to settle, reload the checkpoint.
 
 ## Profiles and progression
 

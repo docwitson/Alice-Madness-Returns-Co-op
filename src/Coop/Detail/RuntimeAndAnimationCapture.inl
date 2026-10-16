@@ -107,10 +107,12 @@
 
 			g_remotePawn = nullptr;
 			g_remoteController = nullptr;
+			g_remoteClothController = nullptr;
 			g_remoteWorld = nullptr;
 			g_retiredRemotePawns.clear();
 			g_remoteHairProxy = nullptr;
 			g_remoteIndependentHair = nullptr;
+			g_remoteNativeHairActive = false;
 			g_remoteHairBindTemplate = nullptr;
 			g_remoteHairRotatedTemplate = nullptr;
 			g_remoteHairTuningTemplate = nullptr;
@@ -180,15 +182,17 @@
 			g_nextRemoteAnimationCompareSample = {};
 			ResetPresentationAnimChannel(g_remoteFullBodyChannel);
 			ResetPresentationAnimChannel(g_remoteUpperAdditiveChannel);
-			g_remoteFullBodyNotifyCursor = {};
-			g_recentRemoteVisualNotifies.clear();
+			g_remoteVisualNotifyChannels = {};
+			g_remoteAppliedUpperBodyNode = nullptr;
+			g_remoteAppliedWeaponNode = nullptr;
 
 			g_localClockBomb = {};
-			g_recentLocalPepperProjectiles.clear();
+			g_localWeaponProjectiles.clear();
+			g_pendingWeaponProjectiles.clear();
+			g_projectileParticleTemplates.clear();
+			g_completedRemoteProjectiles.clear();
 			g_remotePepperVisuals.clear();
 			g_remoteClockBombVisuals.clear();
-			g_pepperFlightTemplate = nullptr;
-			g_pepperMarkerMesh = nullptr;
 			g_clockBombExplosionTemplate = nullptr;
 			g_clockBombMeshTemplate = nullptr;
 		}
@@ -591,6 +595,12 @@
 				g_config.sharedEnemyTransforms = false;
 			}
 			g_config.disableProxyCollision = ReadIniInt(iniPath, L"VisualProxy", L"DisableCollision", 1) == 1;
+			g_config.nativeClothSimulation = EnvironmentInt(
+				L"ALICECOOP_NATIVE_CLOTH",
+				ReadIniInt(iniPath, L"VisualProxy", L"NativeClothSimulation", 1)) == 1;
+			g_config.nativeHairSimulation = EnvironmentInt(
+				L"ALICECOOP_NATIVE_HAIR",
+				ReadIniInt(iniPath, L"VisualProxy", L"NativeHairSimulation", 1)) == 1;
 			g_config.interpolationSpeed = static_cast<float>(ReadIniInt(
 				iniPath, L"VisualProxy", L"InterpolationSpeed", 18));
 			g_config.localMirrorDistance = static_cast<float>(std::clamp(
@@ -801,12 +811,14 @@
 		struct AnimationSequenceCandidate
 		{
 			AnimationSequencePayload payload{};
+			UAnimNodeSequence* node = nullptr;
 			float priority = 0.0f;
 		};
 
 		struct AnimationBlendCandidate
 		{
 			AnimationBlendPayload payload{};
+			UAnimNode* node = nullptr;
 			float priority = 0.0f;
 		};
 
@@ -819,11 +831,49 @@
 			if (!component)
 				return;
 
-			const int32_t nodeCount =
-				std::min<int32_t>(component->AnimTickArray.size(), 65535);
-			for (int32_t index = 0; index < nodeCount; ++index)
+			const int32_t tickNodeCount = std::min<int32_t>(component->AnimTickArray.size(), 65535);
+			std::vector<UAnimNode*> captureNodes;
+			for (int32_t index = 0; index < tickNodeCount; ++index)
+				captureNodes.push_back(component->AnimTickArray.at(index));
+			std::unordered_set<UAnimNode*> activeSlotNodes;
+			std::unordered_set<UAnimNode*> fullBodySlotPoses;
+			if (componentId == AnimationComponent::Body && component->Owner
+				&& component->Owner->IsA(AAliceGamePawn::StaticClass()))
 			{
-				UAnimNode* node = component->AnimTickArray.at(index);
+				auto* pawn = reinterpret_cast<AAliceGamePawn*>(component->Owner);
+				for (int i = 0; i < (std::min)(pawn->AnimBlendNodes.size(), 6); ++i)
+				{
+					auto* node = pawn->AnimBlendNodes.at(i);
+					if (!node || !node->IsA(UAliceGameAnimNode_BlendBySlot::StaticClass())) continue;
+					auto* slot = reinterpret_cast<UAliceGameAnimNode_BlendBySlot*>(node);
+					if (i == 0)
+					{
+						// Native blending still evaluates stopped outgoing children.
+						// AnimTickArray/bPlaying alone lose exactly those terminal poses.
+						for (int childIndex = 1; childIndex < slot->Children.size(); ++childIndex)
+						{
+							const auto& child = slot->Children.at(childIndex);
+							if (!child.Anim || !(child.Weight > 0.001f
+								|| (slot->bIsPlayingCustomAnim && slot->ActiveChildIndex == childIndex))) continue;
+							fullBodySlotPoses.insert(child.Anim);
+							if (std::find(captureNodes.begin(), captureNodes.end(), child.Anim) == captureNodes.end())
+								captureNodes.push_back(child.Anim);
+						}
+					}
+					if (!slot->bIsPlayingCustomAnim || slot->ActiveChildIndex <= 0
+						|| slot->ActiveChildIndex >= slot->Children.size()) continue;
+					if (std::find(captureNodes.begin(), captureNodes.end(), node) == captureNodes.end())
+						captureNodes.push_back(node);
+					UAnimNode* child = slot->Children.at(slot->ActiveChildIndex).Anim;
+					if (!child) continue;
+					activeSlotNodes.insert(child);
+					if (std::find(captureNodes.begin(), captureNodes.end(), child) == captureNodes.end())
+						captureNodes.push_back(child);
+				}
+			}
+			for (int32_t index = 0; index < static_cast<int32_t>(captureNodes.size()); ++index)
+			{
+				UAnimNode* node = captureNodes[index];
 				if (!node)
 					continue;
 				const bool relevant = node->bRelevant
@@ -833,7 +883,8 @@
 				if (node->IsA(UAnimNodeSequence::StaticClass()))
 				{
 					auto* sequence = reinterpret_cast<UAnimNodeSequence*>(node);
-					if (!relevant || !sequence->bPlaying
+					if ((!relevant && !activeSlotNodes.contains(node) && !fullBodySlotPoses.contains(node))
+						|| (!sequence->bPlaying && !fullBodySlotPoses.contains(node))
 						|| !sequence->AnimSeqName.IsValid())
 					{
 						continue;
@@ -844,6 +895,7 @@
 					const bool custom = IsCustomAnimationBranch(node);
 					const bool action = IsActionAnimationName(sequenceName);
 					AnimationSequenceCandidate candidate{};
+					candidate.node = sequence;
 					strncpy_s(candidate.payload.sequenceName,
 						sequenceName.c_str(), _TRUNCATE);
 					candidate.payload.position =
@@ -851,13 +903,20 @@
 						? (sequence->CurrentTime > 0.0f
 							? sequence->CurrentTime : 0.0f)
 						: 0.0f;
-					candidate.payload.rate =
-						std::isfinite(sequence->Rate)
-						&& std::fabs(sequence->Rate) > 0.001f
-						? sequence->Rate
-						: 1.0f;
-					candidate.payload.nodeIndex =
-						static_cast<std::uint16_t>(index);
+					// Wire rate is animation seconds per game second, including
+					// the native mesh/asset multipliers (e.g. fast combo clips).
+					const float effectiveRate = sequence->bPlaying ? sequence->Rate * component->GlobalAnimRateScale
+						* (sequence->AnimSeq ? sequence->AnimSeq->RateScale : 1.0f) : 0.0f;
+					candidate.payload.rate = std::isfinite(effectiveRate) ? effectiveRate : 1.0f;
+					std::uint8_t translation[3]{}, rotation[3]{};
+					for (int axis = 0; axis < 3; ++axis)
+					{
+						translation[axis] = static_cast<std::uint8_t>(sequence->RootBoneOption[axis]);
+						rotation[axis] = static_cast<std::uint8_t>(sequence->RootRotationOption[axis]);
+					}
+					candidate.payload.rootBoneOptions = PackAnimationRootOptions(translation, rotation,
+						sequence->bZeroRootTranslation, sequence->bZeroRootRotation);
+					if (!sequence->bPlaying) candidate.payload.rootBoneOptions |= AnimationPoseStopped;
 					candidate.payload.component = componentId;
 					candidate.payload.nodeWeight =
 						std::isfinite(node->NodeTotalWeight)
@@ -909,8 +968,9 @@
 					? node->NodeName.ToString()
 					: std::string();
 				AnimationBlendCandidate candidate{};
+				candidate.node = node;
 				candidate.payload.nodeIndex =
-					static_cast<std::uint16_t>(index);
+					static_cast<std::uint16_t>(index < tickNodeCount ? index : 65535);
 				candidate.payload.activeChildIndex = activeChild;
 				candidate.payload.component = componentId;
 				candidate.payload.nodeWeight =
@@ -930,6 +990,167 @@
 					+ candidate.payload.nodeWeight * 100.0f;
 				blends.push_back(candidate);
 			}
+		}
+
+
+		bool FindAuthoredAnimationBlend(UObject* owner, const FName& animation, int slotIndex,
+			float& blendIn, float& blendOut)
+		{
+			if (!owner || !owner->Class || !animation.IsValid()) return false;
+			for (auto* type = static_cast<UStruct*>(owner->Class); type;
+				type = reinterpret_cast<UStruct*>(type->SuperField))
+			{
+				for (auto* field = type->Children; field; field = field->Next)
+				{
+					if (!field->IsA(UStructProperty::StaticClass())) continue;
+					auto* property = reinterpret_cast<UStructProperty*>(field);
+					if (!property->Struct || property->Struct->GetName() != "AnimationParaConfig"
+						|| property->ElementSize != sizeof(FAnimationParaConfig)
+						|| property->ArrayDim != 1 || property->Offset < 0
+						|| property->Offset + property->ElementSize > owner->Class->PropertySize) continue;
+					auto* config = reinterpret_cast<const FAnimationParaConfig*>(
+						reinterpret_cast<const std::uint8_t*>(owner) + property->Offset);
+					if (config->BlendNodeIndex != slotIndex) continue;
+					for (int i = 0; i < (std::min)(config->AnimationNames.size(), 64); ++i)
+					{
+						const std::string name = config->AnimationNames.at(i).ToString();
+						const std::string actual = animation.ToString();
+						if (_stricmp(name.c_str(), actual.c_str()) != 0
+							&& !(actual.rfind("ADD_", 0) == 0 && _stricmp(name.c_str(), actual.c_str() + 4) == 0)) continue;
+						blendIn = config->BlendInTime; blendOut = config->BlendOutTime;
+						return std::isfinite(blendIn) && std::isfinite(blendOut) && blendIn >= 0 && blendOut >= 0;
+					}
+				}
+			}
+			return false;
+		}
+
+		void CaptureNativeSlotMetadata(AAlicePawn* pawn, AnimationGraphPayload& graph,
+			std::vector<AnimationSequenceCandidate>& sequences,
+			std::vector<AnimationBlendCandidate>& blends)
+		{
+			if (!pawn || !pawn->Mesh) return;
+			const int perBoneIndex = static_cast<int>(EAnimBlendNodeIndex::EABLIdx_PerBone_BlendUpperLower_Main);
+			if (perBoneIndex < pawn->AnimBlendNodes.size())
+			{
+				auto* node = pawn->AnimBlendNodes.at(perBoneIndex);
+				if (node && node->IsA(UAliceGameAnimNode_BlendPerBone::StaticClass()))
+				{
+					auto* perBone = reinterpret_cast<UAliceGameAnimNode_BlendPerBone*>(node);
+					const float weight = perBone->Child2WeightTarget;
+					graph.upperLowerBlendTicks = static_cast<std::uint8_t>(std::isfinite(perBone->BlendTimeToGo)
+						? std::clamp(perBone->BlendTimeToGo * 500.0f, 0.0f, 255.0f) : 0.0f);
+					if (std::isfinite(weight))
+					{
+						graph.upperLowerWeight = static_cast<std::uint16_t>(std::clamp(weight, 0.0f, 1.0f) * 65535.0f);
+						graph.authoredBlendMask |= 0x80;
+					}
+				}
+			}
+			for (int slotIndex = 0; slotIndex < (std::min)(pawn->AnimBlendNodes.size(), 6); ++slotIndex)
+			{
+				auto* node = pawn->AnimBlendNodes.at(slotIndex);
+				if (!node || !node->IsA(UAliceGameAnimNode_BlendBySlot::StaticClass())) continue;
+				auto* slot = reinterpret_cast<UAliceGameAnimNode_BlendBySlot*>(node);
+				const auto tag = static_cast<std::uint8_t>((slotIndex + 1) << 5);
+				for (auto& blend : blends)
+					if (blend.payload.component == AnimationComponent::Body
+						&& blend.node == node)
+					{
+						blend.payload.flags |= tag;
+						const auto timing = slotIndex == 0
+							? NativeFullBodyTimingFlags(slot->BlendTimeToGo, slot->CurrentPendingBlendOutTime) : 0;
+						if (timing)
+						{
+							blend.payload.flags |= timing;
+							blend.payload.nodeIndex = static_cast<std::uint16_t>(std::clamp(
+								slot->BlendTimeToGo * 500.0f, 0.0f, 65535.0f));
+						}
+						blend.priority += 5000.0f;
+					}
+				for (auto& sequence : sequences)
+				{
+					if (sequence.payload.component != AnimationComponent::Body) continue;
+					auto* sequenceNode = sequence.node;
+					for (int child = 1; child < slot->Children.size(); ++child)
+						if (slot->Children.at(child).Anim == sequenceNode)
+						{
+							sequence.payload.flags |= tag;
+							if (slotIndex == 0 && slot->Children.at(child).Weight > 0.001f)
+								sequence.priority += 4000.0f;
+							if (slot->ActiveChildIndex == child)
+							{
+								sequence.payload.flags |= AnimationSequenceSlotActive;
+								sequence.priority += 5000.0f;
+							}
+						}
+				}
+				if (slotIndex != 0 && slotIndex != 1 && slotIndex != 3) continue;
+				float blendIn = 0.0f, blendOut = slot->CurrentPendingBlendOutTime;
+				bool authored = false;
+				if (slot->ActiveChildIndex > 0 && slot->ActiveChildIndex < slot->Children.size())
+				{
+					auto* child = slot->Children.at(slot->ActiveChildIndex).Anim;
+					if (child && child->IsA(UAnimNodeSequence::StaticClass()))
+					{
+						auto* sequence = reinterpret_cast<UAnimNodeSequence*>(child);
+						const int move = static_cast<int>(pawn->SpecialMove);
+						authored = move >= 0 && move < pawn->SpecialMoves.size()
+							&& FindAuthoredAnimationBlend(pawn->SpecialMoves.at(move), sequence->AnimSeqName, slotIndex, blendIn, blendOut);
+						if (!authored) authored = FindAuthoredAnimationBlend(pawn, sequence->AnimSeqName, slotIndex, blendIn, blendOut);
+					}
+					if (!authored && slot->BlendTimeToGo > 0.0f)
+					{
+						const float remainingWeight = 1.0f - slot->Children.at(slot->ActiveChildIndex).Weight;
+						if (remainingWeight > 0.001f) blendIn = slot->BlendTimeToGo / remainingWeight;
+					}
+				}
+				if (!authored && slotIndex != 0) blendIn = (std::max)(blendIn, blendOut);
+				// Native zero and negative pending-out both disable automatic release.
+				// The negative sentinel is carried separately from the unsigned duration.
+				if (slotIndex == 0 && std::isfinite(slot->CurrentPendingBlendOutTime))
+					blendOut = slot->CurrentPendingBlendOutTime;
+				auto ticks = [](float duration) { return static_cast<std::uint8_t>(std::isfinite(duration)
+					? std::clamp(duration * 500.0f, 0.0f, 255.0f) : 0.0f); };
+				if (authored) graph.authoredBlendMask |= static_cast<std::uint8_t>(1u << slotIndex);
+				if (slotIndex == 0) { graph.fullBodyBlendTicks = ticks(blendIn); graph.fullBodyBlendOutTicks = ticks(blendOut); }
+				if (slotIndex == 1) { graph.halfBodyBlendTicks = ticks(blendIn); graph.halfBodyBlendOutTicks = ticks(blendOut); }
+				if (slotIndex == 3) { graph.upperBlendTicks = ticks(blendIn); graph.upperBlendOutTicks = ticks(blendOut); }
+			}
+		}
+
+		void TraceNativeFullBodyTransition(AAlicePawn* pawn, const AnimationGraphPayload& graph, bool source)
+		{
+			if (!g_config.animationLifecycleTrace && !g_config.animationComparisonTrace) return;
+			if (!pawn || pawn->AnimBlendNodes.size() == 0) return;
+			auto* node = pawn->AnimBlendNodes.at(0);
+			if (!node || !node->IsA(UAliceGameAnimNode_BlendBySlot::StaticClass())) return;
+			auto* slot = reinterpret_cast<UAliceGameAnimNode_BlendBySlot*>(node);
+			std::ostringstream signature, details;
+			signature << pawn << ':' << slot->ActiveChildIndex << ':' << slot->CurrentDynamicAnimIndex
+				<< ':' << slot->bIsPlayingCustomAnim;
+			details << std::fixed << std::setprecision(4) << "ANIMSTATE " << (source ? "TX" : "RX")
+				<< " frame=" << graph.frameNumber << ", active=" << slot->ActiveChildIndex
+				<< ", dynamic=" << slot->CurrentDynamicAnimIndex << ", custom=" << slot->bIsPlayingCustomAnim
+				<< ", remaining=" << slot->BlendTimeToGo << ", pendingOut=" << slot->CurrentPendingBlendOutTime;
+			for (int i = 0; i < slot->Children.size(); ++i)
+			{
+				const auto& child = slot->Children.at(i);
+				if (i == 0) { details << ", baseWeight=" << child.Weight; continue; }
+				if (!child.Anim || (child.Weight <= 0.001f && i != slot->ActiveChildIndex)
+					|| !child.Anim->IsA(UAnimNodeSequence::StaticClass())) continue;
+				auto* sequence = reinterpret_cast<UAnimNodeSequence*>(child.Anim);
+				const auto name = sequence->AnimSeqName.IsValid() ? sequence->AnimSeqName.ToString() : "<none>";
+				signature << '|' << i << ':' << name << ':' << sequence->bPlaying;
+				details << ", child" << i << "={" << name << ";w=" << child.Weight
+					<< ";t=" << sequence->CurrentTime << ";rate=" << sequence->Rate
+					<< ";playing=" << sequence->bPlaying << '}';
+			}
+			static std::string lastSource, lastRemote;
+			auto& last = source ? lastSource : lastRemote;
+			if (last == signature.str()) return;
+			last = signature.str();
+			Log(details.str());
 		}
 
 		AnimationGraphPayload CaptureAnimationGraph(
@@ -954,6 +1175,7 @@
 				CaptureAnimationComponent(pawn->Weapon
 						? pawn->Weapon->Mesh : nullptr,
 					AnimationComponent::Weapon, sequences, blends);
+				CaptureNativeSlotMetadata(pawn, graph, sequences, blends);
 			}
 
 			std::stable_sort(sequences.begin(), sequences.end(),
@@ -984,6 +1206,7 @@
 			{
 				graph.blends[index] = blends[index].payload;
 			}
+			TraceNativeFullBodyTransition(pawn, graph, true);
 			return graph;
 		}
 
@@ -1027,12 +1250,12 @@
 					continue;
 				const std::string name(sequence.sequenceName);
 				signature << static_cast<int>(sequence.component) << ':'
-					<< sequence.nodeIndex << ':' << name << ':'
+					<< sequence.rootBoneOptions << ':' << name << ':'
 					<< static_cast<int>(sequence.flags) << '|';
 				if (wroteDetails)
 					details << ';';
 				details << AnimationComponentLabel(sequence.component)
-					<< '[' << sequence.nodeIndex << "]=" << name
+					<< '[' << sequence.rootBoneOptions << "]=" << name
 					<< "@" << sequence.position
 					<< "x" << sequence.rate
 					<< "w" << sequence.nodeWeight

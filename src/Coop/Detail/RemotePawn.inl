@@ -119,6 +119,105 @@
 			Log(stream.str());
 		}
 
+		bool AttachRemoteClothController(AAlicePawn* remote)
+		{
+			if (!remote || !remote->WorldInfo || !remote->WorldInfo->Game)
+				return false;
+			if (remote->Controller)
+				return true;
+
+			// Native cloth (00ba07e0) and hair (00ba0210) only simulate a
+			// Pawn when its Controller is non-null (Current build, Pawn+0x238).
+			// Supply an independent, dormant service. Possess would execute
+			// Alice gameplay/AI initialization; these links are all the cloth
+			// gate needs, and network presentation remains the movement owner.
+			UClass* controllerClass = AAIController::StaticClass();
+			AActor* actor = controllerClass ? NativeSpawn(
+				remote->WorldInfo->Game, controllerClass, nullptr, FName(),
+				remote->Location, remote->Rotation, nullptr, true) : nullptr;
+			if (!actor)
+			{
+				controllerClass = AAliceGameCloneAliceAIController::StaticClass();
+				if (controllerClass)
+					actor = NativeSpawn(remote->WorldInfo->Game,
+						controllerClass, nullptr, FName(), remote->Location,
+						remote->Rotation, nullptr, true);
+			}
+			if (!actor)
+			{
+				Log("WARN: Native proxy cloth has no service controller; "
+					"the engine will skip its simulation.");
+				return false;
+			}
+			auto* controller = reinterpret_cast<AAIController*>(actor);
+			static UFunction* disableTick = nullptr;
+			if (!disableTick)
+				disableTick = UFunction::FindFunction(
+					"Function Engine.Actor.SetTickIsDisabled");
+			AActor_execSetTickIsDisabled_Params parameters{};
+			parameters.bInDisabled = true;
+			if (!InvokeNativeFunction(controller, disableTick, parameters)
+				|| !controller->bTickIsDisabled)
+			{
+				NativeDestroyActor(controller);
+				Log("WARN: Could not disable cloth service AI; controller discarded.");
+				return false;
+			}
+			controller->bIsPlayer = false;
+			controller->Pawn = remote;
+			remote->Controller = controller;
+			g_remoteClothController = controller;
+			Log("COSMETICSTAGE native cloth service controller attached: "
+				+ ObjectName(controller) + ", AI tick disabled.");
+			return true;
+		}
+
+		bool IsolateRemotePresentationMaterials(AAlicePawn* remote)
+		{
+			if (!remote) return false;
+			std::unordered_map<UMaterialInterface*, UMaterialInterface*> copies;
+			bool complete = true;
+			auto independent = [&](UMaterialInterface* material) -> UMaterialInterface*
+			{
+				if (!material || !material->IsA(UMaterialInstance::StaticClass())) return material;
+				if (auto found = copies.find(material); found != copies.end()) return found->second;
+				UMaterialInstance_execDuplicateInstance_Params params{};
+				InvokeNativeFunction(material, UFunction::FindFunction("Function Engine.MaterialInstance.DuplicateInstance"), params);
+				UMaterialInterface* copy = params.ReturnValue;
+				if (!copy || copy == material) { complete = false; copy = material; }
+				copies.emplace(material, copy);
+				return copy;
+			};
+			std::unordered_set<UMeshComponent*> meshes;
+			for (int32_t i = 0; i < remote->AllComponents.size(); ++i)
+			{
+				UActorComponent* component = remote->AllComponents.at(i);
+				if (component && component->IsA(UMeshComponent::StaticClass()))
+					meshes.insert(reinterpret_cast<UMeshComponent*>(component));
+			}
+			for (UMeshComponent* component : { static_cast<UMeshComponent*>(remote->Mesh),
+				static_cast<UMeshComponent*>(remote->UpperBodyComponent),
+				static_cast<UMeshComponent*>(remote->SkirtComponent),
+				static_cast<UMeshComponent*>(remote->BowComponent),
+				static_cast<UMeshComponent*>(remote->RibbonComponent),
+				static_cast<UMeshComponent*>(remote->EarComponent) })
+				if (component) meshes.insert(component);
+			for (UMeshComponent* component : meshes)
+				for (int32_t index = 0; index < component->Materials.size(); ++index)
+				{
+					UMeshComponent_execSetMaterial_Params params{};
+					params.ElementIndex = index;
+					params.Material = independent(component->Materials.at(index));
+					InvokeNativeFunction(component, UFunction::FindFunction("Function Engine.MeshComponent.SetMaterial"), params);
+					component->Materials.at(index) = params.Material;
+				}
+			if (remote->HairComponent)
+				remote->HairComponent->Material = independent(remote->HairComponent->Material);
+			Log("MATERIALSTAGE proxy instances=" + std::to_string(copies.size())
+				+ ", isolated=" + (complete ? "yes." : "no; material notifies disabled."));
+			return complete;
+		}
+
 		AAlicePawn* SpawnRemotePawn(AAlicePawn* localPawn, AWorldInfo* world,
 			const PlayerStatePayload& state)
 		{
@@ -227,6 +326,7 @@
 				Log("Factory substituted a different archetype; applying cosmetic fallback.");
 				MirrorCosmetics(remote, localPawn);
 			}
+			g_remoteMaterialsIsolated = IsolateRemotePresentationMaterials(remote);
 			// The client copy remains presentation-only. On the host the
 			// proxy must be a valid damage target, otherwise Sphinx rejects
 			// it before considering any of the controller target fields.
@@ -265,9 +365,16 @@
 			NativeForceUpdateComponents(remote, false, false);
 			LogCosmeticState("local-before-reattach", localPawn);
 			LogCosmeticState("remote-before-reattach", remote);
+			if (g_config.nativeClothSimulation || g_config.nativeHairSimulation)
+				AttachRemoteClothController(remote);
 			ReattachProxyCosmetics(remote);
-			SpawnRemoteHairProxy(remote);
+			if (!g_remoteNativeHairActive)
+				SpawnRemoteHairProxy(remote);
 			EnableRemoteAnimationTick(remote);
+			if (g_config.nativeClothSimulation || g_remoteNativeHairActive)
+			{
+				remote->eventResetClothHair(true, true);
+			}
 			LogCosmeticState("remote-after-reattach", remote);
 			g_remotePawn = remote;
 			g_remoteWorld = world;
@@ -291,8 +398,9 @@
 			g_remoteDodgeParticleTemplate = nullptr;
 			g_remoteDodgeParticleUntil = {};
 			g_nextRemoteDodgeParticle = {};
-			g_remoteFullBodyNotifyCursor = {};
-			g_recentRemoteVisualNotifies.clear();
+			g_remoteVisualNotifyChannels = {};
+			g_remoteAppliedUpperBodyNode = nullptr;
+			g_remoteAppliedWeaponNode = nullptr;
 			g_lastRemoteVfx = "none";
 			g_remoteBaseDrawScale = remote->DrawScale;
 			g_remoteShrinkApplied = false;
@@ -307,10 +415,9 @@
 				Clock::now() + std::chrono::seconds(2);
 			g_nextCosmeticSpatialSample =
 				Clock::now() + std::chrono::seconds(1);
-			// The read-only spatial trace has served its purpose. Keep the
-			// instrumentation available for future diagnostics without
-			// producing twenty large samples during every normal connection.
-			g_cosmeticSpatialSamplesRemaining = 0;
+			// Bound spatial samples to focused native-cloth diagnostics.
+			g_cosmeticSpatialSamplesRemaining =
+				g_config.nativeClothSimulation && g_config.animationLifecycleTrace ? 6 : 0;
 			g_cosmeticSpatialSampleNumber = 0;
 			g_remotePresentation = {};
 			g_remoteGraphSequences.clear();
@@ -322,11 +429,11 @@
 			g_remoteAppliedFullBodyName.clear();
 			ResetPresentationAnimChannel(g_remoteFullBodyChannel);
 			ResetPresentationAnimChannel(g_remoteUpperAdditiveChannel);
+			ResetPresentationAnimChannel(g_remoteHalfBodyChannel);
 			g_loggedAnimationStageFailures.clear();
 			g_loggedAnimationStageSuccesses.clear();
 			g_loggedConfigAnimationStages.clear();
 			g_animationStagePoseSamples.clear();
-			g_loggedNotifyInventories.clear();
 			g_loggedLocalMirrorBinding = false;
 			g_loggedLocalMirrorIncompatibility = false;
 			g_lastRemoteActionSerial = state.actionSerial;
@@ -437,6 +544,7 @@
 
 		void DestroyRemotePawn()
 		{
+			g_remoteNativeHairActive = false;
 			if (g_remoteWorld != g_currentWorld
 				|| (g_remotePawn && !IsLiveUObject(g_remotePawn)))
 			{
@@ -488,6 +596,26 @@
 			}
 			DestroyRemotePresentationWeapon(true);
 			DestroyRemoteHairProxy();
+			if (IsLiveUObject(g_remoteNativeDodgeEmitter)
+				&& g_remoteNativeDodgeEmitter->WorldInfo == g_currentWorld)
+			{
+				g_remoteNativeDodgeEmitter->eventFinishFlightEffects();
+				if (g_remotePawn) g_remotePawn->DodgeEmitter = nullptr;
+				NativeDestroyActor(g_remoteNativeDodgeEmitter);
+			}
+			g_remoteNativeDodgeEmitter = nullptr;
+			if (g_remoteClothController && IsLiveUObject(g_remoteClothController)
+				&& g_remoteWorld && g_remoteWorld == g_currentWorld)
+			{
+				if (g_remotePawn && IsLiveUObject(g_remotePawn)
+					&& g_remotePawn->Controller == g_remoteClothController)
+					g_remotePawn->Controller = nullptr;
+				g_remoteClothController->Pawn = nullptr;
+				g_remoteClothController->bNoDelete = false;
+				g_remoteClothController->bStatic = false;
+				if (!NativeDestroyActor(g_remoteClothController))
+					Log("WARN: Cloth service controller destroy was deferred.");
+			}
 			if (g_remoteController && IsLiveUObject(g_remoteController)
 				&& g_remoteWorld && g_remoteWorld == g_currentWorld)
 			{
@@ -529,7 +657,10 @@
 			g_remoteHairTuningTemplate = nullptr;
 			g_remoteHairBaseNodes.clear();
 			g_remoteController = nullptr;
+			g_remoteClothController = nullptr;
 			g_remoteWorld = nullptr;
+            g_remoteClothNeedsReset = false;
+            g_remoteClothRecoveryAt = {};
 			ResetRemoteWeaponPresentationState();
 			g_remoteDodgeVisualHidden = false;
 			g_remoteGlideVfxActive = false;
@@ -547,8 +678,9 @@
 			g_remoteDodgeParticleTemplate = nullptr;
 			g_remoteDodgeParticleUntil = {};
 			g_nextRemoteDodgeParticle = {};
-			g_remoteFullBodyNotifyCursor = {};
-			g_recentRemoteVisualNotifies.clear();
+			g_remoteVisualNotifyChannels = {};
+			g_remoteAppliedUpperBodyNode = nullptr;
+			g_remoteAppliedWeaponNode = nullptr;
 			g_lastRemoteVfx = "none";
 			g_remoteBaseDrawScale = 1.0f;
 			g_remoteShrinkApplied = false;
@@ -575,6 +707,7 @@
 			g_nextRemoteAnimationCompareSample = {};
 			ResetPresentationAnimChannel(g_remoteFullBodyChannel);
 			ResetPresentationAnimChannel(g_remoteUpperAdditiveChannel);
+			ResetPresentationAnimChannel(g_remoteHalfBodyChannel);
 			g_loggedAnimationStageFailures.clear();
 			g_loggedAnimationStageSuccesses.clear();
 			g_loggedConfigAnimationStages.clear();

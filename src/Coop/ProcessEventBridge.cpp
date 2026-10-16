@@ -49,6 +49,9 @@ namespace AliceCoop::ProcessEventBridge
 		UFunction* g_switchEyeStaff = nullptr;
 		UFunction* g_projectileInit = nullptr;
 		UFunction* g_projectilePostBeginPlay = nullptr;
+		UFunction* g_projectileExplode = nullptr;
+		UFunction* g_projectileShutdown = nullptr;
+		UFunction* g_projectileExplosionEffects = nullptr;
 		UFunction* g_rangeProjectileFire = nullptr;
 		UFunction* g_clockBombSetupStart = nullptr;
 		UFunction* g_clockBombDetonate = nullptr;
@@ -330,6 +333,7 @@ namespace AliceCoop::ProcessEventBridge
 		return reinterpret_cast<const void*>(params_);
 	}
 
+
 	void Initialize()
 	{
 		g_diagnosticsEnabled =
@@ -370,6 +374,12 @@ namespace AliceCoop::ProcessEventBridge
 			"Function AliceGame.AliceGameProjectile.Init");
 		g_projectilePostBeginPlay = UFunction::FindFunction(
 			"Function AliceGame.AliceGameProjectile.PostBeginPlay");
+		g_projectileExplode = UFunction::FindFunction(
+			"Function AliceGame.AliceGameProjectile.Explode");
+		g_projectileExplosionEffects = UFunction::FindFunction(
+			"Function AliceGame.AliceGameProjectile.SpawnExplosionEffects");
+		g_projectileShutdown = UFunction::FindFunction(
+			"Function AliceGame.AliceGameProjectile.ShutDown");
 		g_rangeProjectileFire = UFunction::FindFunction(
 			"Function AliceGame.WeaponForAliceRange.ProjectileFire");
 		g_clockBombSetupStart = UFunction::FindFunction(
@@ -591,6 +601,7 @@ namespace AliceCoop::ProcessEventBridge
 		UFunction* Function = invocation.Function();
 		const int uParams = invocation.RawParams();
 
+
 		if (AliceCoop::IsEnabled() && uParams
 			&& Function == g_interpStarted)
 		{
@@ -673,33 +684,24 @@ namespace AliceCoop::ProcessEventBridge
 				reinterpret_cast<UObject*>(This), Function,
 				reinterpret_cast<const void*>(uParams), true);
 		}
+		if (AliceCoop::IsEnabled() && This && Function == g_projectilePostBeginPlay
+			&& reinterpret_cast<UObject*>(This)->IsA(AAliceGameProjectile::StaticClass()))
+			AliceCoop::OnLocalWeaponProjectilePending(reinterpret_cast<AAliceGameProjectile*>(This));
 
 		if (AliceCoop::IsEnabled() && This
-			&& Function == g_projectilePostBeginPlay)
-		{
-			auto* object = reinterpret_cast<UObject*>(This);
-			if (object->IsA(
-				APepperGrinderPrimaryProjectile::StaticClass()))
-			{
-				auto* projectile = reinterpret_cast<
-					APepperGrinderPrimaryProjectile*>(This);
-				AliceCoop::OnLocalPepperProjectileSpawn(
-					projectile, projectile->FlightFront);
-			}
-		}
-
-		if (AliceCoop::IsEnabled() && This
-			&& Function == g_rangeProjectileFire && uParams)
+			&& Function && uParams && g_rangeProjectileFire
+			&& Function->Name == g_rangeProjectileFire->Name
+			&& reinterpret_cast<UObject*>(This)->IsA(AWeaponForAliceRange::StaticClass()))
 		{
 			const auto* parameters = reinterpret_cast<
 				const AWeaponForAliceRange_execProjectileFire_Params*>(
 					uParams);
 			AProjectile* result = parameters->ReturnValue;
 			if (result && result->IsA(
-				APepperGrinderPrimaryProjectile::StaticClass()))
+				AAliceGameProjectile::StaticClass()))
 			{
 				auto* projectile = reinterpret_cast<
-					APepperGrinderPrimaryProjectile*>(result);
+					AAliceGameProjectile*>(result);
 				FVector direction = projectile->FlightFront;
 				const float flightFrontSquared =
 					direction.X * direction.X
@@ -721,18 +723,17 @@ namespace AliceCoop::ProcessEventBridge
 						direction.Z *= inverseLength;
 					}
 				}
-				AliceCoop::OnLocalPepperProjectileSpawn(
+				AliceCoop::OnLocalWeaponProjectileSpawn(
 					projectile, direction);
 			}
 		}
 
 		if (AliceCoop::IsEnabled() && This
-			&& Function == g_projectileInit
-			&& !g_rangeProjectileFire)
+			&& Function == g_projectileInit)
 		{
 			auto* object = reinterpret_cast<UObject*>(This);
 			if (object->IsA(
-				APepperGrinderPrimaryProjectile::StaticClass()))
+				AAliceGameProjectile::StaticClass()))
 			{
 				const auto* parameters = reinterpret_cast<
 					const AAliceGameProjectile_execInit_Params*>(
@@ -740,9 +741,9 @@ namespace AliceCoop::ProcessEventBridge
 				const FVector direction = parameters
 					? parameters->Direction
 					: FVector(0.0f, 0.0f, 0.0f);
-				AliceCoop::OnLocalPepperProjectileSpawn(
+				AliceCoop::OnLocalWeaponProjectileSpawn(
 					reinterpret_cast<
-						APepperGrinderPrimaryProjectile*>(This),
+						AAliceGameProjectile*>(This),
 					direction);
 			}
 		}

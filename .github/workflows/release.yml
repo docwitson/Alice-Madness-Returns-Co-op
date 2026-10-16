@@ -9,7 +9,7 @@ on:
       version:
         description: Package version without the v prefix
         required: true
-        default: 0.1.0-alpha.2
+        default: 0.1.0-alpha.3
 
 permissions:
   contents: write
@@ -29,13 +29,26 @@ jobs:
       - name: Resolve version
         id: version
         shell: pwsh
+        env:
+          RELEASE_REF_TYPE: ${{ github.ref_type }}
+          RELEASE_REF_NAME: ${{ github.ref_name }}
+          RELEASE_INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if ("${{ github.ref_type }}" -eq "tag") {
-            $version = "${{ github.ref_name }}" -replace '^v', ''
+          if ($env:RELEASE_REF_TYPE -eq "tag") {
+            $version = $env:RELEASE_REF_NAME -replace '^v', ''
           } else {
-            $version = "${{ inputs.version }}"
+            $version = $env:RELEASE_INPUT_VERSION
           }
-          "value=$version" >> $env:GITHUB_OUTPUT
+          if ($version -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$') {
+            throw "Invalid release version: $version"
+          }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "value=$version" -Encoding utf8
+
+      - name: Verify native integration
+        shell: pwsh
+        run: |
+          .\tools\Test-ProcessEvent-Bridge-Layout.ps1
+          python .\tools\Test-Coop-Scaleform-Actions.py
 
       - name: Build packages
         shell: pwsh
@@ -54,11 +67,13 @@ jobs:
             artifacts/deploy/*.zip
             artifacts/deploy/*-SHA256SUMS.txt
 
-      - name: Publish GitHub release assets
+      - name: Create draft GitHub release
         if: github.ref_type == 'tag'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
         run: |
           $assets = Get-ChildItem -LiteralPath artifacts/deploy -File |
             Where-Object { $_.Name -like '*.zip' -or $_.Name -like '*-SHA256SUMS.txt' } |
@@ -66,11 +81,12 @@ jobs:
           if ($assets.Count -ne 3) {
             throw "Expected two ZIP archives and one checksum file; found $($assets.Count)."
           }
-          $notes = "docs/RELEASE_NOTES_${{ steps.version.outputs.value }}.md"
+          $notes = "docs/RELEASE_NOTES_$($env:RELEASE_VERSION).md"
           if (-not (Test-Path -LiteralPath $notes -PathType Leaf)) {
             throw "Release notes are missing: $notes"
           }
-          gh release create "${{ github.ref_name }}" @assets `
-            --title "Alice Co-op ${{ steps.version.outputs.value }}" `
+          gh release create $env:RELEASE_TAG @assets `
+            --title "Alice Co-op $($env:RELEASE_VERSION)" `
             --notes-file $notes `
-            --latest
+            --verify-tag --draft --latest
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub draft release creation failed.' }

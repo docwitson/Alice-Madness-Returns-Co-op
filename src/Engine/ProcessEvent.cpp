@@ -3,6 +3,7 @@
 #include "Features.hpp"
 
 #include <cmath>
+#include "NativePresentationHooks.inl"
 
 safetyhook::InlineHook ProcessEvent;
 
@@ -16,6 +17,7 @@ static UFunction* g_getPlatform = nullptr;
 static UFunction* g_finishFirstUpgrade = nullptr;
 static UFunction* g_interpStarted = nullptr;
 static UFunction* g_interpFinished = nullptr;
+static UFunction* g_canvasViewportPostRender = nullptr;
 
 static UFunction* g_meleeAttack = nullptr;
 static UFunction* g_weaponAttack = nullptr;
@@ -169,6 +171,11 @@ static void __fastcall ProcessEvent_Hook(int This, void*, UFunction* Function, i
 		}
 	}
 
+	if ((AchievementSupport || AliceCoop::IsEnabled()) && Function == g_canvasViewportPostRender && uParams)
+	{
+		AchievementOverlay::OnPostRender(reinterpret_cast<UGameViewportClient_eventPostRender_Params*>(uParams)->Canvas);
+	}
+
 	if (FixAspectRatio && g_State.isWideScreen && Function == g_updateCam && This && g_State.bRealGameplay)
 	{
 		AAlicePlayerController* pc = g_State.AlicePlayerController;
@@ -248,6 +255,7 @@ void ResolveProcessEventFunctions()
 	g_finishFirstUpgrade = UFunction::FindFunction("Function AliceGame.AliceGFXMovie.finishFirstWeaponUpgrade");
 	g_interpStarted = UFunction::FindFunction("Function Engine.Actor.InterpolationStarted");
 	g_interpFinished = UFunction::FindFunction("Function Engine.Actor.InterpolationFinished");
+	g_canvasViewportPostRender = UFunction::FindFunction("Function Engine.GameViewportClient.PostRender");
 
 	g_meleeAttack = UFunction::FindFunction("Function AliceGame.AlicePlayerController.MeleeAttack");
 	g_weaponAttack = UFunction::FindFunction("Function AliceGame.AlicePlayerController.WeaponAttack");
@@ -260,6 +268,7 @@ void ResolveProcessEventFunctions()
 	g_pawnFadeOutWeapon = UFunction::FindFunction("Function AliceGame.AlicePawn.FadeOutWeapon");
 	g_pawnClearDelayAttach = UFunction::FindFunction("Function AliceGame.AlicePawn.ClearDelayAttachWeapon");
 	AliceCoop::ProcessEventBridge::Initialize();
+	InstallNativeScriptDispatcher();
 
 	if (FixPinballCannonPrompt)
 	{

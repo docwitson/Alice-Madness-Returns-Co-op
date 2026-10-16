@@ -7,10 +7,9 @@ license of each component explicit.
 | Component | Use | License |
 | --- | --- | --- |
 | [MadnessPatch](https://github.com/Wemino/MadnessPatch) | Base injection DLL, fixes and build foundation | GPL-2.0 |
-| [Dear ImGui](https://github.com/ocornut/imgui) 1.92.8 | In-game status and control overlays | MIT |
 | [SafetyHook](https://github.com/cursey/safetyhook) | Runtime hooks | Boost Software License 1.0 |
 | [Zydis](https://github.com/zyantific/zydis) | Disassembly support bundled with SafetyHook | MIT |
-| [SDL](https://github.com/libsdl-org/SDL) 3.4.12 | Controller support inherited from MadnessPatch | zlib |
+| [SDL](https://github.com/libsdl-org/SDL) 3.4.16 | Controller support inherited from MadnessPatch | zlib |
 | [mINI](https://github.com/metayeti/mINI) 0.9.18 | INI parsing | MIT |
 
 The vendored source files retain their original copyright and license headers.

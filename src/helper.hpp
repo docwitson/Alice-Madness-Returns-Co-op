@@ -277,6 +277,16 @@ namespace SystemHelper
 		return { 0, 0 };
 	}
 
+	static bool GetTargetSize(int& outWidth, int& outHeight)
+	{
+		auto [screenWidth, screenHeight] = SystemHelper::GetScreenResolution();
+
+		outWidth = (int)screenWidth;
+		outHeight = (int)screenHeight;
+
+		return outWidth > 0 && outHeight > 0;
+	}
+
 	static void LoadProxyLibrary()
 	{
 		// Attempt to load the chain-load DLL from the game's directory

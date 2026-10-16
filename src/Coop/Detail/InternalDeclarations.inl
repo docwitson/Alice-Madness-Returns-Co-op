@@ -1,3 +1,6 @@
+        std::string FormatWorldTraceVector(const FVector& vector);
+        void CancelSafeArrival(const char* reason, bool notify = true);
+        bool AttachRemoteClothController(AAlicePawn* remote);
 		const char* VfxAttachmentCandidateName(
 			VfxAttachmentCandidate candidate);
 		UParticleSystem* FindLoadedParticleSystem(
@@ -25,6 +28,12 @@
 			const char* reason);
 		void TickRemoteNativeGlideTrailGuard(AAlicePawn* remote);
 		void TickLocalClockBombReplication();
+		void TickLocalWeaponProjectileReplication();
+		void FinishRemoteVisualNotifyTrails();
+        void QueueProjectileEvent(ProjectileEventPayload event);
+        void StopRemoteWeaponAudio(bool all);
+        void TickLocalWeaponAudio();
+        void TickRemoteWeaponAudio();
 		void TickRemoteProjectileVisuals(AWorldInfo* world);
 		void ApplyInboundProjectileEvents(AWorldInfo* world);
 		void ApplyInboundSharedWorldEvents(

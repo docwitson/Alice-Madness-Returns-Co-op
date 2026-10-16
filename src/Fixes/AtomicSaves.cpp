@@ -3,9 +3,26 @@
 #include "Coop/CoopClient.hpp"
 
 #include <cwctype>
+#include <intrin.h>
 
 safetyhook::InlineHook FileWriterOpen;
 safetyhook::InlineHook FileWriterDtor;
+static safetyhook::InlineHook SessionFileRead;
+static uintptr_t g_gameImageStart = 0, g_gameImageEnd = 0;
+
+static HANDLE WINAPI SessionFileRead_Hook(LPCWSTR name, DWORD access, DWORD sharing,
+    LPSECURITY_ATTRIBUTES security, DWORD creation, DWORD attributes, HANDLE templateFile)
+{
+    const auto caller = reinterpret_cast<uintptr_t>(_ReturnAddress());
+    std::wstring redirected;
+    if (name && creation == OPEN_EXISTING && access == GENERIC_READ
+        && caller >= g_gameImageStart && caller < g_gameImageEnd
+        && AliceCoop::TryRedirectSessionSaveRead(name, redirected))
+        name = redirected.c_str();
+    return SessionFileRead.unsafe_stdcall<HANDLE>(name, access, sharing,
+        security, creation, attributes, templateFile);
+}
+
 
 struct SavePaths { std::wstring real, tmp, bak; };
 
@@ -108,4 +125,15 @@ void ApplyAtomicSaves()
 	InitializeCriticalSection(&g_saveCs);
 	FileWriterOpen = HookHelper::CreateHook((void*)GetAddress(Addr::FileWriterOpen), &FileWriterOpen_Hook);
 	FileWriterDtor = HookHelper::CreateHook((void*)GetAddress(Addr::FileWriterDtor), &FileWriterDtor_Hook);
+    if (AliceCoop::IsEnabled())
+    {
+        const auto module = reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));
+        const auto dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(module);
+        const auto nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(module + dos->e_lfanew);
+        g_gameImageStart = module; g_gameImageEnd = module + nt->OptionalHeader.SizeOfImage;
+        // Only reads issued by the game, of the selected profile's exact two
+        // save paths, while an isolated Join session is active. Mod IO bypasses it.
+        SessionFileRead = HookHelper::CreateHookAPI(L"kernel32.dll", "CreateFileW", &SessionFileRead_Hook);
+        AliceCoop::SetSessionSaveReadHookReady(static_cast<bool>(SessionFileRead));
+    }
 }

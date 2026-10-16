@@ -135,9 +135,9 @@
 			// reached the render thread. Freezing dynamic data here preserves the
 			// last rendered sprite/mesh forever on some UE3 emitter templates.
 			particle->bSkipUpdateDynamicDataDuringTick = false;
-			particle->HiddenGame = true;
 			if (reinforceRenderScene)
 				NativeSetComponentHidden(particle, true);
+			particle->HiddenGame = true;
 			particle->bAutoActivate = false;
 			particle->bSuppressSpawning = true;
 			particle->bWasDeactivated = true;
@@ -154,9 +154,9 @@
 					|| !mesh->IsA(
 						UStaticMeshComponent::StaticClass()))
 					continue;
-				mesh->HiddenGame = true;
 				if (reinforceRenderScene)
 					NativeSetComponentHidden(mesh, true);
+				mesh->HiddenGame = true;
 			}
 		}
 
@@ -187,41 +187,23 @@
 			if (!activeInThisPool)
 				return false;
 
-			// These proxy particles were acquired from WorldInfo's emitter
-			// pool. Returning them explicitly is the only path that also clears
-			// stale UE3 render data; merely setting HiddenGame leaves frozen
-			// sprites and mesh emitters alive on a remote/network session.
-			pool->ReturnToPool(particle);
+			// The engine completion callback first removes ActiveComponents and
+			// RelativePSCs, then calls the intrinsic ReturnToPool from script.
+			// Calling ReturnToPool directly leaves an active entry pointing at
+			// a reusable pooled component; its SDK wrapper also strips FUNC_Native.
+			pool->OnParticleSystemFinished(particle);
 			if (g_config.actionTrace)
-			{
-				Log("VFXSTAGE returned presentation particle to pool template="
+				Log("VFXSTAGE completed presentation particle template="
 					+ ObjectName(particle->Template) + '.');
-			}
 			if (particle->bIsCachedInPool)
 				return true;
-
-			// ReturnToPool is a protected native helper in UE3. Calling it on a
-			// component which has only just been force-retired does not remove the
-			// PSC from ActiveComponents in Alice. The pool's public completion
-			// callback performs the missing ActiveComponents/SMComponents cleanup.
-			// Use it only after the PSC is already inactive so an authored live
-			// effect is never truncated through this fallback.
-			if (!particle->bIsActive || particle->bWasCompleted
-				|| particle->bWasDeactivated)
+			for (int32_t index = 0;
+				index < std::min<int32_t>(pool->ActiveComponents.size(), 2048); ++index)
 			{
-				pool->OnParticleSystemFinished(particle);
-				if (particle->bIsCachedInPool)
-					return true;
-				for (int32_t index = 0;
-					index < std::min<int32_t>(
-						pool->ActiveComponents.size(), 2048); ++index)
-				{
-					if (pool->ActiveComponents.at(index) == particle)
-						return false;
-				}
-				return true;
+				if (pool->ActiveComponents.at(index) == particle)
+					return false;
 			}
-			return false;
+			return true;
 		}
 
 		void EnforcePresentationParticleRetirement(
@@ -286,8 +268,8 @@
 				// visibility update while dynamic data is still allowed. This covers
 				// mesh emitters whose cached child component retained its last frame.
 				particle->bSkipUpdateDynamicDataDuringTick = false;
-				particle->HiddenGame = true;
 				NativeSetComponentHidden(particle, true);
+				particle->HiddenGame = true;
 				for (int32_t index = 0;
 					index < std::min<int32_t>(particle->SMComponents.size(), 64);
 					++index)
@@ -296,8 +278,8 @@
 						particle->SMComponents.at(index);
 					if (IsLiveUObject(mesh))
 					{
-						mesh->HiddenGame = true;
 						NativeSetComponentHidden(mesh, true);
+						mesh->HiddenGame = true;
 					}
 				}
 				TracePresentationParticleState("retire-pooled", particle);
@@ -343,16 +325,17 @@
 				if (IsLivePresentationParticle(particle)
 					&& !particle->bIsCachedInPool)
 				{
+					if (particle->Template != current->particleTemplate)
+						continue;
+					if (particle->bIsActive && !particle->bWasCompleted
+						&& !particle->bWasDeactivated && !particle->bSuppressSpawning)
+						continue; // Reused by an engine effect, including the same template.
 					if (TryReturnPresentationParticleToPool(particle))
 						continue;
 					// UE3's pooled PSC can keep stale dynamic render data even
 					// after all activity flags are cleared. Keep the cheap flags
 					// enforced every frame and periodically push SetHidden into
 					// the render scene until the pool reclaims this exact use.
-					const bool sameUse =
-						particle->Template == current->particleTemplate;
-					if (!sameUse)
-						continue;
 					const bool nativeHide =
 						current->nextNativeHideAt
 							== Clock::time_point{}
@@ -476,8 +459,8 @@
 				}
 			}
 			particle->SetAbsolute(true, true, true);
-			particle->SetTranslation(worldPosition);
-			particle->SetRotation(worldRotation);
+			NativeSetTranslation(particle, worldPosition);
+			NativeSetRotation(particle, worldRotation);
 			particle->ForceUpdate(true);
 			particle->bResetOnDetach = false;
 			particle->bResetOnFinish = false;
@@ -768,14 +751,6 @@
 			const Clock::time_point now = Clock::now();
 			const std::string templateName =
 				ObjectName(particleTemplate);
-			const bool movementEffect =
-				ContainsCaseInsensitive(templateName, "dodge")
-				|| ContainsCaseInsensitive(templateName, "butterfly")
-				|| ContainsCaseInsensitive(templateName, "glide")
-				|| ContainsCaseInsensitive(templateName, "float")
-				|| ContainsCaseInsensitive(templateName, "jump")
-				|| ContainsCaseInsensitive(templateName, "leaf")
-				|| ContainsCaseInsensitive(templateName, "wind");
 			const bool sharedPhysxLeafTrail =
 				ContainsCaseInsensitive(
 					templateName, "Nv_FX_Alice.Particles.GlideTrail");
@@ -789,16 +764,10 @@
 					|| ContainsCaseInsensitive(templateName, "float")
 					|| ContainsCaseInsensitive(templateName, "leaf")
 					|| ContainsCaseInsensitive(templateName, "wind"));
-			const std::size_t perTemplateLimit =
-				g_config.preserveMovementTrails && optionalTrailEffect
-					? 24u : (movementEffect ? 1u : 6u);
-			if (movementEffect
-				&& !(g_config.preserveMovementTrails
-					&& optionalTrailEffect))
-			{
-				lifetime = (std::min)(
-					lifetime, std::chrono::milliseconds(900));
-			}
+			constexpr std::size_t perTemplateLimit = 64;
+			// Let authored finite emitters complete naturally. This is only a
+			// watchdog for a malformed looping template, never an animation timer.
+			lifetime = (std::max)(lifetime, std::chrono::milliseconds(30000));
 
 			for (auto current =
 					g_remoteWeaponTransientParticles.begin();
@@ -832,29 +801,10 @@
 					});
 				if (oldest == g_remoteWeaponTransientParticles.end())
 					break;
-				if (IsLivePresentationParticle(oldest->component)
-					&& oldest->component->Template
-						== oldest->particleTemplate)
-				{
-					HardStopPresentationParticle(
-						oldest->component, true);
-				}
 				g_remoteWeaponTransientParticles.erase(oldest);
 			}
-			if (g_remoteWeaponTransientParticles.size() >= 64)
-			{
-				const TrackedPresentationParticle oldest =
-					g_remoteWeaponTransientParticles.front();
-				if (IsLivePresentationParticle(oldest.component)
-					&& oldest.component->Template
-						== oldest.particleTemplate)
-				{
-					HardStopPresentationParticle(
-						oldest.component, true);
-				}
-				g_remoteWeaponTransientParticles.erase(
-					g_remoteWeaponTransientParticles.begin());
-			}
+			if (g_remoteWeaponTransientParticles.size() >= 256)
+				g_remoteWeaponTransientParticles.erase(g_remoteWeaponTransientParticles.begin());
 			g_remoteWeaponTransientParticles.push_back({
 				particle, particleTemplate,
 				g_config.preserveMovementTrails && optionalTrailEffect
@@ -870,6 +820,10 @@
 				current != g_remoteWeaponTransientParticles.end();
 				++current)
 			{
+				if (!IsLivePresentationParticle(current->component)
+					|| current->component->bIsCachedInPool
+					|| current->component->Template != current->particleTemplate)
+					continue;
 				const bool expired =
 					force || now >= current->expiresAt;
 				if (!expired)
@@ -961,6 +915,13 @@
 			}
 			if (!package)
 				return;
+			// Let UnrealScript copy its owned effect arrays and projectile package.
+			// Copying only trail/muzzle pointers leaves level-dependent notifies stale.
+			if (package == &weapon->DLCPackage)
+				weapon->SetDLCLevelData();
+			else
+				weapon->ChangeWeaponLevelData(std::clamp<int32_t>(level,
+					1, weapon->WeaponLevelData.size()));
 			if (weapon->Mesh && package->WLDP_SkeletalMesh
 				&& weapon->Mesh->SkeletalMesh
 					!= package->WLDP_SkeletalMesh)
@@ -1127,6 +1088,8 @@
 
 		void ResetRemoteWeaponPresentationState()
 		{
+            StopRemoteWeaponAudio(false);
+			FinishRemoteVisualNotifyTrails();
 			StopRemoteWeaponLoopParticles();
 			CleanupRemoteWeaponTransients(true);
 			g_remotePresentationWeapon = nullptr;
@@ -1137,6 +1100,7 @@
 			g_remotePresentationWeaponSocket = FName();
 			g_remoteWeaponBaseDrawScale = 1.0f;
 			g_remoteAppliedWeaponAnimation.clear();
+			g_remoteAppliedWeaponNode = nullptr;
 			g_remoteWeaponAnimationLastSeen = {};
 			g_nextRemoteWeaponSpawnAttempt = {};
 			g_remoteMuzzleFlashActive = false;
@@ -1586,7 +1550,7 @@
 			weapon->Role = ENetRole::ROLE_Authority;
 			weapon->SetTickIsDisabled(false);
 			weapon->SetLocationNoCheck(remote->Location);
-			weapon->SetRotation(remote->Rotation);
+			NativeSetActorRotation(weapon, remote->Rotation);
 			weapon->Location = remote->Location;
 			weapon->Rotation = remote->Rotation;
 			remote->Weapon = weapon;
@@ -1630,6 +1594,7 @@
 			g_remotePresentationWeaponSocket =
 				para->DefaultAttachedSocketName;
 			g_remoteAppliedWeaponAnimation.clear();
+			g_remoteAppliedWeaponNode = nullptr;
 			g_remoteWeaponAnimationLastSeen = {};
 			g_remoteMuzzleFlashActive = false;
 			g_nextRemoteWeaponSpawnAttempt = {};

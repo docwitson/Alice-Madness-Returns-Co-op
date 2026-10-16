@@ -559,7 +559,7 @@
 			g_sharedEnemyRegistry.swap(refreshed);
 			const int registryCount =
 				static_cast<int>(g_sharedEnemyRegistry.size());
-			if (registryCount != g_lastSharedEnemyRegistryCount)
+			if (g_config.worldTrace && registryCount != g_lastSharedEnemyRegistryCount)
 			{
 				g_lastSharedEnemyRegistryCount = registryCount;
 				Log("SHAREDPOSE registry role="
@@ -1137,7 +1137,7 @@
 			}
 
 			static Clock::time_point nextSummary{};
-			if (Clock::now() >= nextSummary)
+			if (g_config.worldTrace && Clock::now() >= nextSummary)
 			{
 				nextSummary =
 					Clock::now() + std::chrono::seconds(2);
@@ -1364,7 +1364,7 @@
 				pose.aiState =
 					static_cast<std::uint8_t>(enemy->AIState);
 			}
-			if (static_cast<int>(poseCount)
+			if (g_config.worldTrace && static_cast<int>(poseCount)
 				!= g_lastSharedEnemySnapshotCount)
 			{
 				g_lastSharedEnemySnapshotCount =
@@ -1712,7 +1712,8 @@
 			{
 				g_nextSharedEnemyPoseSummary =
 					now + std::chrono::seconds(2);
-				Log("SHAREDPOSE client active="
+				if (g_config.worldTrace)
+					Log("SHAREDPOSE client active="
 					+ std::to_string(
 						g_clientSharedEnemyBindings.size())
 					+ ", received="

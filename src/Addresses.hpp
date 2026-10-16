@@ -16,8 +16,6 @@ enum class Addr
 
 	// FixHighFPSHairPhysics
 	HairSimulator,
-	HairSimulator_DampingScaler,
-	HairSimulator_DeltaTimeOverride,
 
 	// FixHighFPSClothPhysics
 	ClothSimulator,
@@ -50,6 +48,7 @@ enum class Addr
 	// Hash-table race condition
 	Localize,
 	HashLoop,
+	HashLoopEntry,
 	FStringFree,
 	FStringAlloc,
 
@@ -82,6 +81,8 @@ enum class Addr
 	BlockHook,
 	BlockMessages_1,
 	BlockMessages_2,
+	GameWindowClassRegister,
+	StartupShowWindowCmd,
 
 	// IntroSkip
 	PlayMovie,
@@ -103,7 +104,7 @@ enum class Addr
 	Height,
 
 	// FixAspectRatio
-	BlackBarDraw,
+	GFxDrawIndexedTriList,
 
 	// MenuScripts
 	MenuScripts,
@@ -146,6 +147,10 @@ enum class Addr
 	WindowedMode,
 	Fullscreen,
 
+	// BorderlessFullscreen
+	ViewportForceBorderless,
+	ViewportLayoutDone,
+
 	// AchievementSupport
 	PlayerControllerConsoleCommand,
 	GameConsoleCommand,
@@ -160,19 +165,18 @@ enum class Addr
 	FileWriterOpen,
 	FileWriterDtor,
 
-	// AchievementOverlay
-	D3D9DevicePtr,
-	D3D9PresentWindowed,
-	D3D9PresentFullscreen,
-	D3D9ResetPre,
-	D3D9ResetPost,
-
 	// AdaptivePhysXMemory
 	PhysXCreateSDK,
 	GetSystemVRAM,
 
 	// XAudio2Upgrade
 	XAudio2CreateEngine,
+
+	// Modding
+	CachePaths,
+	CacheDownloadedPackage,
+	FindPackageFile,
+	LinkerPreload,
 
 	Count
 };
@@ -191,8 +195,6 @@ namespace Addresses
 
 		// FixHighFPSHairPhysics
 		/* HairSimulator                   */ { 0xBE4860, 0xBE4A70, 0xB99320 },
-		/* HairSimulator_DampingScaler     */ { 0xBE415B, 0xBE436B, 0xB98D1B },
-		/* HairSimulator_DeltaTimeOverride */ { 0xBE4892, 0xBE4AA2, 0xB99352 },
 
 		// FixHighFPSClothPhysics
 		/* ClothSimulator                  */ { 0xBE4DE0, 0xBE4FF0, 0xB99660 },
@@ -225,6 +227,7 @@ namespace Addresses
 		// Hash-table race condition
 		/* Localize                        */ { 0x4E9E80, 0x4EA250, 0x4D3ED0 },
 		/* HashLoop                        */ { 0x47C093, 0x47C003, 0x46DE63 },
+		/* HashLoopEntry                   */ { 0x47C049, 0x47BFB9, 0x46DE19 },
 		/* FStringFree                     */ { 0x48C930, 0x48C6C0, 0x47B950 },
 		/* FStringAlloc                    */ { 0x4116F0, 0x4115C0, 0x4107C0 },
 
@@ -257,6 +260,8 @@ namespace Addresses
 		/* BlockHook                       */ { 0xC86A09, 0xC86F69, 0xC2EBD6 },
 		/* BlockMessages_1                 */ { 0xC8019B, 0xC8073B, 0xC28E51 },
 		/* BlockMessages_2                 */ { 0xC810AE, 0xC8164E, 0xC29BDE },
+		/* GameWindowClassRegister         */ { 0x51EF34, 0x51F374, 0x501D22 },
+		/* StartupShowWindowCmd            */ { 0x51F015, 0x51F455, 0x501E03 },
 
 		// IntroSkip
 		/* PlayMovie                       */ { 0x5942E0, 0x5949F0, 0x574380 },
@@ -278,7 +283,7 @@ namespace Addresses
 		/* Height                          */ { 0x14FE260, 0x14FE260, 0x1479888 },
 
 		// FixAspectRatio
-		/* BlackBarDraw                    */ { 0xC71FA4, 0xC72514, 0xC1D344 },
+		/* GFxDrawIndexedTriList           */ { 0xC5AE70, 0xC5B360, 0xC07FC0 },
 
 		// MenuScripts
 		/* MenuScripts                     */ { 0xF11D99, 0xF121A9, 0xE9EA29 },
@@ -321,6 +326,10 @@ namespace Addresses
 		/* WindowedMode                    */ { 0x773EB1, 0x774B9A, 0x745E78 },
 		/* Fullscreen                      */ { 0x14FE264, 0x14FE264, 0x147988C },
 
+		// BorderlessFullscreen
+		/* ViewportForceBorderless         */ { 0xC80D39, 0xC812D9, 0xC29893 },
+		/* ViewportLayoutDone              */ { 0xC80F96, 0xC81536, 0xC29ADF },
+
 		// AchievementSupport
 		/* PlayerControllerConsoleCommand  */ { 0x6DDE70, 0x6DE600, 0x6B32E0 },
 		/* GameConsoleCommand              */ { 0x89AA50, 0x89AC70, 0x8610C0 },
@@ -335,19 +344,18 @@ namespace Addresses
 		/* FileWriterOpen                  */ { 0x47B520, 0x47B490, 0x46D3D0 },
 		/* FileWriterDtor                  */ { 0x47E520, 0x47E5C0, 0x470880 },
 
-		// AchievementOverlay
-		/* D3D9DevicePtr                   */ { 0x151C2AC, 0x151C2AC, 0x149521C },
-		/* D3D9PresentWindowed             */ { 0xC7B69C, 0xC7BCEC, 0xC2513C },
-		/* D3D9PresentFullscreen           */ { 0xC7B648, 0xC7BC98, 0xC250E8 },
-		/* D3D9ResetPre                    */ { 0xC784EB, 0xC78B3B, 0xC2230D },
-		/* D3D9ResetPost                   */ { 0xC784F2, 0xC78B42, 0xC22314 },
-
 		// AdaptivePhysXMemory
-		/* PhysXCreateSDK                  */{ 0x9E80FF, 0x9E878F, 0x9A5607 },
-		/* GetSystemVRAM                   */{ 0xC77592, 0xC77BE2, 0xC21576 },
+		/* PhysXCreateSDK                  */ { 0x9E80FF, 0x9E878F, 0x9A5607 },
+		/* GetSystemVRAM                   */ { 0xC77592, 0xC77BE2, 0xC21576 },
 
 		// XAudio2Upgrade
-		/* XAudio2CreateEngine             */{ 0xC87050, 0xC875B0, 0xC2F100 },
+		/* XAudio2CreateEngine             */ { 0xC87050, 0xC875B0, 0xC2F100 },
+
+		// Modding
+		/* CachePaths                      */ { 0x4F0110, 0x4F0390, 0x4D93B0 },
+		/* CacheDownloadedPackage          */ { 0x4F02E0, 0x4F0560, 0x4D97D0 },
+		/* FindPackageFile                 */ { 0x4EE4E0, 0x4EE760, 0x4D7EF0 },
+		/* LinkerPreload                   */ { 0x4CE030, 0x4CE0E0, 0x4B6020 },
 	};
 
 	inline void SetBuild(GameBuild build, uintptr_t moduleBase)

@@ -751,7 +751,7 @@
 				if (material && marker->StaticMeshComponent)
 					marker->StaticMeshComponent->SetMaterial(0, material);
 				marker->SetLocationNoCheck(location);
-				marker->SetRotation(rotation);
+				NativeSetActorRotation(marker, rotation);
 				marker->Location = location;
 				marker->Rotation = rotation;
 				NativeSetActorHidden(marker, false);
@@ -959,88 +959,6 @@
 								GetBoneQuaternion(socket, 0));
 					}
 				}
-				if (static_cast<std::uint8_t>(
-						weapon->WeaponTypeEnum)
-					== static_cast<std::uint8_t>(
-						EAliceWeaponType::EAWT_HobbyHorse)
-					&& g_remotePresentation.valid)
-				{
-					// HobbyHorse shockwaves are ground-space effects. On the
-					// proxy graph RadiusDamage may resolve to the package
-					// origin (0,0) even though Z looks animated, so reject
-					// implausible XY as well.
-					const FVector root =
-						g_remotePresentation.location;
-					const float offsetX = location.X - root.X;
-					const float offsetY = location.Y - root.Y;
-					const bool invalidAnchor =
-						!WeaponMeshHasAttachPoint(
-							weapon, socket);
-					const bool invalidXY =
-						!std::isfinite(location.X)
-						|| !std::isfinite(location.Y)
-						|| offsetX * offsetX + offsetY * offsetY
-							> 500.0f * 500.0f;
-					if (invalidAnchor || invalidXY)
-					{
-						location.X = root.X;
-						location.Y = root.Y;
-					}
-					// The presentation weapon often reproduces only the
-					// relaxed HobbyHorse pose, leaving RadiusDamage close to
-					// Alice's capsule. Preserve the socket's swing direction
-					// but extend a too-short vector to the approximate head
-					// contact distance. If the socket is unusable, fall back
-					// to Alice's facing direction.
-					float impactX = location.X - root.X;
-					float impactY = location.Y - root.Y;
-					float impactDistance = std::sqrt(
-						impactX * impactX
-						+ impactY * impactY);
-					constexpr float MinimumImpactDistance = 110.0f;
-					if (!std::isfinite(impactDistance)
-						|| impactDistance < MinimumImpactDistance)
-					{
-						if (impactDistance > 2.0f)
-						{
-							impactX /= impactDistance;
-							impactY /= impactDistance;
-						}
-						else
-						{
-							constexpr float RotatorToRadians =
-								6.2831853071795864769f
-								/ 65536.0f;
-							const float yaw =
-								static_cast<float>(
-									g_remotePresentation.rotation.Yaw)
-								* RotatorToRadians;
-							impactX = std::cos(yaw);
-							impactY = std::sin(yaw);
-						}
-						location.X = root.X
-							+ impactX * MinimumImpactDistance;
-						location.Y = root.Y
-							+ impactY * MinimumImpactDistance;
-					}
-					const float collisionHeight =
-						std::isfinite(
-							g_remotePresentation.state
-								.collisionHeight)
-						&& g_remotePresentation.state
-							.collisionHeight > 1.0f
-						? g_remotePresentation.state
-							.collisionHeight
-						: 79.5f;
-					// APawn.Location is the capsule centre, approximately
-					// Alice's pelvis. Shockwave particles are authored in
-					// ground space, so project the animated RadiusDamage XY
-					// down by the current capsule half-height.
-					location.Z =
-						root.Z - collisionHeight + 2.0f;
-					rotation.Pitch = 0;
-					rotation.Roll = 0;
-				}
 				Log("VFXSTAGE weapon world particle="
 					+ ObjectName(particle)
 					+ ", socket="
@@ -1091,10 +1009,12 @@
 			component->bWasCompleted = false;
 			component->bForcedInActive = false;
 			component->bSkipUpdateDynamicDataDuringTick = false;
-			component->HiddenGame = false;
 			NativeSetComponentHidden(component, false);
+			component->HiddenGame = false;
+			component->CustomTimeDilation = 1.0f;
+			component->bUpdateComponentInTick = true;
 			if (needsActivation)
-				component->ActivateSystem(false);
+				NativeActivateSystem(component, false);
 			AuditPresentationParticle(component, false);
 			TracePresentationParticleState("visible", component);
 		}
@@ -1145,7 +1065,17 @@
 						{ "VorpalBlade", "BladeTrail" },
 						{ dlcMesh ? "DLC" : "Lv01" });
 				}
-				if (trail && g_remotePresentationWeapon->Mesh
+				bool authoredTrail = false;
+				if (g_remoteAppliedFullBodyNode && g_remoteAppliedFullBodyNode->AnimSeq)
+				{
+					const auto& notifies = g_remoteAppliedFullBodyNode->AnimSeq->Notifies;
+					for (int32_t index = 0; index < notifies.size(); ++index)
+					{
+						UAnimNotify* notify = notifies.at(index).Notify;
+						authoredTrail = authoredTrail || (notify && notify->IsA(UAnimNotify_Trails::StaticClass()));
+					}
+				}
+				if (!authoredTrail && trail && g_remotePresentationWeapon->Mesh
 					&& g_remotePresentationWeapon->WorldInfo
 					&& g_remotePresentationWeapon->WorldInfo
 						->MyEmitterPool)
@@ -1244,23 +1174,7 @@
 				SetRemoteMuzzleFlash(g_remotePresentationWeapon, false);
 				break;
 			case PlayerAction::Dodge:
-				if (!g_remoteDodgeParticleTemplate)
-				{
-					g_remoteDodgeParticleTemplate =
-						FindRemoteDodgeParticleTemplate();
-					Log("VFXSTAGE dodge template="
-						+ ObjectName(
-							g_remoteDodgeParticleTemplate) + '.');
-				}
-				g_remoteDodgeParticleUntil =
-					Clock::now() + std::chrono::milliseconds(750);
-				g_nextRemoteDodgeParticle = Clock::now();
-				// The action packet is the authoritative presentation
-				// trigger. AnimGraph packets may arrive late or briefly select
-				// the transition nodes that do not contain "Dodge" in their
-				// name, so keep an explicit hide window as well.
-				g_devDodgeHideUntil =
-					Clock::now() + std::chrono::milliseconds(850);
+				// Authored dodge notify drives the native cosmetic emitter.
 				break;
 			case PlayerAction::ShrinkEnter:
 			case PlayerAction::ShrinkLeave:
@@ -1284,33 +1198,196 @@
 			}
 		}
 
+		std::unordered_map<UParticleSystemComponent*, UParticleSystem*> SnapshotNotifyParticles(AWorldInfo* world)
+		{
+			std::unordered_map<UParticleSystemComponent*, UParticleSystem*> result;
+			if (world && world->MyEmitterPool)
+			{
+				const auto& components = world->MyEmitterPool->ActiveComponents;
+				for (int32_t index = 0; index < components.size(); ++index)
+				{
+					auto* component = components.at(index);
+					if (component) result.emplace(component, component->Template);
+				}
+			}
+			auto collect = [&](AActor* actor)
+			{
+				if (!actor || !IsLiveUObject(actor)) return;
+				for (int32_t index = 0; index < actor->AllComponents.size(); ++index)
+				{
+					UActorComponent* component = actor->AllComponents.at(index);
+					if (component && component->IsA(UParticleSystemComponent::StaticClass()))
+					{
+						auto* particle = reinterpret_cast<UParticleSystemComponent*>(component);
+						if (particle->bIsActive) result.emplace(particle, particle->Template);
+					}
+				}
+			};
+			collect(g_remotePawn); collect(g_remotePresentationWeapon);
+			return result;
+		}
+
+		bool RetainNativeNotifyParticles(AWorldInfo* world,
+			const std::unordered_map<UParticleSystemComponent*, UParticleSystem*>& before)
+		{
+			bool spawned = false;
+			for (const auto& [component, particle] : SnapshotNotifyParticles(world))
+			{
+				const auto previous = before.find(component);
+				if (previous != before.end() && previous->second == particle) continue;
+				MakePresentationParticleVisible(component);
+				TrackRemoteWeaponTransient(component, particle, std::chrono::milliseconds(3500));
+				spawned = true;
+			}
+			return spawned;
+		}
+
+		bool ReplayNativeParticleNotify(AAlicePawn* remote, UAnimNodeSequence* node,
+			UAnimNotify_PlayParticleEffect* notify, UParticleSystem* particle,
+			USkeletalMeshComponent* attachMesh)
+		{
+			if (!remote || !node || !notify || !attachMesh) return false;
+			const auto before = SnapshotNotifyParticles(remote->WorldInfo);
+			UParticleSystem* original = notify->PSTemplate;
+			USkeletalMeshComponent* originalMesh = node->SkelComponent;
+			notify->PSTemplate = particle;
+			node->SkelComponent = attachMesh;
+			const bool called = InvokeNativeVisualNotify(notify, node, 0, 0.0f, 0.0f, 0.0f);
+			node->SkelComponent = originalMesh;
+			notify->PSTemplate = original;
+			const bool spawned = RetainNativeNotifyParticles(remote->WorldInfo, before);
+			if (g_config.actionTrace)
+				Log("VFXSTAGE native particle notify=" + ObjectName(notify)
+					+ ", template=" + ObjectName(particle) + ", spawned=" + (spawned ? "yes." : "no."));
+			return called && spawned;
+		}
+
+		void ReplayNativeTrailNotify(UAnimNodeSequence* node, ActiveVisualTrail& trail, int phase, float time)
+		{
+			if (!node || !IsLiveUObject(node) || !node->SkelComponent || !trail.notify || !IsLiveUObject(trail.notify)) return;
+			UAnimNotify_Trails* notify = trail.notify;
+			const auto* package = SelectWeaponPresentationPackage(g_remotePresentationWeapon);
+			RemoteParticleReplayScope replayScope;
+			const auto before = SnapshotNotifyParticles(g_currentWorld);
+			UParticleSystem* originalTemplate = notify->PSTemplate;
+			const bool originalUseLevel = notify->UseAliceLevelDataParticle;
+			const float originalStart = notify->LastStartTime, originalEnd = notify->EndTime;
+			const float originalTime = notify->CurrentTime, originalStep = notify->TimeStep;
+			UAnimNodeSequence* originalNode = notify->AnimNodeSeq;
+			if (originalUseLevel && package && package->WLDP_Particle_Trail)
+			{
+				notify->PSTemplate = package->WLDP_Particle_Trail;
+			}
+			notify->LastStartTime = trail.startTime; notify->EndTime = trail.endTime;
+			notify->CurrentTime = trail.previousTime;
+			const bool called = InvokeNativeVisualNotify(notify, node, phase, time,
+				(std::max)(0.0f, time - trail.previousTime), trail.endTime - trail.startTime);
+			notify->PSTemplate = originalTemplate; notify->UseAliceLevelDataParticle = originalUseLevel;
+			notify->LastStartTime = originalStart; notify->EndTime = originalEnd;
+			notify->CurrentTime = originalTime; notify->TimeStep = originalStep;
+			notify->AnimNodeSeq = originalNode;
+			trail.previousTime = time;
+			const bool spawned = RetainNativeNotifyParticles(g_currentWorld, before);
+			if (phase == 0 && g_config.actionTrace)
+				Log("VFXSTAGE native trail=" + ObjectName(notify) + ", called=" + (called ? "yes" : "no")
+					+ ", spawned=" + (spawned ? "yes." : "no."));
+		}
+
+		void FinishRemoteVisualNotifyTrails()
+		{
+			for (auto& channel : g_remoteVisualNotifyChannels)
+			{
+				for (auto& trail : channel.trails)
+					ReplayNativeTrailNotify(channel.cursor.node, trail, 2, trail.previousTime);
+				channel = {};
+			}
+		}
+
+		bool ReplayNativeDodgeNotify(AAlicePawn* remote, UAnimNodeSequence* node, UAnimNotify* notify)
+		{
+			if (!remote || !node || !remote->WorldInfo) return false;
+			if (!IsLiveUObject(g_remoteNativeDodgeEmitter)
+				|| g_remoteNativeDodgeEmitter->WorldInfo != remote->WorldInfo)
+			{
+				// Alice already creates a dedicated trace actor for this pawn.
+				// Reuse it so the native flight lifecycle owns one emitter.
+				auto* existing = remote->DodgeEmitter;
+				auto* local = GetLocalPawn();
+				if (IsLiveUObject(existing) && !existing->IsDefaultObject()
+					&& !existing->bDeleteMe && existing->WorldInfo == remote->WorldInfo
+					&& (!local || existing != local->DodgeEmitter))
+				{
+					g_remoteNativeDodgeEmitter = existing;
+				}
+				else
+				{
+					auto* actor = NativeSpawn(remote, AAliceDodgeParticleTrace::StaticClass(), remote,
+						FName(), remote->Location, remote->Rotation, nullptr, true);
+					g_remoteNativeDodgeEmitter = reinterpret_cast<AAliceDodgeParticleTrace*>(actor);
+					if (!actor) return false;
+					actor->Instigator = remote;
+					actor->bCollideActors = false;
+					actor->bBlockActors = false;
+					actor->bCollideWorld = false;
+				}
+			}
+			remote->DodgeEmitter = g_remoteNativeDodgeEmitter;
+			RemoteParticleReplayScope replayScope;
+			return InvokeNativeVisualNotify(notify, node, 0, 0.0f, 0.0f, 0.0f);
+		}
+
 		void DispatchRemoteVisualNotify(AAlicePawn* remote,
 			USkeletalMeshComponent* sourceComponent,
-			UAnimNotify* notify, UAnimSequence* sequence,
-			int32_t notifyIndex)
+			UAnimNotify* notify, UAnimNodeSequence* node, float notifyTime)
 		{
 			if (!remote || !sourceComponent || !notify)
 				return;
+			RemoteParticleReplayScope replayScope;
 
-			// Dynamic slot nodes can be rebuilt several times while the same
-			// replicated action is active. Suppress duplicate presentation
-			// notifies without suppressing a later attack using the same asset.
-			const std::uint64_t key =
-				(static_cast<std::uint64_t>(
-					reinterpret_cast<std::uintptr_t>(sequence)) << 1)
-				^ (static_cast<std::uint64_t>(
-					reinterpret_cast<std::uintptr_t>(notify)) << 17)
-				^ static_cast<std::uint64_t>(
-					static_cast<std::uint32_t>(notifyIndex));
 			const Clock::time_point now = Clock::now();
-			auto recent = g_recentRemoteVisualNotifies.find(key);
-			if (recent != g_recentRemoteVisualNotifies.end()
-				&& now - recent->second
-					< std::chrono::milliseconds(450))
+
+            if (notify->IsA(UAnimNotify_Sound::StaticClass()))
+            {
+                ReplayProxySoundNotify(remote, reinterpret_cast<UAnimNotify_Sound*>(notify));
+                return;
+            }
+
+			if (g_remoteMaterialsIsolated && notify->IsA(UAliceAnimNotify_SetMatParam::StaticClass()))
 			{
+				// Authored dodge uses a timed material curve, not Actor.bHidden.
+				// Only replay this cosmetic parameter; death/gameplay material changes
+				// continue to belong to the authoritative pawn.
+				auto* materialNotify = reinterpret_cast<UAliceAnimNotify_SetMatParam*>(notify);
+				bool dodgeFade = materialNotify->MatParamInfos.size() > 0;
+				for (int32_t i = 0; i < materialNotify->MatParamInfos.size(); ++i)
+					dodgeFade = dodgeFade && materialNotify->MatParamInfos.at(i).ParamType == 0
+						&& materialNotify->MatParamInfos.at(i).ParamName.ToString() == "FadeOutAlpha";
+				if (dodgeFade)
+				{
+					InvokeNativeVisualNotify(notify, node, 0, 0.0f, 0.0f, 0.0f);
+					// SetScalarStartTime stores world game time + Value. Seek the
+					// native curve to the event's elapsed time instead of restarting
+					// its visible first frames after network/animation sampling delay.
+					const float rate = node->Rate * node->SkelComponent->GlobalAnimRateScale
+						* (node->AnimSeq ? node->AnimSeq->RateScale : 1.0f);
+					const float elapsed = rate > 0.001f
+						? (std::max)(0.0f, node->CurrentTime - notifyTime) / rate : 0.0f;
+					for (int32_t i = 0; i < materialNotify->MatParamInfos.size(); ++i)
+					{
+						const auto& info = materialNotify->MatParamInfos.at(i);
+						if (!info.bActiveVaryingTime || info.MatID < 0
+							|| info.MatID >= remote->Mesh->Materials.size()) continue;
+						UMaterialInterface* material = remote->Mesh->Materials.at(info.MatID);
+						if (!material || !material->IsA(UMaterialInstanceTimeVarying::StaticClass())) continue;
+						UMaterialInstanceTimeVarying_execSetScalarStartTime_Params params{};
+						params.ParameterName = info.ParamName;
+						params.Value = -elapsed;
+						InvokeNativeFunction(material, UFunction::FindFunction("Function Engine.MaterialInstanceTimeVarying.SetScalarStartTime"), params);
+					}
+					Log("MATERIALSTAGE native dodge fade started on proxy.");
+				}
 				return;
 			}
-			g_recentRemoteVisualNotifies[key] = now;
 
 			if (notify->IsA(
 				UAliceAnimNotify_ToggleAttackTrace::StaticClass()))
@@ -1324,18 +1401,10 @@
 				UAliceAnimNotify_TriggerAliceDodgeParticle::
 					StaticClass()))
 			{
-				auto* dodge = reinterpret_cast<
-					UAliceAnimNotify_TriggerAliceDodgeParticle*>(notify);
-				if (dodge->AliceDodgeEffectTemplate)
-					g_remoteDodgeParticleTemplate =
-						dodge->AliceDodgeEffectTemplate;
-				g_remoteDodgeParticleUntil =
-					now + std::chrono::milliseconds(750);
-				g_nextRemoteDodgeParticle = now;
-				g_lastRemoteVfx = "dodge notify: "
-					+ ObjectName(g_remoteDodgeParticleTemplate);
+				ReplayNativeDodgeNotify(remote, node, notify);
 				return;
 			}
+
 			if (notify->IsA(
 				UAnimNotify_PlayParticleEffect::StaticClass()))
 			{
@@ -1354,10 +1423,11 @@
 					auto* weaponNotify = reinterpret_cast<
 						UAliceAnimNotify_PlayParticleEffect_AliceWeapon*>(
 							notify);
-					UParticleSystem* weaponParticle =
-						g_remotePresentationWeapon->
-							eventGetWeaponLeveDateEffect(
-								weaponNotify->WeaponEffectIndex);
+					UParticleSystem* weaponParticle = nullptr;
+					const auto* package = SelectWeaponPresentationPackage(g_remotePresentationWeapon);
+					if (package && weaponNotify->WeaponEffectIndex >= 0
+						&& weaponNotify->WeaponEffectIndex < package->WLDP_WeaponEffect.size())
+						weaponParticle = package->WLDP_WeaponEffect.at(weaponNotify->WeaponEffectIndex);
 					if (weaponParticle)
 						particleTemplate = weaponParticle;
 					if (g_remotePresentationWeapon->Mesh)
@@ -1365,6 +1435,11 @@
 							g_remotePresentationWeapon->Mesh;
 				}
 				if (!particleTemplate)
+					return;
+				if (weaponSpecific && !particle->bAttach
+					&& g_remotePresentationWeapon->IsA(AHobbyHorse::StaticClass()))
+					return; // Native ground-space emitter is relayed from its owner.
+				if (ReplayNativeParticleNotify(remote, node, particle, particleTemplate, attachMesh))
 					return;
 				UParticleSystemComponent* spawned = nullptr;
 				const bool dodgeParticle =
@@ -1425,6 +1500,8 @@
 					spawned = SpawnRemoteCosmeticParticle(
 						remote, particleTemplate, false);
 				}
+				if (spawned && std::isfinite(particle->DrawScale) && particle->DrawScale > 0.0f)
+					NativeSetScale(spawned, particle->DrawScale);
 				MakePresentationParticleVisible(spawned);
 				if (spawned)
 				{
@@ -1451,112 +1528,79 @@
 			}
 		}
 
+		void UpdateRemoteVisualNotifyChannel(AAlicePawn* remote,
+			UAnimNodeSequence* node, VisualNotifyChannel& channel)
+		{
+			auto finishTrails = [&]()
+			{
+				for (auto& trail : channel.trails)
+					ReplayNativeTrailNotify(channel.cursor.node, trail, 2, trail.previousTime);
+				channel.trails.clear();
+			};
+			if (!remote || !node || !node->AnimSeq || !node->SkelComponent)
+			{
+				finishTrails(); channel = {}; return;
+			}
+			VisualNotifyCursor& cursor = channel.cursor;
+			UAnimSequence* sequence = node->AnimSeq;
+			const float current = (std::max)(0.0f, node->CurrentTime);
+			float from = cursor.previousTime;
+			const bool newSequence = !cursor.primed || cursor.sequence != sequence;
+			const bool newAction = channel.actionSerial != g_lastRemoteActionSerial;
+			const auto advance = ClassifyVisualNotifyAdvance(newSequence, newAction,
+				node->bLooping, from, current, sequence->SequenceLength);
+			auto dispatchInterval = [&](float begin, float end)
+			{
+				const int32_t count = std::min<int32_t>(sequence->Notifies.size(), 256);
+				for (int32_t index = 0; index < count; ++index)
+				{
+					const FAnimNotifyEvent& event = sequence->Notifies.at(index);
+					if (!event.Notify || event.Time <= begin || event.Time > end + 0.002f) continue;
+					if (event.Notify->IsA(UAnimNotify_Trails::StaticClass()))
+					{
+						ActiveVisualTrail trail{ reinterpret_cast<UAnimNotify_Trails*>(event.Notify),
+							event.Time, event.Time + (std::max)(event.Duration, 0.001f), event.Time };
+						ReplayNativeTrailNotify(node, trail, 0, event.Time);
+						channel.trails.push_back(trail);
+					}
+					else DispatchRemoteVisualNotify(remote, node->SkelComponent, event.Notify, node, event.Time);
+				}
+			};
+			if (advance == VisualNotifyAdvance::LoopWrap)
+			{
+				dispatchInterval(from, sequence->SequenceLength);
+				finishTrails(); from = -0.001f;
+			}
+			else if (advance == VisualNotifyAdvance::Restart)
+			{
+				finishTrails(); from = -0.001f;
+			}
+			else if (advance == VisualNotifyAdvance::Correction)
+				return; // A position correction must not replay an already emitted event.
+			cursor.node = node; cursor.sequence = sequence; cursor.primed = true;
+			channel.actionSerial = g_lastRemoteActionSerial;
+			dispatchInterval(from, current);
+			for (auto it = channel.trails.begin(); it != channel.trails.end();)
+			{
+				const float time = (std::min)(current, it->endTime);
+				if (time > it->previousTime)
+					ReplayNativeTrailNotify(node, *it, 1, time);
+				if (current >= it->endTime)
+				{
+					ReplayNativeTrailNotify(node, *it, 2, it->endTime);
+					it = channel.trails.erase(it);
+				}
+				else ++it;
+			}
+			cursor.previousTime = (std::max)(from, current);
+		}
+
 		void UpdateRemoteVisualNotifies(AAlicePawn* remote)
 		{
-			UAnimNodeSequence* node = g_remoteAppliedFullBodyNode;
-			if (!remote || !node || !node->AnimSeq
-				|| !node->SkelComponent)
-			{
-				g_remoteFullBodyNotifyCursor = {};
-				return;
-			}
-
-			VisualNotifyCursor& cursor =
-				g_remoteFullBodyNotifyCursor;
-			UAnimSequence* sequence = node->AnimSeq;
-			const float current =
-				node->CurrentTime > 0.0f ? node->CurrentTime : 0.0f;
-			float from = cursor.previousTime;
-			const bool changed = !cursor.primed
-				|| cursor.node != node
-				|| cursor.sequence != sequence;
-			if (changed)
-			{
-				cursor.node = node;
-				cursor.sequence = sequence;
-				cursor.primed = true;
-				from = -0.001f;
-				if (g_config.actionTrace)
-				{
-					Log("VFXSTAGE inspect animation="
-						+ ObjectName(sequence)
-						+ ", notifies="
-						+ std::to_string(sequence->Notifies.size()) + '.');
-				}
-				if (g_config.actionTrace && g_loggedNotifyInventories
-					.insert(sequence).second)
-				{
-					const int32_t inventoryCount =
-						std::min<int32_t>(
-							sequence->Notifies.size(), 64);
-					for (int32_t index = 0;
-						index < inventoryCount; ++index)
-					{
-						const FAnimNotifyEvent& notifyEvent =
-							sequence->Notifies.at(index);
-						UAnimNotify* notify =
-							notifyEvent.Notify;
-						std::ostringstream inventory;
-						inventory << "VFXNOTIFY animation="
-							<< ObjectName(sequence)
-							<< ", index=" << index
-							<< ", time=" << notifyEvent.Time
-							<< ", notify="
-							<< ObjectName(notify)
-							<< ", class="
-							<< ObjectName(
-								notify ? notify->Class : nullptr);
-						if (notify && notify->IsA(
-							UAnimNotify_PlayParticleEffect::
-								StaticClass()))
-						{
-							auto* particle = reinterpret_cast<
-								UAnimNotify_PlayParticleEffect*>(
-									notify);
-							inventory << ", template="
-								<< ObjectName(
-									particle->PSTemplate)
-								<< ", attach="
-								<< particle->bAttach;
-						}
-						inventory << '.';
-						Log(inventory.str());
-					}
-				}
-			}
-			else if (current + 0.075f < from)
-			{
-				// Network correction on a non-looping action must not replay
-				// already emitted effects. A real looping wrap starts a fresh
-				// notify interval.
-				if (node->bLooping && sequence->SequenceLength > 0.0f
-					&& from > sequence->SequenceLength * 0.65f
-					&& current < sequence->SequenceLength * 0.35f)
-				{
-					from = -0.001f;
-				}
-				else
-				{
-					return;
-				}
-			}
-
-			const int32_t count = std::min<int32_t>(
-				sequence->Notifies.size(), 256);
-			for (int32_t index = 0; index < count; ++index)
-			{
-				const FAnimNotifyEvent& event =
-					sequence->Notifies.at(index);
-				if (!event.Notify || event.Time <= from
-					|| event.Time > current + 0.002f)
-				{
-					continue;
-				}
-				DispatchRemoteVisualNotify(remote,
-					node->SkelComponent, event.Notify,
-					sequence, index);
-			}
-			cursor.previousTime = from > current ? from : current;
+			UpdateRemoteVisualNotifyChannel(remote, g_remoteAppliedFullBodyNode, g_remoteVisualNotifyChannels[0]);
+			UpdateRemoteVisualNotifyChannel(remote, g_remoteAppliedUpperBodyNode, g_remoteVisualNotifyChannels[1]);
+			UpdateRemoteVisualNotifyChannel(remote, g_remoteAppliedWeaponNode, g_remoteVisualNotifyChannels[2]);
+			UpdateRemoteVisualNotifyChannel(remote, g_remoteAppliedHalfBodyNode, g_remoteVisualNotifyChannels[3]);
 		}
 
 		void TickRemoteActionVfx(AAlicePawn* remote,
@@ -1587,29 +1631,11 @@
 				SetRemoteAttackTrail(false);
 			}
 
-			if (!remote || !g_remoteDodgeParticleTemplate
-				|| now >= g_remoteDodgeParticleUntil
-				|| (!dodgeVisualHidden
-					&& now + std::chrono::milliseconds(120)
-						< g_remoteDodgeParticleUntil))
-			{
-				return;
-			}
-			if (now < g_nextRemoteDodgeParticle)
-				return;
-			g_nextRemoteDodgeParticle =
-				now + std::chrono::milliseconds(130);
-			UParticleSystemComponent* particle =
-				SpawnRemoteCosmeticParticle(remote,
-					g_remoteDodgeParticleTemplate, false);
-			MakePresentationParticleVisible(particle);
-			TrackRemoteWeaponTransient(
-				particle, g_remoteDodgeParticleTemplate,
-				std::chrono::milliseconds(1000));
 		}
 
 		void LogClockBombPresentationCandidates()
 		{
+			if (!g_config.vfxLifecycleTrace) return;
 			TArray<UObject*>* objects = UObject::GObjObjects();
 			if (!objects)
 				return;
@@ -1660,18 +1686,28 @@
 				if (!component)
 					return;
 				component->bIgnoreOwnerHidden = false;
-				component->HiddenGame = value;
 				NativeSetComponentHidden(component, value);
+				component->HiddenGame = value;
 			};
 
 			setHidden(remote->Mesh, actorHidden
 				|| (state.flags & StateBodyHidden) != 0);
 			setHidden(remote->UpperBodyComponent, actorHidden
 				|| (state.flags & StateUpperBodyHidden) != 0);
-			// The pawn-owned strand component remains dormant. The proxy's
-			// skeletal scalp is only an invisible head-space anchor; its
-			// independent HairComponent supplies the visible strands.
-			setHidden(remote->HairComponent, true);
+			if (g_remoteNativeHairActive && remote->HairComponent)
+			{
+				UHairComponent* hair = remote->HairComponent;
+				const bool hidden = actorHidden || (state.flags & StateHairHidden) != 0;
+				const bool wasHidden = hair->HiddenGame;
+				hair->bIgnoreOwnerHidden = false;
+				if (hidden != wasHidden)
+					NativeSetComponentHidden(hair, hidden);
+				hair->HiddenGame = hidden;
+				if (wasHidden && !hidden)
+					NativeResetHair(hair);
+			}
+			else
+				setHidden(remote->HairComponent, true);
 			if (g_remoteHairProxy
 				&& g_remoteHairProxy->SkeletalMeshComponent)
 			{
@@ -1777,11 +1813,17 @@
 				return;
 
 			const PlayerStatePayload& state = presentation.state;
+			if (g_remoteNativeHairActive && remote->HairComponent
+				&& (presentation.location - remote->Location).SizeSquared() >= 1500.0f * 1500.0f)
+				NativeResetHair(remote->HairComponent);
 			remote->SetLocationNoCheck(presentation.location);
-			remote->SetRotation(presentation.rotation);
+			NativeSetActorRotation(remote, presentation.rotation);
 			remote->Location = presentation.location;
 			remote->Rotation = presentation.rotation;
 			remote->Velocity = FVector(state.velocity[0], state.velocity[1], state.velocity[2]);
+			remote->AimOffsetPct.X = UnpackAimOffset(state.aimOffset, 0);
+			remote->AimOffsetPct.Y = UnpackAimOffset(state.aimOffset, 1);
+			ApplyRemotePawnStance(remote, state);
 			remote->BasicMovementState = static_cast<EMovementState>(state.movementState);
 			remote->bIsWalking = (state.flags & StateWalking) != 0;
 			remote->bIsCrouched = (state.flags & StateCrouched) != 0;
@@ -1822,18 +1864,18 @@
 				if (std::isfinite(meshTranslation.X) && std::isfinite(meshTranslation.Y)
 					&& std::isfinite(meshTranslation.Z))
 				{
-					remote->Mesh->SetTranslation(meshTranslation);
+					NativeSetTranslation(remote->Mesh, meshTranslation);
 					remote->Mesh->Translation = meshTranslation;
 				}
 				if (std::isfinite(state.meshScale) && state.meshScale > 0.01f)
 				{
-					remote->Mesh->SetScale(state.meshScale);
+					NativeSetScale(remote->Mesh, state.meshScale);
 					remote->Mesh->Scale = state.meshScale;
 				}
 				if (std::isfinite(meshScale3D.X) && std::isfinite(meshScale3D.Y)
 					&& std::isfinite(meshScale3D.Z))
 				{
-					remote->Mesh->SetScale3D(meshScale3D);
+					NativeSetScale3D(remote->Mesh, meshScale3D);
 					remote->Mesh->Scale3D = meshScale3D;
 				}
 			}
@@ -1853,7 +1895,7 @@
 			NativeSetActorHidden(remote, presentation.hidden);
 			ApplyRemoteComponentVisibility(remote, state,
 				presentation.hidden);
-			if (forceComponents)
+			if (forceComponents && !g_remoteRenderDetached)
 			{
 				NativeForceUpdateComponents(remote, false, true);
 				ForceRemoteCosmeticMasterPose(remote);
@@ -1884,7 +1926,9 @@
 				for (UClothComponent* cloth : clothComponents)
 				{
 					if (cloth && cloth->bAttached)
-						NativeDetachActorComponent(remote, cloth);
+					{
+                        NativeDetachActorComponent(remote, cloth);
+					}
 				}
 				if (remote->UpperBodyComponent
 					&& remote->UpperBodyComponent->bAttached)
@@ -1898,6 +1942,8 @@
 			}
 			else
 			{
+				g_remoteClothNeedsReset = g_config.nativeClothSimulation;
+                g_remoteClothRecoveryAt = {};
 				if (remote->Mesh && !remote->Mesh->bAttached)
 					NativeAttachComponent(remote, remote->Mesh);
 				if (remote->UpperBodyComponent
@@ -1910,6 +1956,15 @@
 				{
 					if (!cloth || !cloth->SkeletalMesh)
 						continue;
+					if (g_config.nativeClothSimulation)
+					{
+						cloth->AttachedToSkelComponent = remote->Mesh;
+						cloth->bTransformFromAnimParent = 1;
+						if (!cloth->bAttached)
+							NativeAttachComponent(remote, cloth);
+						NativeSetComponentHidden(cloth, false);
+						continue;
+					}
 					if (!cloth->bAttached)
 						NativeAttachComponent(remote, cloth);
 					if (remote->Mesh
@@ -1975,7 +2030,7 @@
 					auto* blend = reinterpret_cast<
 						UAliceGameAnimNode_BlendByFloat*>(node);
 					blend->curFloatState = 0;
-					blend->SetActiveChild(0, 0.08f);
+					if (blend->ActiveChildIndex != 0) NativeSetActiveChild(blend, 0, 0.08f);
 					++floatNodes;
 				}
 				else if (node->IsA(
@@ -1989,11 +2044,11 @@
 					blend->PendingJumpStep = static_cast<int32_t>(
 						EBlendJumpSteps::BJS_None);
 					blend->PendingTimeToGo = 0.0f;
-					if (blend->Children.size() > 4)
-						blend->SetActiveChild(4, 0.08f);
+					if (blend->Children.size() > 4 && blend->ActiveChildIndex != 4)
+						NativeSetActiveChild(blend, 4, 0.08f);
 					++fallNodes;
 				}
-				else if (node->IsA(
+				else if (logTransition && node->IsA(
 					UAliceGameAnimNode_BlendByLegState::StaticClass()))
 				{
 					// This transition helper can retain ELS_RightLeg after a
@@ -2004,24 +2059,23 @@
 					blend->LegState = ELegState::ELS_None;
 					blend->oldLegState = ELegState::ELS_None;
 					if (blend->Children.size() > 0)
-						blend->SetActiveChild(0, 0.05f);
+						NativeSetActiveChild(blend, 0, 0.05f);
 					++legNodes;
 				}
-				else if (node->IsA(
+				else if (logTransition && node->IsA(
 					UAliceGameAnimNode_BlendByAliceWeaponType::StaticClass()))
 				{
 					// Re-entering a melee locomotion branch after Float can preserve
 					// its last partial lower-body pose. Rebuild that branch from the
-					// neutral child using the network-authoritative weapon type.
+					// network-authoritative weapon type without resetting its base pose.
 					auto* blend = reinterpret_cast<
 						UAliceGameAnimNode_BlendByAliceWeaponType*>(node);
 					const int32_t target = static_cast<int32_t>(
 						g_remotePresentationWeaponType);
 					if (target >= 0 && target < blend->Children.size())
 					{
-						if (target != 0)
-							blend->SetActiveChild(0, 0.0f);
-						blend->SetActiveChild(target, 0.08f);
+						if (blend->ActiveChildIndex != target)
+							NativeSetActiveChild(blend, target, 0.08f);
 						++weaponNodes;
 					}
 				}
@@ -2169,36 +2223,9 @@
 				ResetRemoteAirAnimTree(remote, g_remoteAirResetPending);
 				g_remoteAirResetPending = false;
 			}
-			const bool dodgeVisualHidden =
-				!g_config.localMirror
-				&& ((g_activeRemoteAnimationGraph.has_value()
-						&& g_remoteFullBodyChannel.active
-						&& ContainsCaseInsensitive(
-							g_remoteFullBodyChannel.sequenceName,
-							"dodge"))
-					|| Clock::now() < g_devDodgeHideUntil);
-			if (dodgeVisualHidden != g_remoteDodgeVisualHidden)
-			{
-				g_remoteDodgeVisualHidden = dodgeVisualHidden;
-				if (dodgeVisualHidden)
-				{
-					if (!g_remoteDodgeParticleTemplate)
-						g_remoteDodgeParticleTemplate =
-							FindRemoteDodgeParticleTemplate();
-					g_remoteDodgeParticleUntil =
-						Clock::now()
-						+ std::chrono::milliseconds(800);
-					g_nextRemoteDodgeParticle = Clock::now();
-					g_lastRemoteVfx =
-						"dodge animation: "
-						+ ObjectName(
-							g_remoteDodgeParticleTemplate);
-				}
-				Log(std::string("VFXSTAGE remote dodge proxy=")
-					+ (dodgeVisualHidden
-						? "hidden (butterfly placeholder)."
-						: "shown."));
-			}
+			const bool dodgeVisualHidden = !g_config.localMirror
+				&& ((state.flags & StateDodgeInvisible) != 0 || Clock::now() < g_devDodgeHideUntil);
+			g_remoteDodgeVisualHidden = dodgeVisualHidden;
 			const bool rawGlideVfxActive =
 				!g_config.localMirror
 				&& g_remoteFullBodyChannel.active
@@ -2362,10 +2389,11 @@
 			const bool hideForLocalCinematic =
 				localCinematic || IsEmergencyForcedCutsceneActive();
 			const bool peerDead = state.health <= 0;
-			const bool hidden = (state.flags & StateVisible) == 0
+			const bool suppressEffects = ((state.flags & StateVisible) == 0
+					&& !dodgeVisualHidden)
 				|| peerDead || hideForLocalCinematic
-				|| dodgeVisualHidden
 				|| g_devForceProxyHidden;
+			const bool hidden = suppressEffects || dodgeVisualHidden;
 			if (hidden != g_remoteHidden)
 			{
 				Log(std::string("Visual proxy ") + (hidden ? "hidden" : "shown")
@@ -2382,7 +2410,9 @@
 			// Detaching only the proxy render tree is the renderer-equivalent
 			// of disabling its SkinnedMeshRenderers and does not affect
 			// networking, animation capture or the peer game.
-			SetRemoteRenderDetached(remote, hidden);
+			// Keep the skeleton registered during dodge so native cloth
+			// retains its simulator and butterflies can outlive body hiding.
+			SetRemoteRenderDetached(remote, suppressEffects);
 			g_remotePresentation.location = next;
 			g_remotePresentation.rotation = rotation;
 			g_remotePresentation.hidden = hidden;
@@ -2391,8 +2421,15 @@
 			UpdateRemoteVisualNotifies(remote);
 			TickRemoteActionVfx(remote, dodgeVisualHidden);
 			TickRemoteNativeGlideTrailGuard(remote);
-			if (hidden)
+			if (suppressEffects)
 			{
+				if (IsLiveUObject(g_remoteNativeDodgeEmitter)
+					&& g_remoteNativeDodgeEmitter->WorldInfo == world)
+				{
+					g_remoteNativeDodgeEmitter->eventFinishFlightEffects();
+					g_remoteNativeDodgeEmitter->FlightTime = 0.0f;
+				}
+
 				// Animation notifies keep ticking while the proxy render tree
 				// is detached for a cinematic. Retire anything they emitted
 				// in that frame so invisible proxy effects cannot accumulate
@@ -2452,7 +2489,7 @@
 				// follow the original owner-based path. If the explicit path
 				// has never submitted a render after two seconds, retry once
 				// with the exact binding used by the playable Alice.
-				if (!g_remoteHairProxy
+				if (!g_remoteNativeHairActive && !g_remoteHairProxy
 					&& !g_remoteHairOwnerFallbackApplied
 					&& remote->HairComponent
 					&& remote->HairComponent->LastRenderTime < 0.0f)
@@ -2486,7 +2523,7 @@
 							? "remote-after-hair-owner-fallback"
 							: "remote-delayed",
 						remote);
-					if (remote->HairComponent)
+					if ((g_config.vfxLifecycleTrace || g_config.localMirror) && remote->HairComponent)
 					{
 						std::ostringstream stream;
 						stream
@@ -2504,7 +2541,7 @@
 							<< '.';
 						Log(stream.str());
 					}
-					if (g_remoteIndependentHair)
+					if ((g_config.vfxLifecycleTrace || g_config.localMirror) && g_remoteIndependentHair)
 					{
 						std::ostringstream stream;
 						stream
@@ -2568,7 +2605,7 @@
 							<< '.';
 						Log(stream.str());
 					}
-					if (g_remoteHairProxy
+					if ((g_config.vfxLifecycleTrace || g_config.localMirror) && g_remoteHairProxy
 						&& g_remoteHairProxy
 							->SkeletalMeshComponent)
 					{
@@ -2618,15 +2655,15 @@
 					// action pose reaches this render frame. Unlike the old raw
 					// graph driver, the tree stays unpaused and advances itself.
 					const std::uint64_t poseBefore =
-						PoseHash(remote->Mesh);
+						g_config.animationLifecycleTrace ? PoseHash(remote->Mesh) : 0;
 					NativeForceSkelUpdate(remote->Mesh);
 					ForceRemoteCosmeticMasterPose(remote);
 					const std::uint64_t poseAfter =
-						PoseHash(remote->Mesh);
+						g_config.animationLifecycleTrace ? PoseHash(remote->Mesh) : 0;
 					int& poseSamples =
 						g_animationStagePoseSamples[
 							g_remoteAppliedFullBodyName];
-					if (poseSamples < 3)
+					if (g_config.animationLifecycleTrace && poseSamples < 3)
 					{
 						++poseSamples;
 						std::ostringstream stream;
@@ -2659,7 +2696,7 @@
 							<< (poseBefore != poseAfter ? "yes." : "no.");
 						Log(stream.str());
 					}
-					if (!g_loggedPostEngineSkeletonRefresh)
+					if (g_config.animationLifecycleTrace && !g_loggedPostEngineSkeletonRefresh)
 					{
 						g_loggedPostEngineSkeletonRefresh = true;
 						Log("Post-EngineTick skeleton refresh v8 is active.");

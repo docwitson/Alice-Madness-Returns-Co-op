@@ -1,17 +1,29 @@
 #include "Common.hpp"
 #include "Features.hpp"
 
-static safetyhook::MidHook RenderLetterbox{};
+static uintptr_t GfxTriListContinue = 0;
+static uintptr_t BlackBarFlag = 0;
 
-static void OnLetterboxDraw(safetyhook::Context& ctx)
+__declspec(naked) static void GfxLetterboxStub()
 {
-	uint32_t numVerts = *(uint32_t*)(ctx.ebp + 0x10);
-	uint32_t primCount = *(uint32_t*)(ctx.ebp + 0x14);
-
-	if (g_State.shouldBlockBlackBar && primCount == 20 && numVerts == 16)
+	__asm
 	{
-		// Skip the letterbox draw call
-		ctx.edi = 0;
+		cmp dword ptr[esp + 14h], 20 // triangleCount
+		jne not_letterbox
+		cmp dword ptr[esp + 0Ch], 16 // numVertices
+		jne not_letterbox
+		mov eax, dword ptr[BlackBarFlag]
+		cmp byte ptr[eax], 0
+		je not_letterbox
+
+		xor eax, eax
+		ret 14h
+
+		not_letterbox :
+		push ebp
+		mov ebp, esp
+		push - 1
+		jmp dword ptr[GfxTriListContinue]
 	}
 }
 
@@ -19,5 +31,8 @@ void ApplyFixAspectRatio()
 {
 	if (!FixAspectRatio) return;
 
-	RenderLetterbox = safetyhook::create_mid(GetAddress(Addr::BlackBarDraw), OnLetterboxDraw);
+	DWORD addr_GFxDrawIndexedTriList = GetAddress(Addr::GFxDrawIndexedTriList);
+	GfxTriListContinue = addr_GFxDrawIndexedTriList + 0x5;
+	BlackBarFlag = reinterpret_cast<uintptr_t>(&g_State.shouldBlockBlackBar);
+	MemoryHelper::MakeJMP(addr_GFxDrawIndexedTriList, reinterpret_cast<uintptr_t>(&GfxLetterboxStub));
 }

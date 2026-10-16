@@ -33,7 +33,7 @@ AliceCoop\images\...
 AliceCoop\Advanced\Manual\...
 ```
 
-The combined `dinput8.dll` already contains MadnessPatch 3.1.1. Do not replace
+The combined `dinput8.dll` already contains MadnessPatch 3.3.3. Do not replace
 it with another proxy DLL.
 
 ## Start with the packaged launcher

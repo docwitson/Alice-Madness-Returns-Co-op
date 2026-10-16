@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 
 // Fixes
 void ApplyFixHighFPSHairPhysics();
 void ApplyFixHighFPSClothPhysics();
+void InvalidateHighFPSParticleSimulation(const void* simulator);
 void ApplyFixHighFPSProjectileCollisionCheck();
 void ApplyFixHighFPSPhysX();
 void ApplyFixHighFPSWalkingPhysics();
@@ -20,11 +21,17 @@ void ApplyIntroSkip();
 void ApplyWarnAlice1InstallFolder();
 void ApplyAchievementSupport();
 void UpdateAchievementProgress();
+void ApplyGameLanguage();
+
+// Modding
+void ApplyExportFiles();
+void ApplyModFiles();
 
 // Display
 void ApplyFontScaling();
 void ApplyAutoResolution();
 void ApplyUseWindowed();
+void ApplyBorderlessFullscreen();
 
 // Input
 void ApplyUseSDLControllerInput();
@@ -36,8 +43,10 @@ void ApplyDisableBackgroundLevelStreaming();
 void ApplyFixBinkVideoBT709();
 void ApplyFixAspectRatio();
 void ApplyMenuScripts();
+bool ConsumeNativeMenuStreamNotice(std::string& notice);
 void ApplyAdaptivePhysXMemory();
 void ReapplyMenuLetterbox();
+void ReapplyMemoryPosition();
 
 // Engine
 void ApplyResolutionHook();
@@ -65,3 +74,4 @@ namespace CutsceneFPSCap
 namespace InputResponsiveness { void Tick(); }
 namespace BlackBarGuard { void Tick(); }
 namespace BlockCameraInMenu { void Tick(); }
+namespace MenuMouseCursor { void Tick(); }

@@ -22,7 +22,10 @@
 				ResetSharedEnemyPose(false);
 				ClearRemoteProjectileVisuals(g_currentWorld != nullptr);
 				g_localClockBomb = {};
-				g_recentLocalPepperProjectiles.clear();
+				g_localWeaponProjectiles.clear();
+				g_pendingWeaponProjectiles.clear();
+				g_projectileParticleTemplates.clear();
+				g_completedRemoteProjectiles.clear();
 				{
 					std::lock_guard lock(g_stateMutex);
 					g_inboundProjectileEvents.clear();
@@ -86,6 +89,8 @@
 				{
 					g_remotePawn = nullptr;
 					g_remoteController = nullptr;
+					g_remoteClothController = nullptr;
+					g_remoteNativeHairActive = false;
 					g_remoteWorld = nullptr;
 				}
 				TraceWorldResetInvariants();
@@ -363,6 +368,7 @@
 			state.velocity[0] = pawn->Velocity.X;
 			state.velocity[1] = pawn->Velocity.Y;
 			state.velocity[2] = pawn->Velocity.Z;
+			PackAimOffset(pawn->AimOffsetPct.X, pawn->AimOffsetPct.Y, state.aimOffset);
 			state.drawScale = pawn->DrawScale;
 			state.drawScale3D[0] = pawn->DrawScale3D.X;
 			state.drawScale3D[1] = pawn->DrawScale3D.Y;
@@ -425,6 +431,12 @@
 					weapon->WeaponTypeEnum);
 			}
 			state.flags = pawn->bHidden ? 0 : StateVisible;
+			state.flags = PackPawnStance(state.flags, static_cast<std::uint8_t>(pawn->PawnStance));
+			// Native HideAlicePawn sets bShouldBeHide as well as Actor.bHidden.
+			// This is distinct from a material fade and must not suppress dodge FX.
+			if (pawn->bShouldBeHide || (pawn->Mesh && pawn->Mesh->bForceTranslucency
+				&& pawn->Mesh->ForceTranslucencyAlpha <= 0.01f))
+				state.flags |= StateDodgeInvisible;
 			if (controller && controller->MyAlicePawn == pawn)
 				state.flags |= StateProgressionValid;
 			if (pawn->Mesh && pawn->Mesh->HiddenGame)
@@ -1085,7 +1097,12 @@
 		{
 			const auto now = Clock::now();
 			AchievementOverlay::HideCoopJoinTeleportHint();
+            g_sessionReadActive.store(false);
+            g_joinSessionTransferId = 0; g_joinSessionReady.store(0);
+            g_joinSessionPersistentLoadQueued = false;
+            g_sessionPersistentReadObserved.store(false);
 			g_joinHostPending = false;
+            g_joinArrivalRequested = false;
 			g_joinHostRetryUntil = now + std::chrono::seconds(15);
 			g_nextJoinHostRetry = now;
 			g_joinHostLoadInvokedAt = {};
@@ -1095,12 +1112,79 @@
 
 		void FinishJoinHostAttempts()
 		{
+            if (_stricmp(g_currentMap.c_str(), "AliceEntry") == 0)
+                g_sessionReadActive.store(false);
+            if (g_requestedSavePurpose.load() == SaveRequestJoinSession)
+            {
+                g_requestedSaveTransferId.store(0);
+                if (g_saveSyncInProgress.load()) SetSaveSyncStatus("SESSION JOIN CANCELLED", false, 0);
+            }
+            g_joinSessionTransferId = 0;
+            g_joinSessionPersistentLoadQueued = false;
 			g_joinHostRetryUntil = {};
 			g_nextJoinHostRetry = {};
 			g_joinHostLoadInvokedAt = {};
 			g_joinHostAttemptCount = 0;
 		}
 
+        bool InvalidateSessionPersistentArchive(AWorldInfo* world)
+        {
+            auto* manager = world && world->Game
+                ? world->Game->MyCheckPointManager : nullptr;
+            if (!manager || !IsLiveUObject(manager)
+                || !manager->IsA(AAliceCheckPointManager::StaticClass())) return false;
+            const auto* table = *reinterpret_cast<const std::uintptr_t* const*>(manager);
+            if (!MemoryHelper::IsReadable(table, 0x40c)) return false;
+            const auto* loader = reinterpret_cast<const std::uint8_t*>(table[0x408 / 4]);
+            if (!MemoryHelper::IsReadable(loader, 0x100)) return false;
+            const auto slot = AliceCoopNative::FindPersistentArchiveCacheSlot({loader, 0x100});
+            if (!slot || !MemoryHelper::IsReadable(reinterpret_cast<const void*>(slot), 4)) return false;
+            auto* archive = *reinterpret_cast<std::uint8_t* const*>(slot);
+            if (!archive) return true;
+            if (!MemoryHelper::IsWritable(archive, 0x94)) return false;
+            const auto* archiveTable = *reinterpret_cast<const std::uintptr_t* const*>(archive);
+            if (!MemoryHelper::IsReadable(archiveTable, 0x38)) return false;
+            const auto seekAddress = archiveTable[0x34 / 4];
+            if (!seekAddress || !MemoryHelper::IsReadable(reinterpret_cast<const void*>(seekAddress), 1)) return false;
+            auto& buffer = *reinterpret_cast<AliceCoopNative::ArchiveByteBuffer32*>(archive + 0x88);
+            const auto previousCount = buffer.count;
+            const bool reset = AliceCoopNative::InvalidatePersistentArchiveBuffer(buffer, [&]
+            {
+                using Seek = void(__thiscall*)(void*, std::int32_t);
+                reinterpret_cast<Seek>(seekAddress)(archive, 0);
+                return true;
+            });
+            if (reset) Log("SESSIONJOIN invalidated native persistent archive, bytes="
+                + std::to_string(previousCount));
+            return reset;
+        }
+
+        std::string NativeSessionContinueMap(AWorldInfo* world)
+        {
+            auto* manager = world && world->Game
+                ? world->Game->MyCheckPointManager : nullptr;
+            if (!manager || !IsLiveUObject(manager)
+                || !manager->IsA(AAliceCheckPointManager::StaticClass())) return {};
+            const auto data = static_cast<AAliceCheckPointManager*>(manager)
+                ->PersistentSaveData.Dummy;
+            if (!data || !MemoryHelper::IsReadable(reinterpret_cast<const void*>(data),
+                0x7c + sizeof(FString))) return {};
+            // Native title Continue passes this cached FString to LoadChapter.
+            // Verified in the game's title-Continue implementation and crash dump;
+            // FindCheckpointData alone does not refresh this separate cache.
+            const auto* map = reinterpret_cast<const FString*>(data + 0x7c);
+            const auto count = map->length();
+            if (count < 2 || count > 128 || !map->c_str()
+                || !MemoryHelper::IsReadable(map->c_str(), count * sizeof(wchar_t))
+                || map->c_str()[count - 1] != L'\0') return {};
+            for (int i = 0; i < count - 1; ++i)
+            {
+                const auto ch = map->c_str()[i];
+                if (!((ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z')
+                    || (ch >= L'0' && ch <= L'9') || ch == L'_')) return {};
+            }
+            return map->ToString();
+        }
 		bool TryJoinHostCheckpoint(AWorldInfo* world)
 		{
 			if (g_config.role != Role::Client
@@ -1141,101 +1225,148 @@
 				SetJoinHostStatus("HOST IS LOADING...");
 				return false;
 			}
-			ACheckPointManager* manager =
-				world->Game->MyCheckPointManager;
-			if (!manager || !IsLiveUObject(manager))
-			{
-				SetJoinHostStatus("CHECKPOINT MANAGER NOT READY");
-				return false;
-			}
-
-			int checkpoint = -1;
-			const std::uint8_t hostCheckpoint =
-				host->snapshot.reserved[0];
-			if (hostCheckpoint >= 1 && hostCheckpoint <= 70)
-			{
-				const int candidate =
-					static_cast<int>(hostCheckpoint) - 1;
-				const std::string candidateMap =
-					manager->AliceMapName[candidate].ToString();
-				if (candidateMap.empty()
-					|| ContainsCaseInsensitive(
-						candidateMap, hostMap.c_str())
-					|| ContainsCaseInsensitive(
-						hostMap, candidateMap.c_str()))
-				{
-					checkpoint = candidate;
-				}
-			}
-			if (checkpoint < 0)
-			{
-				int matchingCheckpoint = -1;
-				int matchingCheckpointCount = 0;
-				for (int index = 0; index < 70; ++index)
-				{
-					const std::string candidateMap =
-						manager->AliceMapName[index].ToString();
-					if (!candidateMap.empty()
-							&& (ContainsCaseInsensitive(
-								candidateMap, hostMap.c_str())
-							|| ContainsCaseInsensitive(
-								hostMap, candidateMap.c_str())))
-					{
-						if (matchingCheckpoint < 0)
-							matchingCheckpoint = index;
-						++matchingCheckpointCount;
-					}
-				}
-				if (matchingCheckpointCount == 1)
-					checkpoint = matchingCheckpoint;
-				else if (matchingCheckpointCount > 1)
-				{
-					// A deterministic biome-start fallback is preferable to a dead
-					// JOIN button. Once loaded, P can safely close the remaining gap.
-					checkpoint = matchingCheckpoint;
-					Log("SESSIONJOIN ambiguous map-only fallback hostMap="
-						+ hostMap + ", matches="
-						+ std::to_string(
-							matchingCheckpointCount)
-						+ ", selected="
-						+ std::to_string(checkpoint) + '.');
-				}
-			}
-			if (checkpoint < 0)
-			{
-				SetJoinHostStatus("HOST CHECKPOINT UNKNOWN");
-				Log("SESSIONJOIN map lookup failed hostMap="
-					+ hostMap + ", wireCheckpoint="
-					+ std::to_string(hostCheckpoint) + '.');
-				return false;
-			}
-
-			g_joinHostPending = true;
-			g_joinHostLoadInvokedAt = Clock::now();
-			++g_joinHostAttemptCount;
-			SetJoinHostStatus("LOADING HOST CHECKPOINT...");
-			const bool invoked = NativeLoadChapter(
-				manager,
-				static_cast<EChapterNameList>(checkpoint));
-			Log("SESSIONJOIN LoadChapter hostMap=" + hostMap
-				+ ", checkpoint=" + std::to_string(checkpoint)
-				+ ", attempt="
-				+ std::to_string(g_joinHostAttemptCount)
-				+ ", native="
-				+ (invoked ? std::string("yes.")
-					: std::string("no.")));
-			if (!invoked)
-			{
-				g_joinHostPending = false;
-				g_joinHostLoadInvokedAt = {};
-				SetJoinHostStatus("LOAD CHAPTER FAILED");
-			}
-			return invoked;
-		}
+            if (!g_sessionReadHookReady.load(std::memory_order_acquire)
+                || !g_State.AliceEngine || !IsLiveUObject(g_State.AliceEngine)
+                || !world->Game->IsA(AAliceGameInfo::StaticClass()))
+            { SetJoinHostStatus("NATIVE CHECKPOINT LOADER NOT READY"); return false; }
+            if (g_joinSessionTransferId == 0)
+            {
+                if (g_saveSyncInProgress.load())
+                { SetJoinHostStatus("WAITING FOR PROFILE TRANSFER"); return false; }
+                RefreshActiveProfileSaveTargets();
+                if (!HaveOriginalClientSaveTargets())
+                { SetJoinHostStatus("SELECT CLIENT PROFILE FIRST"); return false; }
+                auto id = static_cast<std::uint32_t>(GetTickCount64()
+                    ^ (static_cast<std::uint64_t>(GetCurrentProcessId()) << 12));
+                if (!id) id = 1;
+                {
+                    std::lock_guard lock(g_observedSavePathMutex);
+                    g_sessionOriginalPaths = g_originalClientSavePaths;
+                    g_sessionSaveDirectory = std::filesystem::path(SystemHelper::GetModulePath())
+                        / L"AliceCoop" / L"client-saves"
+                        / (L"session-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(id));
+                    for (unsigned i = 0; i < SaveSyncFileCount; ++i)
+                        g_requestedClientSavePaths[i] = g_sessionSaveDirectory / SaveFileName(
+                            i ? SaveSyncFileKind::Checkpoint : SaveSyncFileKind::PersistentData);
+                    g_requestedClientProfileName = "<session>";
+                    g_sessionExpectedMap = hostMap;
+                }
+                g_joinSessionTransferId = id;
+                g_joinSessionHostMap = hostMap; g_joinSessionHostEpoch = host->snapshot.worldEpoch;
+                g_requestedSavePurpose.store(SaveRequestJoinSession);
+                g_joinSessionReady.store(0);
+                g_requestedSaveTransferId.store(id, std::memory_order_release);
+                g_joinHostRetryUntil = Clock::now() + std::chrono::seconds(90);
+                SetSaveSyncStatus("RECEIVING SESSION CHECKPOINT", true, 0);
+                SetJoinHostStatus("RECEIVING HOST CHECKPOINT...");
+                return false;
+            }
+            if (hostMap != g_joinSessionHostMap || host->snapshot.worldEpoch != g_joinSessionHostEpoch)
+            { FinishJoinHostAttempts(); SetJoinHostStatus("HOST CHANGED LEVEL; JOIN AGAIN"); return false; }
+            if (g_joinSessionReady.load(std::memory_order_acquire) != g_joinSessionTransferId)
+            {
+                if (!g_requestedSaveTransferId.load())
+                { FinishJoinHostAttempts(); SetJoinHostStatus("CHECKPOINT TRANSFER FAILED; JOIN AGAIN"); }
+                return false;
+            }
+            auto* engine = g_State.AliceEngine;
+            if (engine->PendingCheckpointAction != ECheckpointAction::Checkpoint_Default)
+            { SetJoinHostStatus("WAITING FOR NATIVE CHECKPOINT LOADER"); return false; }
+            static UFunction* findCheckpoint = UFunction::FindFunction(
+                "Function AliceGame.AliceGameEngine.FindCheckpointData");
+            static UFunction* continueGame = UFunction::FindFunction(
+                "Function AliceGame.AliceGameInfo.LoadLastCheckpointFromTitleMenu");
+            static UFunction* loadPersistent = UFunction::FindFunction(
+                "Function AliceGame.AliceGameInfo.InitLoadPersistentSaveData");
+            auto dispatch = [](UObject* object, UFunction* fn, void* params)
+            {
+                if (!fn || !(fn->FunctionFlags & 0x400) || !fn->iNative) return false;
+                using Dispatcher = void(__thiscall*)(UObject*, UFunction*, void*, void*);
+                const auto native = reinterpret_cast<Dispatcher>(GetAddress(Addr::ProcessEvent));
+                if (!native) return false;
+                native(object, fn, params, nullptr); return true;
+            };
+            // Continue chooses its base map from the manager's PersistentData,
+            // not CurrentCheckpoint. Reload that session file first and let the
+            // native engine finish its queued persistent-only load on a later tick.
+            // Otherwise a Chapter2 client can restore Chapter1 actors into Chapter2.
+            g_sessionReadActive.store(true, std::memory_order_release);
+            if (!g_joinSessionPersistentLoadQueued)
+            {
+                // 99 is the native Continue travel sentinel. InitLoad would
+                // request ALL data there, including actors, rather than just
+                // ConfigAndPersistentData. Never restore actors into AliceEntry.
+                if (static_cast<std::uint8_t>(engine->LoadingChapterName) == 99)
+                {
+                    SetJoinHostStatus("WAITING FOR NATIVE LEVEL TRANSITION");
+                    return false;
+                }
+                g_sessionPersistentReadObserved.store(false, std::memory_order_release);
+                if (!InvalidateSessionPersistentArchive(world))
+                {
+                    FinishJoinHostAttempts();
+                    SetJoinHostStatus("SESSION PROFILE CACHE RESET FAILED; JOIN AGAIN");
+                    return false;
+                }
+                AAliceGameInfo_execInitLoadPersistentSaveData_Params persistent{};
+                if (!dispatch(world->Game, loadPersistent, &persistent)
+                    || engine->PendingCheckpointAction == ECheckpointAction::Checkpoint_Default)
+                {
+                    FinishJoinHostAttempts();
+                    SetJoinHostStatus("SESSION PROFILE LOAD DID NOT START; JOIN AGAIN");
+                    return false;
+                }
+                g_joinSessionPersistentLoadQueued = true;
+                SetJoinHostStatus("READING HOST SESSION PROFILE...");
+                return false;
+            }
+            const auto continueMap = NativeSessionContinueMap(world);
+            if (!g_sessionPersistentReadObserved.load(std::memory_order_acquire)
+                || _stricmp(continueMap.c_str(), hostMap.c_str()) != 0)
+            {
+                Log("SESSIONJOIN blocked inconsistent Continue map=" + continueMap
+                    + ", expected=" + hostMap + ", sessionRead="
+                    + (g_sessionPersistentReadObserved.load() ? "yes" : "no"));
+                FinishJoinHostAttempts();
+                SetJoinHostStatus("SESSION PROFILE READ FAILED; JOIN AGAIN");
+                return false;
+            }
+            // Now replace the independently cached checkpoint as well, keeping
+            // native LevelRecords, actor/Kismet and location restoration intact.
+            UAliceGameEngine_execFindCheckpointData_Params find{};
+            find.SlotIndex = 0;
+            if (!dispatch(engine, findCheckpoint, &find) || !find.ReturnValue
+                || !engine->CurrentCheckpoint || !IsLiveUObject(engine->CurrentCheckpoint)
+                || _stricmp(engine->CurrentCheckpoint->BaseLevelName.ToString().c_str(), hostMap.c_str()))
+            {
+                FinishJoinHostAttempts(); SetJoinHostStatus("NATIVE CHECKPOINT READ FAILED; JOIN AGAIN"); return false;
+            }
+            const auto* checkpoint = engine->CurrentCheckpoint;
+            Log("SESSIONJOIN native Continue map=" + continueMap);
+            Log("SESSIONJOIN native checkpoint base=" + checkpoint->BaseLevelName.ToString()
+                + ", levels=" + std::to_string(checkpoint->LevelRecords.size())
+                + ", actors=" + std::to_string(checkpoint->ActorRecords.size())
+                + ", location=" + FormatWorldTraceVector(checkpoint->CheckpointLocation));
+            AAliceGameInfo_execLoadLastCheckpointFromTitleMenu_Params load{};
+            if (!dispatch(world->Game, continueGame, &load))
+            {
+                FinishJoinHostAttempts(); SetJoinHostStatus("NATIVE CONTINUE DID NOT START; JOIN AGAIN"); return false;
+            }
+            // Native title Continue travels to the cached persistent base map;
+            // LoadLastCheckPoint then queues Checkpoint_Load subsequently.
+            // Do not require PendingCheckpointAction to change synchronously.
+            g_joinHostPending = true;
+            g_joinHostLoadInvokedAt = Clock::now(); ++g_joinHostAttemptCount;
+            SetJoinHostStatus("LOADING HOST SAVED AREA...");
+            return true;
+        }
 
 		void UpdateCoopMainMenuPanel(AWorldInfo* world)
 		{
-			const bool visible =
+			if (_stricmp(g_currentMap.c_str(), "AliceEntry") == 0
+                && g_joinHostRetryUntil == Clock::time_point{} && !g_joinHostPending)
+                g_sessionReadActive.store(false);
+            const bool visible =
 				!g_config.localMirror
 				&& !g_config.actionTrace
 				&& _stricmp(
@@ -1314,7 +1445,9 @@
 			else if (g_config.role == Role::Client
 				&& hostInGameplay && !hostStateSettled)
 				status = "HOST IS LOADING...";
-			else if (g_joinHostPending)
+			else if (g_joinHostPending || g_joinHostRetryUntil != Clock::time_point{}
+                || g_joinHostStatus.find("JOIN AGAIN") != std::string::npos
+                || g_joinHostStatus.find("JOIN FAILED") != std::string::npos)
 				status = g_joinHostStatus;
 			else
 				status = "CONNECTED";
@@ -1327,8 +1460,22 @@
 				peerMap,
 				visible && hostStateSettled
 					&& !peerCinematic
-					&& !g_joinHostPending,
+					&& !g_joinHostPending && g_joinHostRetryUntil == Clock::time_point{},
 				status);
+            if (AchievementOverlay::ConsumeNativeMenuNotice())
+                Log("UISTAGE native Scaleform Multiplayer ready; original button/navigation template active.");
+            std::string streamNotice;
+            if (ConsumeNativeMenuStreamNotice(streamNotice))
+                Log("UISTAGE native GFX stream: " + streamNotice);
+            if (const auto music = AchievementOverlay::ConsumeNativeMusicResult())
+                Log(music == 1 ? "UISTAGE native main-menu music recovered; component is playing."
+                    : music == 2 ? "UISTAGE native main-menu music recovery: component is stopped."
+                    : "UISTAGE native main-menu music recovery: component was not created.");
+            if (AchievementOverlay::ConsumeNativeViewportNotice())
+                Log("UISTAGE native menu viewport fills " + std::to_string(static_cast<int>(g_State.screenWidth))
+                    + "x" + std::to_string(static_cast<int>(g_State.screenHeight)));
+            if (AchievementOverlay::ConsumeNativeFrameNotice())
+                Log("UISTAGE native frame loaded: AliceGameUI.uiShare.uiShare_IAA.");
 			if (visible && world
 				&& AchievementOverlay::
 					ConsumeCoopJoinHostRequest())
@@ -1340,14 +1487,12 @@
 				&& g_config.role == Role::Client
 				&& g_joinHostRetryUntil != Clock::time_point{})
 			{
-				// A native LoadChapter request can be accepted before the title
-				// menu's checkpoint manager is fully ready and then silently leave
-				// us in AliceEntry. One L/click therefore owns a bounded retry
-				// window instead of making the player press the button repeatedly.
+				// Native Continue queues the manager command for a later tick.
+                // Keep a bounded transfer/load window without repeated UI input.
 				if (g_joinHostPending
 					&& g_joinHostLoadInvokedAt != Clock::time_point{}
 					&& now - g_joinHostLoadInvokedAt
-						>= std::chrono::seconds(5))
+						>= std::chrono::seconds(30))
 				{
 					g_joinHostPending = false;
 					g_joinHostLoadInvokedAt = {};
@@ -1368,7 +1513,7 @@
 					&& now >= g_joinHostRetryUntil)
 				{
 					FinishJoinHostAttempts();
-					SetJoinHostStatus("JOIN FAILED - PRESS L TO RETRY");
+					SetJoinHostStatus("JOIN FAILED - CHOOSE JOIN HOST TO RETRY");
 				}
 			}
 		}

@@ -169,199 +169,226 @@
 				+ (open ? "open." : "closed."));
 	}
 
-	void OnLocalPepperProjectileSpawn(
-		APepperGrinderPrimaryProjectile* projectile,
+	void OnLocalWeaponProjectilePending(AAliceGameProjectile* projectile)
+	{
+		if (!g_config.enabled || g_soloMinigameActive || g_config.localMirror
+			|| !projectile || projectile->IsDefaultObject()) return;
+		if (projectile->IsA(APepperGrinderPrimaryProjectile::StaticClass())
+			|| projectile->IsA(ATeapotCannonProjectile::StaticClass()))
+		{
+			const auto previous = g_localWeaponProjectiles.find(projectile);
+			if (previous != g_localWeaponProjectiles.end())
+			{
+				auto event = previous->second.spawn;
+				event.kind = ProjectileEventKind::WeaponProjectileRemove;
+				QueueProjectileEvent(event);
+				g_localWeaponProjectiles.erase(previous);
+			}
+			g_pendingWeaponProjectiles[projectile] = projectile->ObjectInternalInteger;
+		}
+	}
+
+	void OnLocalWeaponProjectileSpawn(AAliceGameProjectile* projectile,
 		const FVector& direction)
 	{
-		if (!g_config.enabled || g_soloMinigameActive
-			|| g_config.localMirror || !projectile
-			|| projectile->IsDefaultObject())
-		{
+		if (!g_config.enabled || g_soloMinigameActive || g_config.localMirror
+			|| !projectile || projectile->IsDefaultObject())
 			return;
-		}
-		AAlicePawn* localPawn = GetLocalPawn();
-		const bool ownedByLocal = localPawn
-			&& (projectile->Instigator == localPawn
-				|| (projectile->WeaponOwner
-					&& projectile->WeaponOwner->Instigator
-						== localPawn));
-		if (!ownedByLocal)
+		const bool pepper = projectile->IsA(APepperGrinderPrimaryProjectile::StaticClass());
+		const bool teapot = projectile->IsA(ATeapotCannonProjectile::StaticClass());
+		AAlicePawn* local = GetLocalPawn();
+		if ((!pepper && !teapot) || !local
+			|| (projectile->Instigator != local
+				&& (!projectile->WeaponOwner || projectile->WeaponOwner->Instigator != local))
+			|| g_localWeaponProjectiles.contains(projectile))
 			return;
-		if (!PepperProjectileReplicationEnabled)
-		{
-			static bool loggedDisabled = false;
-			if (!loggedDisabled)
-			{
-				loggedDisabled = true;
-				Log("PROJECTILESTAGE pepper projectile replication "
-					"disabled; remote muzzle presentation only.");
-			}
+
+		// Capture after Init/ProjectileFire, when the level/charged flight asset is set.
+		UParticleSystemComponent* source = projectile->ProjFlightEffects
+			? projectile->ProjFlightEffects : projectile->ProjEffects;
+		UParticleSystem* particle = source && source->Template
+			? source->Template : projectile->ProjFlightEffectTemplate;
+		if (!particle)
 			return;
-		}
-
-		const Clock::time_point now = Clock::now();
-		for (auto iterator =
-				g_recentLocalPepperProjectiles.begin();
-			iterator != g_recentLocalPepperProjectiles.end();)
-		{
-			if (now - iterator->second > std::chrono::seconds(10))
-				iterator =
-					g_recentLocalPepperProjectiles.erase(iterator);
-			else
-				++iterator;
-		}
-		if (g_recentLocalPepperProjectiles.contains(projectile))
-			return;
-		g_recentLocalPepperProjectiles.emplace(projectile, now);
-
-		FVector resolvedDirection = direction;
-		auto normalizeDirection = [](FVector& value)
-		{
-			const float lengthSquared =
-				value.X * value.X + value.Y * value.Y
-				+ value.Z * value.Z;
-			if (lengthSquared < 0.001f)
-				return false;
-			const float inverseLength =
-				1.0f / std::sqrt(lengthSquared);
-			value.X *= inverseLength;
-			value.Y *= inverseLength;
-			value.Z *= inverseLength;
-			return true;
-		};
-		if (!normalizeDirection(resolvedDirection))
-		{
-			resolvedDirection = projectile->FlightFront;
-			normalizeDirection(resolvedDirection);
-		}
-		if (!normalizeDirection(resolvedDirection))
-		{
-			resolvedDirection = projectile->Velocity;
-			normalizeDirection(resolvedDirection);
-		}
-		if (!normalizeDirection(resolvedDirection))
-		{
-			constexpr float RotatorToRadians =
-				6.28318530717958647692f / 65536.0f;
-			const float pitch =
-				static_cast<float>(projectile->Rotation.Pitch)
-				* RotatorToRadians;
-			const float yaw =
-				static_cast<float>(projectile->Rotation.Yaw)
-				* RotatorToRadians;
-			const float cosPitch = std::cos(pitch);
-			resolvedDirection = FVector(
-				cosPitch * std::cos(yaw),
-				cosPitch * std::sin(yaw),
-				std::sin(pitch));
-		}
-
-		if (projectile->ProjFlightEffectTemplate)
-			g_pepperFlightTemplate =
-				projectile->ProjFlightEffectTemplate;
-		else if (projectile->ProjFlightEffects
-			&& projectile->ProjFlightEffects->Template)
-		{
-			g_pepperFlightTemplate =
-				projectile->ProjFlightEffects->Template;
-		}
-		else if (projectile->ProjEffects
-			&& projectile->ProjEffects->Template)
-		{
-			g_pepperFlightTemplate =
-				projectile->ProjEffects->Template;
-		}
-
 		ProjectileEventPayload event{};
-		event.kind = ProjectileEventKind::PepperSpawn;
+		event.kind = pepper ? ProjectileEventKind::PepperSpawn : ProjectileEventKind::TeapotSpawn;
 		event.projectileId = g_localProjectileId++;
-		if (event.projectileId == 0)
-			event.projectileId = g_localProjectileId++;
-		event.variant = static_cast<std::uint8_t>(
-			std::clamp(projectile->WeaponLevel, 0, 255));
-		UParticleSystemComponent* sourceParticle =
-			projectile->ProjFlightEffects
-				? projectile->ProjFlightEffects
-				: projectile->ProjEffects;
-		float particleScale = projectile->DrawScale;
-		if (sourceParticle)
-		{
-			float componentScale3D =
-				std::fabs(sourceParticle->Scale3D.X);
-			componentScale3D = (std::max)(
-				componentScale3D,
-				std::fabs(sourceParticle->Scale3D.Y));
-			componentScale3D = (std::max)(
-				componentScale3D,
-				std::fabs(sourceParticle->Scale3D.Z));
-			componentScale3D = (std::max)(
-				componentScale3D, 0.001f);
-			particleScale *= sourceParticle->Scale
-				* componentScale3D;
-		}
-		event.extra = particleScale;
+		if (!event.projectileId) event.projectileId = g_localProjectileId++;
+		event.variant = static_cast<std::uint8_t>(std::clamp(projectile->WeaponLevel, 0, 255));
+		event.particleTemplateHash = HashMapName(particle->GetFullName());
+		event.extra = projectile->DrawScale * (source ? source->Scale : 1.0f);
+		if (source) event.extra *= std::fabs(source->Scale3D.X);
 		FillProjectileTransform(event, projectile);
-		const float velocitySquared =
-			event.velocity[0] * event.velocity[0]
-			+ event.velocity[1] * event.velocity[1]
-			+ event.velocity[2] * event.velocity[2];
-		if (velocitySquared < 1.0f)
+		const float speedSquared = projectile->Velocity.X * projectile->Velocity.X
+			+ projectile->Velocity.Y * projectile->Velocity.Y + projectile->Velocity.Z * projectile->Velocity.Z;
+		const float directionSquared = direction.X * direction.X + direction.Y * direction.Y + direction.Z * direction.Z;
+		if (speedSquared < 1.0f && directionSquared > 0.001f)
 		{
-			float fallbackSpeed = projectile->Speed;
-			if (fallbackSpeed < 1.0f)
-				fallbackSpeed = projectile->MaxSpeed;
-			if (fallbackSpeed < 1.0f)
-				fallbackSpeed = projectile->RefVel;
-			if (fallbackSpeed < 1.0f)
-				fallbackSpeed = 12000.0f;
-			event.velocity[0] =
-				resolvedDirection.X * fallbackSpeed;
-			event.velocity[1] =
-				resolvedDirection.Y * fallbackSpeed;
-			event.velocity[2] =
-				resolvedDirection.Z * fallbackSpeed;
+			const float speed = (std::max)(projectile->Speed, projectile->RefVel) / std::sqrt(directionSquared);
+			event.velocity[0] = direction.X * speed;
+			event.velocity[1] = direction.Y * speed;
+			event.velocity[2] = direction.Z * speed;
+		}
+		const auto now = Clock::now();
+		g_localWeaponProjectiles.emplace(projectile, LocalWeaponProjectileTrack{
+			event.projectileId, projectile->ObjectInternalInteger, event,
+			now + std::chrono::milliseconds(50), now + std::chrono::seconds(15) });
+		QueueProjectileEvent(event);
+		static std::uint32_t count = 0;
+		if (++count <= 8 || count % 100 == 0)
+			Log("PROJECTILESTAGE local spawn id=" + std::to_string(event.projectileId)
+				+ ", class=" + ObjectName(projectile->Class) + ", flight=" + ObjectName(particle) + '.');
+	}
+
+	void OnLocalWeaponProjectileEnd(AAliceGameProjectile* projectile,
+		const FVector*, const FVector*)
+	{
+		const auto found = g_localWeaponProjectiles.find(projectile);
+		if (found == g_localWeaponProjectiles.end()) return;
+		ProjectileEventPayload event = found->second.spawn;
+		g_localWeaponProjectiles.erase(found);
+		event.kind = ProjectileEventKind::WeaponProjectileRemove;
+		FillProjectileTransform(event, projectile);
+		event.particleTemplateHash = 0;
+		QueueProjectileEvent(event);
+		// Actual impact emitters are relayed independently from the native
+		// pool spawn. Shutdown neither guesses a material nor suppresses them.
+	}
+
+    void OnLocalNativeAudioCreated(UObject* source, UObject* context, UAudioComponent* component)
+    {
+        UObject* owner = LocalWeaponAudioSource(source) ? source : context;
+        CaptureLocalWeaponAudio(owner, component);
+    }
+
+    void OnLocalNativeWeaponSound(UObject* source, UObject* context, USoundCue* cue)
+    {
+        auto* actor = LocalWeaponAudioSource(source);
+        if (!actor) actor = LocalWeaponAudioSource(context);
+        if (!actor || !cue || !IsLiveUObject(cue) || !cue->IsA(USoundCue::StaticClass())) return;
+        auto id = g_localAudioId++; if (!id) id = g_localAudioId++;
+        SendNativeWeaponAudio(ProjectileEventKind::NativeSoundStart, actor, nullptr, cue, id,
+            actor->IsA(AWeaponForAlice::StaticClass()));
+    }
+
+	void OnLocalNativeEmitterSpawn(UObject* source, UParticleSystemComponent* component,
+		UParticleSystem* particle, const FVector& location, const FRotator& rotation)
+	{
+		if (!g_config.enabled || g_config.localMirror || g_soloMinigameActive
+			|| g_remoteParticleReplayDepth || !g_currentWorld || !particle
+			|| !IsLivePresentationParticle(component) || component->bIsCachedInPool)
+			return;
+		AAlicePawn* local = GetLocalPawn();
+		if (!local) return;
+		bool owned = false;
+		if (source && source->IsA(AAliceGameProjectile::StaticClass()))
+		{
+			auto* projectile = reinterpret_cast<AAliceGameProjectile*>(source);
+			owned = projectile->Instigator == local
+				|| (projectile->WeaponOwner && projectile->WeaponOwner->Instigator == local);
+			if (!projectile->IsA(APepperGrinderPrimaryProjectile::StaticClass())
+				&& !projectile->IsA(ATeapotCannonProjectile::StaticClass())) return;
+			if (particle == projectile->ProjFlightEffectTemplate
+				|| (projectile->ProjFlightEffects && particle == projectile->ProjFlightEffects->Template))
+				return; // Flight is replicated separately.
+		}
+		else if (source && source->IsA(AHobbyHorse::StaticClass()))
+			owned = reinterpret_cast<AHobbyHorse*>(source)->Instigator == local;
+		else if (!source)
+		{
+			// Native radius damage can call the emitter-pool event directly,
+			// without a weapon script frame. These world effects are exclusive
+			// to Alice's equipped HobbyHorse; remote replay is guarded above.
+			owned = local->Weapon && local->Weapon->IsA(AHobbyHorse::StaticClass())
+				&& ContainsCaseInsensitive(ObjectName(particle), "FX_Wpn_HobbyHorse.");
+		}
+		if (!owned) return;
+		ProjectileEventPayload event{};
+		event.kind = ProjectileEventKind::NativeWorldEffect;
+		event.projectileId = g_localProjectileId++;
+		if (!event.projectileId) event.projectileId = g_localProjectileId++;
+		event.particleTemplateHash = HashMapName(particle->GetFullName());
+		event.location[0] = location.X; event.location[1] = location.Y; event.location[2] = location.Z;
+		event.rotation[0] = rotation.Pitch; event.rotation[1] = rotation.Yaw; event.rotation[2] = rotation.Roll;
+		event.extra = component->Scale;
+		if (component->Owner && component->Owner->IsA(AEmitter::StaticClass()))
+			event.extra *= component->Owner->DrawScale;
+		event.velocity[0] = component->Scale3D.X;
+		event.velocity[1] = component->Scale3D.Y;
+		event.velocity[2] = component->Scale3D.Z;
+		if (component->Owner && component->Owner->IsA(AEmitter::StaticClass()))
+		{
+			event.velocity[0] *= component->Owner->DrawScale3D.X;
+			event.velocity[1] *= component->Owner->DrawScale3D.Y;
+			event.velocity[2] *= component->Owner->DrawScale3D.Z;
 		}
 		QueueProjectileEvent(event);
+		static std::uint32_t count = 0;
+		if (++count <= 16 || count % 100 == 0)
+			Log("NATIVEFX TX template=" + ObjectName(particle) + ", source=" + ObjectName(source)
+				+ ", location=(" + std::to_string(location.X) + ',' + std::to_string(location.Y)
+				+ ',' + std::to_string(location.Z) + ").");
+	}
 
-		static std::uint32_t pepperLogCount = 0;
-		++pepperLogCount;
-		if (pepperLogCount <= 3 || pepperLogCount % 100 == 0)
+
+
+	void OnLocalNativeActorEmitterSpawn(UObject* source, AEmitter* emitter)
+	{
+		if (!emitter || !emitter->ParticleSystemComponent) return;
+		// Projectile impact scripts use Actor.Spawn(Emitter), then SetTemplate;
+		// they never visit EmitterPool.SpawnEmitter.
+		OnLocalNativeEmitterSpawn(source ? source : emitter->Owner,
+			emitter->ParticleSystemComponent, emitter->ParticleSystemComponent->Template,
+			emitter->Location, emitter->Rotation);
+	}
+
+	void OnLocalNativeDecalSpawn(UObject* source, const ADecalManager_execSpawnDecal_Params& params)
+	{
+		if (!g_config.enabled || g_config.localMirror || g_soloMinigameActive
+			|| g_remoteParticleReplayDepth || !g_currentWorld || !source || !params.DecalMaterial
+			|| !source->IsA(AAliceGameProjectile::StaticClass())) return;
+		auto* projectile = reinterpret_cast<AAliceGameProjectile*>(source);
+		auto* local = GetLocalPawn();
+		if (!local || (projectile->Instigator != local
+			&& (!projectile->WeaponOwner || projectile->WeaponOwner->Instigator != local))
+			|| (!projectile->IsA(APepperGrinderPrimaryProjectile::StaticClass())
+				&& !projectile->IsA(ATeapotCannonProjectile::StaticClass()))) return;
+		ProjectileEventPayload event{};
+		event.kind = ProjectileEventKind::NativeWorldDecal;
+		event.projectileId = g_localProjectileId++;
+		if (!event.projectileId) event.projectileId = g_localProjectileId++;
+		UMaterialInterface* material = params.DecalMaterial;
+		if (material->IsA(UMaterialInstanceTimeVarying::StaticClass()))
 		{
-			Log("PROJECTILESTAGE local pepper projectile #"
-				+ std::to_string(pepperLogCount)
-				+ ", id=" + std::to_string(event.projectileId)
-				+ ", speed=" + std::to_string(projectile->Speed)
-				+ ", maxSpeed="
-				+ std::to_string(projectile->MaxSpeed)
-				+ ", refVel="
-				+ std::to_string(projectile->RefVel)
-				+ ", drawScale="
-				+ std::to_string(projectile->DrawScale)
-				+ ", particleScale="
-				+ std::to_string(sourceParticle
-					? sourceParticle->Scale : 0.0f)
-				+ ", particleScale3D=("
-				+ std::to_string(sourceParticle
-					? sourceParticle->Scale3D.X : 0.0f)
-				+ ','
-				+ std::to_string(sourceParticle
-					? sourceParticle->Scale3D.Y : 0.0f)
-				+ ','
-				+ std::to_string(sourceParticle
-					? sourceParticle->Scale3D.Z : 0.0f)
-				+ "), netScale="
-				+ std::to_string(event.extra)
-				+ ", direction=("
-				+ std::to_string(resolvedDirection.X) + ','
-				+ std::to_string(resolvedDirection.Y) + ','
-				+ std::to_string(resolvedDirection.Z) + ')'
-				+ ", velocity=("
-				+ std::to_string(event.velocity[0]) + ','
-				+ std::to_string(event.velocity[1]) + ','
-				+ std::to_string(event.velocity[2])
-				+ "), effect="
-				+ ObjectName(g_pepperFlightTemplate) + '.');
+			auto* varying = reinterpret_cast<UMaterialInstanceTimeVarying*>(material);
+			if (varying->ScalarParameterValues.size() > 0)
+				strncpy_s(event.effectParameterName,
+					varying->ScalarParameterValues.at(0).ParameterName.ToString().c_str(), _TRUNCATE);
 		}
+		// Runtime instances have process-specific object names. Replicate the
+		// authored parent, then create an independent instance on the receiver.
+		for (int depth = 0; depth < 8 && material->IsA(UMaterialInstance::StaticClass())
+			&& ((material->ObjectFlags & RF_Transient) != 0
+				|| ContainsCaseInsensitive(material->GetFullName(), " Transient.")); ++depth)
+		{
+			auto* parent = reinterpret_cast<UMaterialInstance*>(material)->Parent;
+			if (!parent || parent == material) break;
+			material = parent;
+		}
+		event.particleTemplateHash = HashMapName(material->GetFullName());
+		event.location[0] = params.DecalLocation.X; event.location[1] = params.DecalLocation.Y; event.location[2] = params.DecalLocation.Z;
+		event.rotation[0] = params.DecalOrientation.Pitch; event.rotation[1] = params.DecalOrientation.Yaw; event.rotation[2] = params.DecalOrientation.Roll;
+		event.velocity[0] = params.Width; event.velocity[1] = params.Height; event.velocity[2] = params.Thickness;
+		event.extra = params.InDecalLifeSpan;
+		event.reserved = (params.bNoClip ? 1u : 0u) | (params.bProjectOnTerrain ? 2u : 0u)
+			| (params.bProjectOnSkeletalMeshes ? 4u : 0u);
+		event.effectParameters[0] = params.DecalRotation;
+		event.effectParameters[1] = params.InDepthBias;
+		event.effectParameters[2] = params.InBlendRange.X; event.effectParameters[3] = params.InBlendRange.Y;
+		QueueProjectileEvent(event);
+		static unsigned count = 0;
+		if (++count <= 16 || count % 100 == 0)
+			Log("NATIVEFX TX decal=" + ObjectName(material) + ", source=" + ObjectName(source) + '.');
 	}
 
 	void OnLocalClockBombSpawn(AAliceClonePawn* bomb)
@@ -493,6 +520,14 @@
 		const bool localController = object
 			&& g_State.AlicePlayerController
 			&& object == g_State.AlicePlayerController;
+        if (!after && ((localController && functionName == "backtoTitle")
+            || (object && functionName == "QuitGame"
+                && object->IsA(UAliceGfxMovie_inGameMenu::StaticClass()))))
+        {
+            // Disable before native title/profile reload, not on the next Tick.
+            g_sessionReadActive.store(false);
+            FinishJoinHostAttempts();
+        }
 		if (!after && functionName == "Restart"
 			&& object
 			&& object->IsA(
@@ -1795,7 +1830,7 @@
 						g_waitingCutsceneKey) + '.');
 			}
 		}
-		if (g_interpolationTraceCount >= 100)
+		if (!g_config.controlLifecycleTrace || g_interpolationTraceCount >= 100)
 			return;
 		++g_interpolationTraceCount;
 		Log("CUTSCENEINTERP start #" + std::to_string(
@@ -2678,14 +2713,48 @@
 			error ? path : absolute;
 	}
 
+    void SetSessionSaveReadHookReady(bool ready)
+    {
+        g_sessionReadHookReady.store(ready, std::memory_order_release);
+    }
+
+    bool TryRedirectSessionSaveRead(const wchar_t* originalPath, std::wstring& redirectedPath)
+    {
+        if (!g_config.enabled || g_config.role != Role::Client
+            || !g_sessionReadActive.load(std::memory_order_acquire) || !originalPath) return false;
+        const std::filesystem::path path(originalPath);
+        const auto name = path.filename().wstring();
+        if (_wcsicmp(name.c_str(), L"Alice2Checkpoint.sav")
+            && _wcsicmp(name.c_str(), L"PersistentData_PC.PSD")) return false;
+        std::error_code error;
+        const auto full = std::filesystem::absolute(path, error).lexically_normal();
+        if (error) return false;
+        std::lock_guard lock(g_observedSavePathMutex);
+        for (const auto& original : g_sessionOriginalPaths)
+            if (_wcsicmp(full.c_str(), original.lexically_normal().c_str()) == 0)
+            {
+                redirectedPath = (g_sessionSaveDirectory / name).wstring();
+                if (_wcsicmp(name.c_str(), L"PersistentData_PC.PSD") == 0)
+                    g_sessionPersistentReadObserved.store(true, std::memory_order_release);
+                Log("SESSIONJOIN native save read=" + NarrowAscii(name));
+                return true;
+            }
+        return false;
+    }
+
 	bool TryRedirectClientSave(const wchar_t* originalPath, std::wstring& redirectedPath)
 	{
 		if (!g_config.enabled || g_config.role != Role::Client || !originalPath || !*originalPath)
 			return false;
 		RememberOriginalClientSavePath(originalPath);
 
-		const std::filesystem::path sandboxDirectory =
-			std::filesystem::path(SystemHelper::GetModulePath()) / L"AliceCoop" / L"client-saves";
+		std::filesystem::path sandboxDirectory =
+            std::filesystem::path(SystemHelper::GetModulePath()) / L"AliceCoop" / L"client-saves";
+        if (g_sessionReadActive.load(std::memory_order_acquire))
+        {
+            std::lock_guard lock(g_observedSavePathMutex);
+            sandboxDirectory = g_sessionSaveDirectory;
+        }
 		std::error_code error;
 		std::filesystem::create_directories(sandboxDirectory, error);
 		const std::filesystem::path source(originalPath);

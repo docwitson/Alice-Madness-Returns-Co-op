@@ -7,8 +7,57 @@ static uintptr_t Unattached_Collision_Skip = 0;
 static uintptr_t FxActorLoopExit = 0;
 static uintptr_t ParticleMaterialContinue = 0;
 static uintptr_t ParticleMaterialSkip = 0;
+static uintptr_t HashChainEntryResume = 0;
+static uintptr_t HashChainLoopHead = 0;
+static uintptr_t HashChainNotFound = 0;
 static safetyhook::MidHook UnattachedCollisionGuard{};
 static safetyhook::MidHook FxActorLoopGuard{};
+
+static __declspec(thread) int t_hashChainBudget = 0;
+
+void __cdecl HashChainBudgetReset(int numElements)
+{
+	t_hashChainBudget = numElements > 0 ? numElements : 1;
+}
+
+int __cdecl HashChainBudgetStep()
+{
+	return t_hashChainBudget-- > 0;
+}
+
+__declspec(naked) static void HashChainEntryStub()
+{
+	__asm
+	{
+		// Re-run the six bytes replaced by the JMP, budget = Elements.ArrayNum
+		mov edi, [edx + ecx * 4]
+		push dword ptr[ebx + 4]
+		call HashChainBudgetReset
+		add esp, 4
+		cmp edi, 0FFFFFFFFh
+		jmp dword ptr[HashChainEntryResume]
+	}
+}
+
+__declspec(naked) static void HashChainBackEdgeStub()
+{
+	__asm
+	{
+		call HashChainBudgetStep
+		test eax, eax
+		jz out_of_budget
+
+		// Re-run the five bytes replaced by the JMP
+		cmp edi, 0FFFFFFFFh
+		jne keep_walking
+
+		out_of_budget:
+		jmp dword ptr[HashChainNotFound]
+
+		keep_walking:
+		jmp dword ptr[HashChainLoopHead]
+	}
+}
 
 __declspec(naked) static void ParticleMaterialDeadFlagStub()
 {
@@ -103,7 +152,18 @@ void ApplyCrashFixes()
 	Localize = HookHelper::CreateHook((void*)GetAddress(Addr::Localize), &Localize_Hook);
 
 	// Fix infinite loading screen
-	MemoryHelper::MakeNOP(GetAddress(Addr::HashLoop), 2);
+	DWORD addr_HashLoopEntry = GetAddress(Addr::HashLoopEntry);
+	DWORD addr_HashLoop = GetAddress(Addr::HashLoop);
+
+	HashChainEntryResume = addr_HashLoopEntry + 0x6;
+	HashChainLoopHead = addr_HashLoopEntry + 0x8;
+	HashChainNotFound = addr_HashLoop + 0x2;
+
+	MemoryHelper::MakeJMP(addr_HashLoopEntry, reinterpret_cast<uintptr_t>(&HashChainEntryStub));
+	MemoryHelper::MakeNOP(addr_HashLoopEntry + 0x5, 1);
+
+	// Guard sits on "cmp edi,-1", three bytes before the back-edge
+	MemoryHelper::MakeJMP(addr_HashLoop - 0x3, reinterpret_cast<uintptr_t>(&HashChainBackEdgeStub));
 
 	// Unattached-collision panic
 	DWORD addr_FixUnattachedCollisionPanic = GetAddress(Addr::FixUnattachedCollisionPanic);

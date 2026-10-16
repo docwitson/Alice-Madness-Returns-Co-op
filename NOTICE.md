@@ -18,6 +18,9 @@ The repository header is unofficial promotional artwork containing AI-generated
 elements. Gameplay previews are captured from the mod running in the original
 game.
 
+AI-assisted coding, debugging and documentation include work with OpenAI Codex
+(GPT-6). Gameplay checks are performed by human testers.
+
 Copyright in the original MadnessPatch code remains with its respective authors.
 Copyright in Alice Co-op-specific changes remains with their respective contributors.
 

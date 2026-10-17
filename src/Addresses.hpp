@@ -105,6 +105,9 @@ enum class Addr
 
 	// FixAspectRatio
 	GFxDrawIndexedTriList,
+	GFxMenuDisplayAspect,
+	SceneFamilyDisplayAspect,
+	MovieDisplayAspect,
 
 	// MenuScripts
 	MenuScripts,
@@ -284,6 +287,12 @@ namespace Addresses
 
 		// FixAspectRatio
 		/* GFxDrawIndexedTriList           */ { 0xC5AE70, 0xC5B360, 0xC07FC0 },
+		// Current renderer: after desktop ratio calculation, before letterbox scaling.
+		/* GFxMenuDisplayAspect            */ { 0, 0, 0xBF0C0B },
+		// Current local-player scene family, before storing its fullscreen aspect.
+		/* SceneFamilyDisplayAspect        */ { 0, 0, 0x831DD7 },
+		// Current movie renderer, before desktop/viewport compensation and movie fit.
+		/* MovieDisplayAspect              */ { 0, 0, 0x562156 },
 
 		// MenuScripts
 		/* MenuScripts                     */ { 0xF11D99, 0xF121A9, 0xE9EA29 },

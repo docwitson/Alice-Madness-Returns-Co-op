@@ -11,9 +11,7 @@ inline void SetCoopArrivalStatus(const std::string& status, unsigned int millise
 inline bool g_coopDevMode = false;
 inline bool g_nativeMenuNotice = false, g_nativeFrameNotice = false;
 inline std::atomic<unsigned int> g_nativeMusicResult{0};
-inline bool g_nativeViewportNotice = false;
 inline unsigned int ConsumeNativeMusicResult() { return g_nativeMusicResult.exchange(0); }
-inline bool ConsumeNativeViewportNotice() { bool value = g_nativeViewportNotice; g_nativeViewportNotice = false; return value; }
 inline bool ConsumeNativeMenuNotice() { bool value = g_nativeMenuNotice; g_nativeMenuNotice = false; return value; }
 inline bool ConsumeNativeFrameNotice() { bool value = g_nativeFrameNotice; g_nativeFrameNotice = false; return value; }
 inline std::atomic<int> g_coopDevCommand{0};
@@ -332,32 +330,9 @@ inline void TickCoopScaleformMenu()
         UGFxMovie_execSetVariableString_Params p{}; p.Path = FString(path); p.S = FString(value.c_str());
         movie->ProcessEvent(text, &p, nullptr);
     };
-    // Use the game's viewport API for its fixed 1280x720 menu movie. ShowAll
-    // otherwise reveals narrow strips of the 3D scene in a taller window.
-    // ExactFit keeps every menu item on screen; gameplay movies are unaffected.
-    static UGFxMovie* fittedMovie = nullptr;
-    static int fittedWidth = 0, fittedHeight = 0;
-    const int width = static_cast<int>(g_State.screenWidth), height = static_cast<int>(g_State.screenHeight);
-    if (FixAspectRatio && movie->IsA(UAliceGfxMovie_titlePlayerMenu::StaticClass())
-        && width > 0 && height > 0
-        && (movie != fittedMovie || width != fittedWidth || height != fittedHeight
-            || read(movie, L"_global.AliceCoopViewportReady") != 1))
-    {
-        static UFunction* viewport = UFunction::FindFunction("Function GFxUI.GFxMovie.SetViewport");
-        static UFunction* scale = UFunction::FindFunction("Function GFxUI.GFxMovie.SetViewScaleMode");
-        if (viewport && scale && (viewport->FunctionFlags & 0x400) && viewport->iNative
-            && (scale->FunctionFlags & 0x400) && scale->iNative)
-        {
-            UGFxMovie_execSetViewport_Params bounds{};
-            bounds.Width = width; bounds.Height = height;
-            movie->ProcessEvent(viewport, &bounds, nullptr);
-            UGFxMovie_execSetViewScaleMode_Params mode{}; mode.sm = static_cast<std::uint8_t>(EGFxScaleMode::GSM_ExactFit);
-            movie->ProcessEvent(scale, &mode, nullptr);
-            fittedMovie = movie; fittedWidth = width; fittedHeight = height;
-            setNumber(L"_global.AliceCoopViewportReady", 1);
-            g_nativeViewportNotice = true;
-        }
-    }
+    // Preserve the game's viewport, alignment and scale mode. Its menu code
+    // handles the constrained 16:9 region and input coordinates together;
+    // overriding either viewport width or ExactFit here crops/misaligns submenus.
     // The root calls SetInMainMenu/PlayMusic only once, before its controller
     // may be ready. A focused, owned title movie is the readiness evidence;
     // requiring bInMainMenu here would prevent recovery of that missed callback.

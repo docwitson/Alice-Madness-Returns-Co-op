@@ -4,6 +4,7 @@
 #include "../include/NativePersistentReadCache.hpp"
 #include "../include/NativeSoundArgument.hpp"
 #include "../include/StartupDisplayMode.hpp"
+#include "../include/MenuDisplayAspect.hpp"
 
 #include <array>
 #include <cstdint>
@@ -526,6 +527,45 @@ namespace
 
 int main()
 {
+    using AliceCoopDisplay::SceneDisplayAspect;
+    // The 3D renderer consumes this separately from the GFx menu aspect. Both
+    // a menu camera and gameplay must receive the same render-mode dimensions.
+    const float sceneAspect = SceneDisplayAspect(3440.0f / 1440, 1920, 1080, true);
+    const float sceneWidth = 1920 / (sceneAspect / (1920.0f / 1080));
+    Check(sceneWidth == 1920, "3D scene keeps full width in 16:9 exclusive fullscreen");
+    Check(sceneWidth / 1080 == sceneAspect,
+        "3D destination rectangle matches projection aspect without horizontal squeezing");
+    Check(SceneDisplayAspect(3440.0f / 1440, 3440, 1440, true) == 3440.0f / 1440,
+        "3D native ultrawide fullscreen retains its aspect");
+    Check(SceneDisplayAspect(2.389f, 1920, 1080, false) == 2.389f,
+        "3D windowed and borderless compensation is unchanged");
+    Check(SceneDisplayAspect(2.389f, 1920, 0, true) == 2.389f,
+        "3D uninitialized viewport avoids division by zero");
+    using AliceCoopDisplay::MovieDisplayAspect;
+    // The live renderer used desktop/render aspect to shrink 1920 to 1428 pixels.
+    const float renderAspect = 1920.0f / 1080;
+    const float desktopAspect = 3440.0f / 1440;
+    Check(static_cast<int>(1920 / (desktopAspect / renderAspect)) == 1428,
+        "observed native fullscreen letterbox regression fixture");
+    const float correctedAspect = SceneDisplayAspect(desktopAspect, 1920, 1080, true);
+    Check(static_cast<int>(1920 / (correctedAspect / renderAspect)) == 1920,
+        "fullscreen GFx renderer keeps full width in title, pause and HUD movies");
+
+    Check(SceneDisplayAspect(3440.0f / 1440, 1920, 1080, true) == 1920.0f / 1080,
+        "fullscreen GFx movies follow 16:9 render size after 21:9 desktop");
+    Check(SceneDisplayAspect(3440.0f / 1440, 3440, 1440, true) == 3440.0f / 1440,
+        "native 21:9 fullscreen keeps its aspect");
+    Check(SceneDisplayAspect(1.777f, 3440, 1440, false) == 1.777f,
+        "windowed and borderless retain native menu compensation");
+    Check(SceneDisplayAspect(2.389f, 0, 1080, true) == 2.389f,
+        "uninitialized viewport retains native aspect");
+    const float movieAspect = MovieDisplayAspect(desktopAspect, renderAspect);
+    Check(movieAspect / renderAspect == 1.0f,
+        "fullscreen 16:9 video avoids stale desktop compensation and horizontal squeezing");
+    Check(MovieDisplayAspect(desktopAspect, desktopAspect) == desktopAspect,
+        "native ultrawide video keeps source fitting and letterboxing");
+    Check(MovieDisplayAspect(desktopAspect, 0) == desktopAspect,
+        "uninitialized video viewport keeps native aspect");
 	Check(TestNativeAudioResultStorage(), "native audio DWORD result preserves adjacent stack storage");
 	AliceCoopDisplay::StartupMode launchMode;
 	Check(launchMode.Consume(), "display preference applies on initial viewport creation");

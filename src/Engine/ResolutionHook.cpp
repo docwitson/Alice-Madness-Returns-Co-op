@@ -7,13 +7,8 @@ static void __fastcall UpdateViewportRHI_Hook(int thisp, int, int bDestroyed, in
 {
 	if (BorderlessFullscreenEnabled && !bDestroyed)
 	{
-		int width = 0, height = 0;
-		if (SystemHelper::GetTargetSize(width, height))
-		{
-			NewSizeX = width;
-			NewSizeY = height;
-		}
-
+		// The window/input/Scaleform layout already uses NewSizeX/Y. Replacing
+		// only the RHI size here desynchronizes it from those upstream dimensions.
 		bNewIsFullscreen = false;
 	}
 

@@ -793,7 +793,7 @@ inline void DrawCoopCanvas(DrawCtx& d)
     const float s = d.s;
     if (g_coopMenuVisible.load())
     {
-        std::wstring stamp = L"AliceCoop 0.1.0-alpha.3  |  ";
+        std::wstring stamp = L"AliceCoop 0.1.0-alpha.3.1  |  ";
         stamp += g_coopMenuHostRole.load() ? L"Host" : L"Client";
         stamp += g_coopMenuRelayConnected.load() ? L" Online" : L" Offline";
         CoopCanvasText(d, stamp, 16 * s, d.canvas->SizeY - 30 * s, 15,

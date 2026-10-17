@@ -56,6 +56,7 @@
 			bool disableProxyCollision = true;
 			bool nativeClothSimulation = true;
 			bool nativeHairSimulation = true;
+			int launcherDisplayMode = -1; // -1: manual, 0: fullscreen, 1: windowed, 2: borderless
 			bool forceWindowed = false;
 			bool manageWindowGeometry = false;
 			bool borderlessWindow = false;

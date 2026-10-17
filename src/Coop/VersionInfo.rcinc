@@ -2,8 +2,8 @@
 
 // Shared release metadata for the native mod and relay server.
 1 VERSIONINFO
-FILEVERSION 0,1,0,3
-PRODUCTVERSION 0,1,0,3
+FILEVERSION 0,1,0,4
+PRODUCTVERSION 0,1,0,4
 FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
 #ifdef _DEBUG
 FILEFLAGS VS_FF_DEBUG
@@ -20,12 +20,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Docwitson"
             VALUE "FileDescription", ALICECOOP_FILE_DESCRIPTION
-            VALUE "FileVersion", "0.1.0.3"
+            VALUE "FileVersion", "0.1.0.4"
             VALUE "InternalName", ALICECOOP_INTERNAL_NAME
             VALUE "LegalCopyright", ALICECOOP_COPYRIGHT
             VALUE "OriginalFilename", ALICECOOP_ORIGINAL_FILENAME
             VALUE "ProductName", "Alice Co-op"
-            VALUE "ProductVersion", "0.1.0-alpha.3"
+            VALUE "ProductVersion", "0.1.0-alpha.3.1"
             VALUE "Comments", "Experimental two-player co-op mod. Open-source project, GPL-2.0-only."
         END
     END

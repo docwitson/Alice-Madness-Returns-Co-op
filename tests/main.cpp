@@ -3,6 +3,7 @@
 #include "../include/GfxMovieStreamOverride.hpp"
 #include "../include/NativePersistentReadCache.hpp"
 #include "../include/NativeSoundArgument.hpp"
+#include "../include/StartupDisplayMode.hpp"
 
 #include <array>
 #include <cstdint>
@@ -526,6 +527,12 @@ namespace
 int main()
 {
 	Check(TestNativeAudioResultStorage(), "native audio DWORD result preserves adjacent stack storage");
+	AliceCoopDisplay::StartupMode launchMode;
+	Check(launchMode.Consume(), "display preference applies on initial viewport creation");
+	for (int change = 0; change < 10; ++change)
+		Check(!launchMode.Consume(), "subsequent fullscreen / resolution changes remain player controlled");
+	AliceCoopDisplay::StartupMode nextProcess;
+	Check(nextProcess.Consume(), "a new game launch applies the selected startup mode again");
 	TestProtocolHeaders();
     TestNativeSoundArgument();
     TestPersistentArchiveInvalidation();

@@ -19,6 +19,13 @@ of *Alice: Madness Returns*. Each player runs their own game process; a small UD
 relay exchanges player, animation and world state while the host provides the
 authoritative view of ordinary enemies.
 
+## Alpha.3.1 window management hotfix
+
+Alpha.3.1 fixes forced window resizing and display-mode persistence. Close the
+game and use **Install/Repair** with the new launcher to update the DLL.
+Protocol **43** is unchanged and public Alpha.3 remains compatible.
+See the [hotfix notes](docs/RELEASE_NOTES_0.1.0-alpha.3.1.md).
+
 ## Alpha.3
 
 - Improved partner animations, weapon effects and spatial weapon sounds.

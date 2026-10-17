@@ -639,11 +639,13 @@
 					|| _wcsicmp(launcherDisplayMode.c_str(), L"borderless") == 0);
 			const bool launcherBorderless = launcherSessionActive
 				&& _wcsicmp(launcherDisplayMode.c_str(), L"borderless") == 0;
+			g_config.launcherDisplayMode = launcherSessionActive
+				? (launcherBorderless ? 2 : launcherWindowed ? 1 : 0) : -1;
 			g_config.forceWindowed = EnvironmentInt(L"ALICECOOP_FORCE_WINDOWED",
 				launcherSessionActive ? (launcherWindowed ? 1 : 0) :
 				ReadIniInt(iniPath, L"Window", L"ForceWindowed", 0)) == 1;
 			g_config.manageWindowGeometry = EnvironmentInt(L"ALICECOOP_MANAGE_WINDOW",
-				launcherSessionActive ? (launcherWindowed ? 1 : 0) :
+				launcherSessionActive ? 0 :
 				ReadIniInt(iniPath, L"Window", L"ManageGeometry", 0)) == 1;
 			g_config.borderlessWindow = EnvironmentInt(L"ALICECOOP_BORDERLESS",
 				launcherBorderless ? 1 : 0) == 1;

@@ -1,5 +1,8 @@
 #include "Common.hpp"
 #include "Features.hpp"
+#include "StartupDisplayMode.hpp"
+
+static AliceCoopDisplay::StartupMode startupMode;
 
 static safetyhook::MidHook SetWindowedMid{};
 
@@ -20,7 +23,10 @@ static void OnUseWindowed(safetyhook::Context& ctx)
 		return;
 	}
 
-	MemoryHelper::WriteMemory<int>(GetAddress(Addr::Fullscreen), !UseWindowed, false);
+	// Apply the requested launch mode once. Later calls belong to the game
+	// settings / Alt+Enter and must retain the player's choice.
+	if (startupMode.Consume())
+		MemoryHelper::WriteMemory<int>(GetAddress(Addr::Fullscreen), !UseWindowed, false);
 }
 
 void ApplyUseWindowed()

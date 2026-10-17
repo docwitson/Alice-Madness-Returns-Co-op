@@ -4,6 +4,20 @@ All notable user-facing changes are documented here. Alice Co-op follows
 [Semantic Versioning](https://semver.org/) where practical; compatibility also
 depends on the protocol version shown in each release.
 
+## 0.1.0-alpha.3.1
+
+### Fixed
+
+- Windowed launches no longer repeatedly resize or reposition the game using
+  legacy INI dimensions. In-game resolution and fullscreen changes remain usable.
+- Launcher Borderless uses the native MadnessPatch monitor-resolution viewport
+  instead of the legacy fixed-size test window layout.
+- The launcher saves the selected display mode immediately, including when
+  closed without starting a session.
+
+The DLL and launcher are updated: close the game and use **Install/Repair**.
+Protocol **43** is unchanged; this hotfix remains compatible with public Alpha.3.
+
 ## 0.1.0-alpha.3
 
 ### Added

@@ -953,6 +953,11 @@ namespace AliceCoopLauncher
             SavePreferences(ReadPortOrDefault(), CurrentDisplayMode());
         }
 
+        private void DisplayMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            SavePreferencesSilently();
+        }
+
         private string CurrentDisplayMode()
         {
             var item = DisplayModeComboBox.SelectedItem as ComboBoxItem;

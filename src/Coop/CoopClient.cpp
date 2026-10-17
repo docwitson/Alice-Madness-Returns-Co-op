@@ -160,6 +160,13 @@ namespace AliceCoop
 			Log("PLAYERDAMAGE background-window test guard enabled.");
 		}
 
+		// Launcher modes use the native viewport path, never the legacy test layout.
+		if (g_config.launcherDisplayMode >= 0)
+		{
+			UseWindowed = g_config.launcherDisplayMode != 0;
+			BorderlessFullscreenEnabled = g_config.launcherDisplayMode == 2;
+			AutoResolution = false;
+		}
 		if (g_config.forceWindowed)
 		{
 			UseWindowed = true;

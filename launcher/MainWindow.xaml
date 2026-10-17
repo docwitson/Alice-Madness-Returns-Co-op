@@ -295,7 +295,8 @@
                                     <TextBlock Grid.Column="3" Text="Game display mode"
                                                VerticalAlignment="Center" />
                                     <ComboBox x:Name="DisplayModeComboBox" Grid.Column="4"
-                                              Margin="10,0,0,0" SelectedIndex="0">
+                                              Margin="10,0,0,0" SelectedIndex="0"
+                                              SelectionChanged="DisplayMode_SelectionChanged">
                                         <ComboBoxItem Content="Fullscreen" Tag="fullscreen" />
                                         <ComboBoxItem Content="Borderless" Tag="borderless" />
                                         <ComboBoxItem Content="Windowed" Tag="windowed" />

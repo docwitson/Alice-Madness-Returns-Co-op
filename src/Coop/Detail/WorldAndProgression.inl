@@ -1471,9 +1471,6 @@
                 Log(music == 1 ? "UISTAGE native main-menu music recovered; component is playing."
                     : music == 2 ? "UISTAGE native main-menu music recovery: component is stopped."
                     : "UISTAGE native main-menu music recovery: component was not created.");
-            if (AchievementOverlay::ConsumeNativeViewportNotice())
-                Log("UISTAGE native menu viewport fills " + std::to_string(static_cast<int>(g_State.screenWidth))
-                    + "x" + std::to_string(static_cast<int>(g_State.screenHeight)));
             if (AchievementOverlay::ConsumeNativeFrameNotice())
                 Log("UISTAGE native frame loaded: AliceGameUI.uiShare.uiShare_IAA.");
 			if (visible && world

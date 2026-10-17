@@ -10,8 +10,14 @@ depends on the protocol version shown in each release.
 
 - Windowed launches no longer repeatedly resize or reposition the game using
   legacy INI dimensions. In-game resolution and fullscreen changes remain usable.
-- Launcher Borderless uses the native MadnessPatch monitor-resolution viewport
-  instead of the legacy fixed-size test window layout.
+- Borderless starts at the monitor resolution, then accepts in-game resolution
+  changes without forcing a different render-target size behind the window/input
+  layout.
+- Native menu viewport and scaling are preserved instead of applying a co-op
+  ExactFit override that cropped or misaligned menus on ultrawide displays.
+- Fullscreen menus (including pause and HUD), 3D scenes and video cutscenes use
+  the actual render aspect instead of the cached desktop aspect. Selecting
+  1920x1080 on a 3440x1440 desktop no longer crops menus or squeezes the scene/video.
 - The launcher saves the selected display mode immediately, including when
   closed without starting a session.
 

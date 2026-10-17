@@ -8,7 +8,11 @@ static safetyhook::MidHook SetWindowedMid{};
 
 static void OnUseWindowed(safetyhook::Context& ctx)
 {
-	// Borderless keeps the device windowed at the monitor's resolution
+	// All launch preferences, including the initial borderless resolution, apply
+	// only at startup. Later resolution changes must reach every viewport layer.
+	if (!startupMode.Consume()) return;
+
+	// Start borderless at the monitor's resolution.
 	if (BorderlessFullscreenEnabled)
 	{
 		MemoryHelper::WriteMemory<int>(GetAddress(Addr::Fullscreen), 0, false);
@@ -25,8 +29,7 @@ static void OnUseWindowed(safetyhook::Context& ctx)
 
 	// Apply the requested launch mode once. Later calls belong to the game
 	// settings / Alt+Enter and must retain the player's choice.
-	if (startupMode.Consume())
-		MemoryHelper::WriteMemory<int>(GetAddress(Addr::Fullscreen), !UseWindowed, false);
+	MemoryHelper::WriteMemory<int>(GetAddress(Addr::Fullscreen), !UseWindowed, false);
 }
 
 void ApplyUseWindowed()

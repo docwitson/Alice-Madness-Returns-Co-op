@@ -107,8 +107,9 @@ Normal releases ship conservative defaults. The most relevant sections are:
 - `[SharedWorld]`: enemy health/transform authority and reconciliation limits.
 - `[Window]`: explicit manual/test window geometry. Since Alpha.3.1 the graphical
   launcher does not enable geometry management or inherit old fixed dimensions.
-  Windowed preserves game resolution and placement; Borderless uses the native
-  monitor-resolution viewport. The launch mode is saved immediately and applied
+  Windowed preserves game resolution and placement; Borderless starts at monitor
+  resolution and accepts later in-game resolution changes. Render, window and
+  input dimensions stay aligned. The launch mode is saved immediately and applied
   at startup; normal in-game display changes remain available. Explicit manual
   `ALICECOOP_MANAGE_WINDOW` overrides still opt into managed test geometry.
 - `[Performance]`: process FPS and worker-thread limits.
